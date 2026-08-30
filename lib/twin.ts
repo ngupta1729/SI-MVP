@@ -185,24 +185,38 @@ async function modelEngine(text: string, intent: ImportIntent): Promise<TwinResu
     wantedStructures ||
     "Follow the public H5P content specs for each requested content type.";
 
+  // Intent is authored in exactly one mode.
+  const intentInstruction =
+    intent.authoringMode === "brief"
+      ? `The educator specified a structured brief:
+- Learning goal: ${intent.learningGoal || "(not set)"}
+- Audience level: ${intent.audienceLevel}
+- Emphasis: ${intent.emphasis}
+- Volume: ${intent.volume} (light ≈ 4 questions, standard ≈ 6, thorough ≈ 10)
+- Language: ${intent.language}`
+      : `The educator wrote this instruction:
+"""
+${intent.prompt || "(none — use sensible defaults for a general audience)"}
+"""`;
+
   const mode =
     intent.mode === "extract"
-      ? "The source already contains questions. EXTRACT them close to verbatim into the target H5P type; do not invent new ones."
-      : "GENERATE new questions grounded strictly in the source.";
+      ? `EXTRACTION MODE. The source already contains questions. Extract each one exactly as written — do not rephrase, reword, shorten, reorder, or invent questions. Carry over any answer options and marked correct answers unchanged. Where the source does not indicate the correct answer, choose the one best supported by the source text and set that item's "provenance" to "inferred". Map each into the requested H5P type without changing its substance.`
+      : `GENERATION MODE. Write new questions grounded strictly in the source. Questions must test understanding, not shallow recall. Distractors must be clearly wrong on a careful reading of the source — never defensibly correct.`;
 
-  const prompt = `You are a faithful digital twin of H5P.com's Smart Import. Given source material and an educator's intent, produce a content plan and the content.json for each requested content type. ${mode}
+  const prompt = `You are a faithful digital twin of H5P.com's Smart Import. Given source material and an educator's intent, produce a content plan and the content.json for each requested content type.
+
+${mode}
+
+${intentInstruction}
 
 Rules for H5P.SingleChoiceSet / H5P.QuestionSet content.json:
 - "choices": array. Each: { "subContentId": <uuid v4>, "question": <plain text, NO html tags>, "answers": [<correct answer FIRST>, <distractor>, <distractor>, <distractor>] }
-- Questions must test understanding, not shallow recall. Distractors must be clearly wrong on the source, never defensibly correct.
-- 5–8 questions unless the intent says otherwise.
-- Also include: "behaviour", "overallFeedback", "l10n" — copy them from the real sample.
+- 5–8 questions in generation mode unless the brief's volume says otherwise; in extraction mode, one per question found in the source.
+- Also include "behaviour", "overallFeedback", "l10n" using the STRUCTURE below.
 
 SOURCE:
 ${text.slice(0, 12000)}
-
-INTENT:
-${JSON.stringify(intent, null, 2)}
 
 STRUCTURE (format only — all content must come from the SOURCE above):
 ${sampleBlock}

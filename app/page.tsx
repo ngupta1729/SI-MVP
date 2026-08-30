@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CONTENT_TYPES, CATEGORIES, contentType } from "@/lib/h5p/contentTypes";
+import { INTENT_PRESETS, isPreset } from "@/lib/intent-presets";
 import type { ImportIntent, TwinResult, SourceAnalysis } from "@/lib/types";
 import H5PRender from "@/components/H5PRender";
 
@@ -20,10 +21,12 @@ interface Recommendation {
 }
 
 const DEFAULT_INTENT: ImportIntent = {
+  authoringMode: "prompt",
   prompt: "",
   learningGoal: "",
   audienceLevel: "beginner",
   emphasis: "balanced",
+  volume: "standard",
   language: "English",
   mode: "generate",
   contentTypes: [],
@@ -38,7 +41,6 @@ export default function Page() {
   const [text, setText] = useState("");
   const [wikiUrl, setWikiUrl] = useState("");
   const [intent, setIntent] = useState<ImportIntent>(DEFAULT_INTENT);
-  const [briefOpen, setBriefOpen] = useState(false);
 
   const [analysis, setAnalysis] = useState<SourceAnalysis | null>(null);
   const [recs, setRecs] = useState<Recommendation[]>([]);
@@ -176,8 +178,6 @@ export default function Page() {
                 setWikiUrl,
                 intent,
                 setIntent,
-                briefOpen,
-                setBriefOpen,
                 analysis,
                 analyzing,
               }}
@@ -330,13 +330,14 @@ function Configure(p: {
   setWikiUrl: (s: string) => void;
   intent: ImportIntent;
   setIntent: (f: (i: ImportIntent) => ImportIntent) => void;
-  briefOpen: boolean;
-  setBriefOpen: (b: boolean) => void;
   analysis: SourceAnalysis | null;
   analyzing: boolean;
 }) {
   const set = (patch: Partial<ImportIntent>) =>
     p.setIntent((i) => ({ ...i, ...patch }));
+  const promptMode = p.intent.authoringMode === "prompt";
+  const pristinePreset = isPreset(p.intent.prompt);
+  const canImprove = promptMode && p.intent.prompt.trim().length > 0 && !pristinePreset;
   return (
     <div className="space-y-6">
       <div>
@@ -383,53 +384,87 @@ function Configure(p: {
       </div>
 
       <div className="space-y-3">
-        <p className="text-sm font-medium">
-          What do you want? <span className="text-zinc-400">(intent — optional)</span>
-        </p>
-        <textarea
-          value={p.intent.prompt}
-          onChange={(e) => set({ prompt: e.target.value })}
-          rows={2}
-          placeholder="e.g. Assessment for first-year undergrads. Focus on the three boundary types and the evidence. Plain language."
-          className="w-full rounded-md border border-zinc-300 p-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-        />
-        <div className="flex flex-wrap gap-2 text-xs">
-          <button
-            onClick={() => p.setBriefOpen(!p.briefOpen)}
-            className="rounded-md border border-zinc-300 px-2 py-1 dark:border-zinc-700"
-          >
-            {p.briefOpen ? "Hide" : "Use"} guided brief
-          </button>
-          {["Exam revision", "Introduce a topic", "Check prior knowledge"].map((x) => (
-            <button
-              key={x}
-              onClick={() => set({ prompt: presetPrompt(x) })}
-              className="rounded-md border border-zinc-300 px-2 py-1 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
-            >
-              {x}
-            </button>
-          ))}
-          <button
-            onClick={() =>
-              set({
-                prompt: p.intent.prompt
-                  ? `${p.intent.prompt.trim()} Be specific about measurable objectives, audience level, and which concepts to prioritise.`
-                  : p.intent.prompt,
-              })
-            }
-            className="rounded-md border border-zinc-300 px-2 py-1 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
-          >
-            ✨ Improve this prompt
-          </button>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium">Intent</p>
+          <span className="text-xs text-zinc-400">— choose one way to say what you want</span>
         </div>
 
-        {p.briefOpen && (
+        {/* mutually exclusive mode toggle */}
+        <div className="inline-flex rounded-md border border-zinc-300 p-0.5 text-xs dark:border-zinc-700">
+          {(
+            [
+              ["prompt", "Write a prompt"],
+              ["brief", "Guided brief"],
+            ] as const
+          ).map(([m, label]) => (
+            <button
+              key={m}
+              onClick={() => set({ authoringMode: m })}
+              className={`rounded px-3 py-1 ${
+                p.intent.authoringMode === m
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  : "text-zinc-500"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {promptMode ? (
+          <>
+            <textarea
+              value={p.intent.prompt}
+              onChange={(e) => set({ prompt: e.target.value, mode: "generate" })}
+              rows={3}
+              placeholder="e.g. Assessment for first-year undergrads. Focus on the three boundary types and the evidence. Plain language."
+              className="w-full rounded-md border border-zinc-300 p-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            />
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-zinc-400">Start from:</span>
+              {INTENT_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  onClick={() =>
+                    set({ prompt: preset.prompt, mode: preset.mode })
+                  }
+                  className={`rounded-md border px-2 py-1 ${
+                    p.intent.prompt.trim() === preset.prompt.trim()
+                      ? "border-blue-600 font-medium"
+                      : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+              {canImprove && (
+                <button
+                  onClick={() =>
+                    set({
+                      prompt: `${p.intent.prompt.trim()} Be specific about measurable objectives, the audience level, and which concepts from the source to prioritise. State how many questions and their difficulty.`,
+                    })
+                  }
+                  className="rounded-md border border-zinc-300 px-2 py-1 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                >
+                  ✨ Improve this prompt
+                </button>
+              )}
+            </div>
+            {pristinePreset && (
+              <p className="text-[11px] text-zinc-400">
+                Using a pre-designed prompt — already written to best practice. Edit
+                it to make it your own.
+              </p>
+            )}
+          </>
+        ) : (
           <div className="grid gap-3 rounded-md border border-zinc-200 p-3 text-sm sm:grid-cols-2 dark:border-zinc-800">
             <Field label="Learning goal">
               <input
                 value={p.intent.learningGoal}
                 onChange={(e) => set({ learningGoal: e.target.value })}
                 className={fieldInput}
+                placeholder="e.g. Distinguish the three plate-boundary types"
               />
             </Field>
             <Field label="Audience level">
@@ -460,6 +495,19 @@ function Configure(p: {
                 <option value="concept_explanation">Concept explanation</option>
               </select>
             </Field>
+            <Field label="Volume">
+              <select
+                value={p.intent.volume}
+                onChange={(e) =>
+                  set({ volume: e.target.value as ImportIntent["volume"] })
+                }
+                className={fieldInput}
+              >
+                <option value="light">Light (~4 questions)</option>
+                <option value="standard">Standard (~6)</option>
+                <option value="thorough">Thorough (~10)</option>
+              </select>
+            </Field>
             <Field label="Language">
               <input
                 value={p.intent.language}
@@ -486,10 +534,19 @@ function Configure(p: {
                 <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs dark:border-amber-800 dark:bg-amber-950/40">
                   This source contains existing questions.{" "}
                   <button
-                    onClick={() => set({ mode: "extract" })}
+                    onClick={() => {
+                      const ex = INTENT_PRESETS.find(
+                        (x) => x.id === "extract-questions",
+                      )!;
+                      set(
+                        promptMode
+                          ? { mode: "extract", prompt: ex.prompt }
+                          : { mode: "extract" },
+                      );
+                    }}
                     className={`underline ${p.intent.mode === "extract" ? "font-semibold" : ""}`}
                   >
-                    Extract as-is
+                    Extract them as-is
                   </button>{" "}
                   ·{" "}
                   <button
@@ -521,18 +578,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </label>
   );
 }
-function presetPrompt(x: string) {
-  const m: Record<string, string> = {
-    "Exam revision":
-      "Exam revision for students who have already studied this. Prioritise commonly-tested points, mix recall and application, keep it concise.",
-    "Introduce a topic":
-      "First exposure for beginners. Explain core concepts plainly, light assessment to check understanding, define any jargon.",
-    "Check prior knowledge":
-      "A quick diagnostic before teaching. Short, low-stakes, spread across the main sub-topics.",
-  };
-  return m[x] ?? "";
-}
-
 /* ---------------- Screen 2 ---------------- */
 
 function Activities(p: {

@@ -8,14 +8,23 @@ export interface TwinSource {
   value: string;
 }
 
-/** The reworked "intent" step — richer than Smart Import's language + checkboxes. */
+/**
+ * The reworked "intent" step. Intent is authored in ONE mode — a written prompt
+ * OR a guided brief — never both. `authoringMode` says which fields are live.
+ */
 export interface ImportIntent {
-  /** Free-form prompt (the default on-ramp). */
+  authoringMode: "prompt" | "brief";
+
+  /** Live when authoringMode === "prompt". May come from a preset or be user-written. */
   prompt: string;
+
+  /** Live when authoringMode === "brief". */
   learningGoal: string;
   audienceLevel: "beginner" | "intermediate" | "advanced";
-  /** What the educator wants to weight. */
   emphasis: "assessment" | "concept_explanation" | "balanced";
+  volume: "light" | "standard" | "thorough";
+
+  /** Applies in both modes. */
   language: string;
   /** "generate" new items, or "extract" questions already present in the source. */
   mode: "generate" | "extract";

@@ -64,8 +64,10 @@ rework keeps that shell and inserts new steps.
 - **NEW — Question handling** when questions are detected:
   **[Extract as-is]** · **[Generate new]** · **[Both]**. Extraction lifts the educator's own
   questions into the target H5P type with minimal rewriting — faster, and their own wording.
-- **NEW — Intent authoring** replaces the single Customization box (free-form stays the default
-  view): four on-ramps — free-form prompt · guided brief · preset briefs · "improve this prompt".
+- **NEW — Intent authoring** replaces the single Customization box. The educator picks **one
+  mode** — *Write a prompt* **or** *Guided brief* — never both at once (a free-text prompt and a
+  structured brief can contradict each other). Prompt mode carries **preset prompts** to start
+  from and an **"improve this prompt"** action; brief mode is a structured form only.
 - **Language** unchanged.
 
 ### Screen 2 — Select Activities _(existing, enhanced)_
@@ -110,18 +112,28 @@ rework keeps that shell and inserts new steps.
 
 ### Stage 1 — Intent authoring
 
-Four on-ramps feeding **one underlying intent object**:
+The educator authors intent in **exactly one mode** — a written prompt **or** a guided brief.
+They are mutually exclusive: a free-text prompt and a set of structured fields can contradict
+each other, and it's ambiguous which wins. A segmented toggle switches between them.
 
-| On-ramp | What it is | For the educator who… |
-|---|---|---|
-| Free-form prompt (keep) | The text box that exists today; default, lowest-friction. | will type a sentence |
-| Guided brief | Structured form: learning goal(s), audience/grade, prior knowledge, difficulty, emphasis (recall↔understanding↔application), tone, terminology/spelling, volume. | wants scaffolding |
-| Preset briefs | Clickable starts (Exam revision, Introduce a topic, Check prior knowledge, Deep practice, Accessible/ESL) that fill prompt + fields. | faces the blank page |
-| "Improve this prompt" | Rewrites their text with prompt-engineering best practice; diff view; teaches. | typed something rough |
+**Write a prompt**
 
-Interlocks: prompt ↔ brief are two views of one object; presets seed both; "improve" back-fills
-brief fields; brief fields are pre-suggested from the source; any result can be saved as a
-reusable named brief.
+| Element | Behaviour |
+|---|---|
+| Free-text box | The primary input. Lowest friction; default mode. |
+| **Preset prompts** | Clickable, each fills the box with a best-practice prompt: _Exam revision · Introduce a topic · Check prior knowledge · Deep conceptual practice · **Extract existing questions**_. |
+| **"Improve this prompt"** | Rewrites the text to best practice. **Shown only for text the educator wrote or edited** — never for a pristine preset (a preset is already best practice; offering to "improve" our own suggestion makes no sense). It reappears the moment the educator edits a preset. |
+
+**Guided brief**
+
+Structured form: learning goal, audience level, emphasis (recall ↔ understanding ↔ application),
+volume (light / standard / thorough), language. No free-text prompt, no presets, no "improve" —
+the brief *is* the intent; the twin serialises it into an instruction internally.
+
+**Question extraction** — the *Extract existing questions* preset (and the read-back's "Extract
+them as-is" action) sets a verbatim-extraction instruction and switches the run to extract mode:
+pull each question from the source exactly as written, carry over options and marked answers,
+invent nothing. Prompt-only — no special parser needed.
 
 **Also in Stage 1:**
 
@@ -205,7 +217,7 @@ personal track record · confusion-report loop · generation transparency.
 | Seq | Item | Priority | Success measure |
 |---|---|---|---|
 | 1 | PowerPoint (.pptx) first-class ingestion | P1 | `.pptx` approve-without-edit rate reaches clean-article parity; W2 retention for `.pptx`-first users reaches cohort average |
-| 1 | Guided brief + presets + "improve prompt" + save named brief | P1 | Brief used in ≥ 30% of imports by users with ≥ 2 imports; approve-without-edit higher for brief-driven imports |
+| 1 | Full intent authoring: prompt-XOR-brief toggle · preset prompts · "improve" (user text only) · save named brief | P1 | Prompt or brief used in ≥ 30% of imports by users with ≥ 2 imports; approve-without-edit higher for intent-driven imports |
 | 2 | Inline item actions + scoped natural-language edits (Refine) | P1 | Median edits per approved item trends **down** across a user's successive imports |
 | 2 | Per-activity controls + coverage grid | P2 | Cross-activity concept overlap ↓ (measured); "too many/few questions" feedback ↓ |
 | 3 | Propagate-a-fix + preference memory | P2 | Same correction made twice by the same user → near zero |
