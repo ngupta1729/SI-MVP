@@ -39,6 +39,31 @@ async function resolveSourceText(source: TwinSource): Promise<string> {
   }
 }
 
+// --- improve a rough prompt (Stage 1) --------------------------------------
+
+export async function improvePrompt(rough: string): Promise<string> {
+  const trimmed = rough.trim();
+  if (!trimmed || !hasModel()) return trimmed;
+  try {
+    const { text } = await generateText({
+      model: openai(process.env.TWIN_ANALYZE_MODEL || "gpt-4o-mini"),
+      temperature: 0.3,
+      prompt: `An educator wrote a rough instruction for an AI that generates H5P quiz / assessment activities from source material. Rewrite it into a clear, well-structured instruction that follows prompt-engineering best practice: imperative voice, specific and unambiguous, and — only where the rough text states or clearly implies it — the audience/level, the focus or scope, the number of questions, and the difficulty.
+
+HARD RULE: use only what is in or directly implied by the rough text. Do NOT invent an audience, a topic focus, a question count, or a difficulty the educator did not indicate. If they didn't say, leave it out — do not fill gaps with assumptions.
+
+Keep it concise (2–5 sentences). Return ONLY the rewritten instruction — no preamble, no quotes, no explanation.
+
+ROUGH INSTRUCTION:
+${trimmed}`,
+    });
+    return text.trim().replace(/^["']|["']$/g, "") || trimmed;
+  } catch (err) {
+    console.error("improvePrompt failed:", err);
+    return trimmed;
+  }
+}
+
 // --- source read-back (Stage 1) ----------------------------------------------
 // Advisory only. Describes strengths and watch-outs; never blocks or discourages.
 

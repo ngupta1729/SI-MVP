@@ -358,38 +358,48 @@ function Configure(p: {
   const promptTemplates = lib.templates
     .filter((t) => t.kind === "prompt")
     .sort((a, b) => (b.usedAt ?? 0) - (a.usedAt ?? 0));
-  const briefTemplates = lib.templates
-    .filter((t) => t.kind === "brief")
-    .sort((a, b) => (b.usedAt ?? 0) - (a.usedAt ?? 0));
-  const [saving, setSaving] = useState<null | "prompt" | "brief">(null);
+  const [saving, setSaving] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [loadedId, setLoadedId] = useState<string | null>(null);
   const lastId = lib.lastUsedId;
+  const [improving, setImproving] = useState(false);
+  const [preImprove, setPreImprove] = useState<string | null>(null);
+
+  async function improve() {
+    const before = p.intent.prompt;
+    if (!before.trim()) return;
+    setImproving(true);
+    try {
+      const res = await fetch("/api/improve", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ prompt: before }),
+      });
+      const data = await res.json();
+      if (data.improved && data.improved.trim() !== before.trim()) {
+        setPreImprove(before);
+        set({ prompt: data.improved });
+      }
+    } catch {
+      /* leave the prompt as-is */
+    } finally {
+      setImproving(false);
+    }
+  }
   const recentTemplate =
     promptTemplates.find((t) => t.id === lastId) ?? promptTemplates[0] ?? null;
-  const recentBrief =
-    briefTemplates.find((t) => t.id === lastId) ?? briefTemplates[0] ?? null;
-
 
   const bundleTypes =
     p.intent.contentTypes.length > 0 ? p.intent.contentTypes : undefined;
 
   function loadTemplate(t: SavedTemplate) {
-    if (t.kind === "prompt") {
-      set({
-        authoringMode: "prompt",
-        promptPresetId: null,
-        prompt: t.prompt ?? "",
-        mode: t.mode ?? "generate",
-        ...(t.contentTypes?.length ? { contentTypes: t.contentTypes } : {}),
-      });
-    } else if (t.brief) {
-      set({
-        authoringMode: "brief",
-        ...t.brief,
-        ...(t.contentTypes?.length ? { contentTypes: t.contentTypes } : {}),
-      });
-    }
+    set({
+      authoringMode: "prompt",
+      promptPresetId: null,
+      prompt: t.prompt ?? "",
+      mode: t.mode ?? "generate",
+      ...(t.contentTypes?.length ? { contentTypes: t.contentTypes } : {}),
+    });
     setLoadedId(t.id);
     lib.markUsed(t.id);
   }
@@ -397,22 +407,8 @@ function Configure(p: {
   function commitSave() {
     const name = saveName.trim();
     if (!name) return;
-    if (saving === "prompt") {
-      lib.savePrompt(name, p.intent.prompt, p.intent.mode, bundleTypes);
-    } else if (saving === "brief") {
-      lib.saveBrief(
-        name,
-        {
-          learningGoal: p.intent.learningGoal,
-          audienceLevel: p.intent.audienceLevel,
-          emphasis: p.intent.emphasis,
-          volume: p.intent.volume,
-          language: p.intent.language,
-        },
-        bundleTypes,
-      );
-    }
-    setSaving(null);
+    lib.savePrompt(name, p.intent.prompt, p.intent.mode, bundleTypes);
+    setSaving(false);
     setSaveName("");
   }
 
@@ -474,7 +470,7 @@ function Configure(p: {
             </span>
           </div>
           <LibraryPicker
-            templates={lib.templates}
+            templates={promptTemplates}
             loadedId={loadedId}
             lastId={lastId}
             onLoadTemplate={loadTemplate}
@@ -583,14 +579,22 @@ function Configure(p: {
                 <div className="flex flex-wrap items-center gap-2">
                   {canImprove && (
                     <button
-                      onClick={() =>
-                        set({
-                          prompt: `${p.intent.prompt.trim()} Be specific about measurable objectives, the audience level, and which concepts from the source to prioritise. State how many questions and their difficulty.`,
-                        })
-                      }
-                      className="rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                      onClick={improve}
+                      disabled={improving}
+                      className="rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-600 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300"
                     >
-                      ✨ Improve this prompt
+                      {improving ? "Improving…" : "✨ Improve this prompt"}
+                    </button>
+                  )}
+                  {preImprove !== null && !improving && (
+                    <button
+                      onClick={() => {
+                        set({ prompt: preImprove });
+                        setPreImprove(null);
+                      }}
+                      className="rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-400 dark:border-zinc-700"
+                    >
+                      ↩ revert
                     </button>
                   )}
                   {loadedPromptEdited && loaded && (
@@ -608,16 +612,16 @@ function Configure(p: {
                     </button>
                   )}
                   {p.intent.prompt.trim().length > 0 &&
-                    (saving === "prompt" ? (
+                    (saving ? (
                       <SaveRow
                         value={saveName}
                         onChange={setSaveName}
                         onSave={commitSave}
-                        onCancel={() => setSaving(null)}
+                        onCancel={() => setSaving(false)}
                       />
                     ) : (
                       <button
-                        onClick={() => setSaving("prompt")}
+                        onClick={() => setSaving(true)}
                         className="rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
                       >
                         + Save {bundleTypes ? "prompt + activities" : "as template"}
@@ -637,44 +641,6 @@ function Configure(p: {
           </>
         ) : (
           <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              {recentBrief && (
-                <>
-                  <span className="text-zinc-400">Load brief:</span>
-                  <button
-                    onClick={() => loadTemplate(recentBrief)}
-                    className={`rounded-md border px-2 py-1 ${
-                      loadedId === recentBrief.id
-                        ? "border-blue-600 font-medium"
-                        : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
-                    }`}
-                  >
-                    ★ {recentBrief.name}
-                    <span className="ml-1 text-[10px] text-zinc-400">· recent</span>
-                  </button>
-                  {briefTemplates.length > 1 && (
-                    <span className="text-zinc-400">
-                      + {briefTemplates.length - 1} more in 📚 library
-                    </span>
-                  )}
-                </>
-              )}
-              {saving === "brief" ? (
-                <SaveRow
-                  value={saveName}
-                  onChange={setSaveName}
-                  onSave={commitSave}
-                  onCancel={() => setSaving(null)}
-                />
-              ) : (
-                <button
-                  onClick={() => setSaving("brief")}
-                  className="rounded-md border border-zinc-300 px-2 py-1 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
-                >
-                  + Save this brief
-                </button>
-              )}
-            </div>
             <div className="grid gap-3 rounded-md border border-zinc-200 p-3 text-sm sm:grid-cols-2 dark:border-zinc-800">
             <Field label="Learning goal">
               <input
