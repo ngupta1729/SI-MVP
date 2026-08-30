@@ -171,6 +171,16 @@ automated verbatim-diff check added then.
   text-based). Revisit when image-based content types (Image Hotspots, image Drag-and-Drop, Find
   the Hotspot) enter the Smart Import catalog.
 
+**Considered and not pursuing — "suggest a full prompt from the source."** Mechanically easy, but
+the prompt exists to carry the educator's *intent* — audience, purpose (formative vs. summative),
+depth, the sub-topic students struggle with — none of which is in the learning material. A prompt
+derived from the source alone can only restate the read-back and do what Smart Import already
+does by default. If a source-only prompt were good enough, the prompt wouldn't be needed. What
+the source *can* inform stays in: proposed objectives, content-shape guardrails, mode
+pre-selection, and nudges after the educator has written something. _Backlog exception:_ if the
+input is a **lesson plan / syllabus / outcomes doc** (source-as-brief, not source-as-content), it
+does contain intent and could auto-fill objectives + prompt.
+
 ### Stage 2 — Approval (review gate before spend)
 
 Plan preview → proposed-content list → **live interactive H5P preview per item** → per-item
