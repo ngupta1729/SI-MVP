@@ -99,15 +99,34 @@ rework keeps that shell and inserts new steps.
   - **Review** _(default)_ — every question laid out as a list, correct answer marked, so the
     educator can **scan without answering**. Each question carries its own trust signals.
   - **Play** — the real H5P player, the learner experience, for a feel check.
-- **Actions are two-level:**
-  - **Activity level** (in the list): **Approve · Edit · Discard.** Approve-by-default —
-    the educator acts on the exceptions.
-  - **Question level** (in the Review list): **Drop** (✕) a single question · edit its text
-    (in Edit mode) · Regenerate a single question _(planned)_. There is no per-question
-    "Approve" — questions are approved implicitly by being in an approved activity.
+- **Actions — MVP.** Approve is the **default, not a click**; the educator acts on the exceptions.
+  - **Item level** (one question / card / word): **Edit only** — inline text, manual, no AI.
+    (Regenerating one question in isolation risks breaking coherence with the rest — so
+    regeneration is activity-level.)
+  - **Activity level:**
+    - **Regenerate ▾** — a bounded picker that *steers* the regeneration, not just a re-roll:
+      Harder · Easier · Simpler language · More formal · In [language] · Less repetitive ·
+      Clearer wording · Different focus · Just try again. One click → the whole activity is
+      regenerated for its type with that adjustment. Warns: "replaces every question, including
+      your edits."
+    - **Discard ▾** — a bounded reason picker: wrong activity type · quality too low · redundant
+      with another · source doesn't support it · not useful. Drops the activity.
+  - **Gate button:** "Create N" — N = every activity not discarded.
+  - _Deliberately out of MVP:_ item-level regenerate/drop · diagnosis→strategy branching for
+    regenerate · "regenerate instead of discard" redirects · difficulty/count/type as standalone
+    controls (they're regenerate adjustments) · coverage-grid-tied Add-item.
 - **Trust signals are per question**, not per activity: each question shows the exact source
-  sentence it was built from, a one-line answer-key note, and a confidence level. (A 6-question
-  quiz with one grounding sentence for all six is useless.)
+  sentence it was built from, a one-line answer-key note, and a confidence level.
+
+**Feedback → eval stream.** Every review-stage action writes a `review_event`:
+`{ importId, contentType, engine, model, sourceKind, readbackKind, sourceLength, intent{mode,
+authoringMode, preset, emphasis, volume}, action: "edit"|"regenerate"|"discard", reason (the
+picker value), field?, charsDelta?, attempt?, timestamp }` — plus one `create_summary` per import
+(generated / created / edited / regenerated / discarded). This is the labelled dataset that gives
+**approve-without-edit rate**, **which adjustment people reach for** (→ tune defaults: lots of
+"Harder" = generate harder), **discard reasons per source kind**, **edit magnitude per field**,
+and **regenerate attempt-loops** (≥3 = the source can't support that type). It also answers "is
+quality good enough" with data instead of opinion.
 - **Coverage grid**: objectives × activities.
 - **Cost line**: "This will use 2 credits and create 18 items."
 - **[Approve N & create]**.
@@ -370,8 +389,29 @@ approve/drop/edit decisions are a free measurement stream — the gate exists an
 
 ### Stage 3 — Refinement
 
-Inline item actions · scoped natural-language edits · propagate-a-fix (and remember) ·
-regenerate one artifact · post-generation coverage report with "fill the gap".
+**MVP (built into Screen 3 — see that section for detail).** Two bounded levers, no free-form
+natural-language editing:
+
+- **Item level: Edit only.** Inline manual text edit of one question / card / gap. No per-item
+  AI regenerate — regenerating a single item in isolation breaks coherence with the rest of the
+  activity.
+- **Activity level: Regenerate ▾ and Discard ▾.** Regenerate re-runs the whole activity for its
+  type with one *steering adjustment* picked from a closed list — Harder · Easier · Simpler
+  language · More formal · In [language] · Less repetitive · Clearer wording · Different focus ·
+  Just try again. Each adjustment rewrites the generation prompt; it is not just logged. Discard
+  takes a reason from a closed list (wrong activity type · quality too low · redundant · source
+  doesn't support it · not useful). Regenerate replaces every item in the activity, edits
+  included — the UI warns.
+
+Every action writes a `review_event` (schema in the Screen 3 section); this is the labelled
+eval stream — approve-without-edit rate, which adjustment people reach for, discard reasons by
+source kind, regenerate attempt-loops.
+
+**Phase 2 (not built).** Scoped natural-language edits · propagate-a-fix (and remember) ·
+diagnosis→strategy branching on Regenerate · "regenerate instead of discard" redirect ·
+difficulty / count / activity-type as standalone controls · post-generation coverage report
+with "fill the gap" / coverage-grid-tied Add-item · attempt-loop escalation ("this source keeps
+failing for this type — try a different type").
 
 ### Stage 4 — Discoverability & organization
 
