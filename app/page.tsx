@@ -16,13 +16,13 @@ import type {
 } from "@/lib/types";
 import H5PRender from "@/components/H5PRender";
 
-type Screen = "configure" | "activities" | "review" | "done";
+type Screen = "configure" | "activities" | "review" | "library";
 
-const MOCK_DESTINATIONS = [
-  "Smart Imports (inbox)",
-  "Biology 101 / Unit 3 — Plate Tectonics",
-  "Biology 101 / Unit 4 — Volcanism",
-  "Earth Science / Draft material",
+// Mock pre-existing library content, to show new items land among everything else.
+const MOCK_LIBRARY_ITEMS = [
+  { title: "Cell structure — check", type: "Question Set", from: "Biology intro · 12 Aug", modified: "2 weeks ago" },
+  { title: "Photosynthesis flashcards", type: "Dialog Cards", from: "built manually", modified: "3 weeks ago" },
+  { title: "Ecosystem vocabulary", type: "Accordion", from: "Ecology import · 28 Jul", modified: "1 month ago" },
 ];
 type SourceTab = "Pasted Text" | "Wikipedia";
 
@@ -78,11 +78,9 @@ export default function Page() {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Place & Finish (Screen 4)
-  const [importName, setImportName] = useState("");
-  const [destination, setDestination] = useState(MOCK_DESTINATIONS[0]);
-  const [placement, setPlacement] = useState<"draft" | "published">("draft");
-  const [placed, setPlaced] = useState(false);
+  // Post-create: land in the content library, scoped to this import.
+  const [importLabel, setImportLabel] = useState("");
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const activeSourceKey = `${sourceTab}::${sourceTab === "Wikipedia" ? wikiUrl : text}`;
   // Only ever show the read-back / recommendations computed for the source the
@@ -326,36 +324,15 @@ export default function Page() {
         },
       }),
     }).catch(() => {});
-    if (!importName) {
-      const stem =
-        title.trim() ||
-        (sourceTab === "Wikipedia"
-          ? decodeURIComponent(wikiUrl.split("/wiki/")[1] ?? "").replace(/_/g, " ")
-          : "") ||
-        "Smart import";
-      setImportName(`${stem} — ${new Date().toISOString().slice(0, 10)}`);
-    }
-    setPlaced(false);
-    setScreen("done");
-  }
-
-  function placeImport() {
-    if (!result) return;
-    const kept = result.items.filter((i) => itemState[i.id] !== "discarded");
-    fetch("/api/review-event", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        importId,
-        placement: {
-          name: importName,
-          destination,
-          state: placement,
-          items: kept.length,
-        },
-      }),
-    }).catch(() => {});
-    setPlaced(true);
+    const stem =
+      title.trim() ||
+      (sourceTab === "Wikipedia"
+        ? decodeURIComponent(wikiUrl.split("/wiki/")[1] ?? "").replace(/_/g, " ")
+        : "") ||
+      "Smart import";
+    setImportLabel(`${stem} · ${new Date().toISOString().slice(0, 10)}`);
+    setDetailsOpen(false);
+    setScreen("library");
   }
 
   function startAnother() {
@@ -365,10 +342,8 @@ export default function Page() {
     setSelected(null);
     setAttempts({});
     setRemixes({});
-    setImportName("");
-    setDestination(MOCK_DESTINATIONS[0]);
-    setPlacement("draft");
-    setPlaced(false);
+    setImportLabel("");
+    setDetailsOpen(false);
     setText("");
     setWikiUrl("");
     setTitle("");
@@ -450,13 +425,14 @@ export default function Page() {
               onDiscard={discardActivity}
             />
           )}
-          {screen === "done" && result && (
-            <PlaceFinish
+          {screen === "library" && result && (
+            <LibraryView
               result={result}
               itemState={itemState}
               edits={edits}
               attempts={attempts}
               remixes={remixes}
+              importLabel={importLabel}
               sourceLabel={
                 sourceTab === "Wikipedia"
                   ? wikiUrl
@@ -468,23 +444,16 @@ export default function Page() {
                   : intent.prompt || "(defaults)"
               }
               engine={result.engine}
-              importName={importName}
-              setImportName={setImportName}
-              destination={destination}
-              setDestination={setDestination}
-              placement={placement}
-              setPlacement={setPlacement}
-              placed={placed}
+              detailsOpen={detailsOpen}
+              setDetailsOpen={setDetailsOpen}
             />
           )}
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-zinc-200 px-6 py-3 dark:border-zinc-800">
           <span className="text-xs text-zinc-400">
-            {screen === "done" && result
-              ? placed
-                ? `Placed in ${destination}`
-                : `${keptIds.length} activit${keptIds.length === 1 ? "y" : "ies"} ready to place`
+            {screen === "library" && result
+              ? `${keptIds.length} created · in your content library`
               : screen === "review" && result
               ? `${keptIds.length}/${result.items.length} kept · engine: ${result.engine}`
               : shownAnalysis
@@ -537,30 +506,14 @@ export default function Page() {
                 </button>
               </>
             )}
-            {screen === "done" && (
+            {screen === "library" && (
               <>
-                {!placed && (
-                  <button
-                    onClick={() => setScreen("review")}
-                    className={btnGhost}
-                  >
-                    Back to review
-                  </button>
-                )}
-                {placed ? (
-                  <button onClick={startAnother} className={btnPrimary}>
-                    Start another import
-                  </button>
-                ) : (
-                  <button
-                    onClick={placeImport}
-                    disabled={!importName.trim()}
-                    className={btnPrimary}
-                  >
-                    {placement === "published" ? "Publish" : "Place"} in “
-                    {destination.split(" / ").pop()}”
-                  </button>
-                )}
+                <button onClick={() => setScreen("review")} className={btnGhost}>
+                  Back to review
+                </button>
+                <button onClick={startAnother} className={btnPrimary}>
+                  Start another import
+                </button>
               </>
             )}
           </div>
@@ -582,9 +535,10 @@ function Stepper({ screen }: { screen: Screen }) {
     ["configure", "Configure Content"],
     ["activities", "Select Activities"],
     ["review", "Review & Approve"],
-    ["done", "Place & Finish"],
   ];
-  const idx = steps.findIndex(([s]) => s === screen);
+  // "library" is post-flow — show every step complete.
+  const idx =
+    screen === "library" ? steps.length : steps.findIndex(([s]) => s === screen);
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
       {steps.map(([s, label], i) => (
@@ -1579,24 +1533,20 @@ function Review(p: {
   );
 }
 
-/* ---------------- Screen 4 — Place & Finish ---------------- */
+/* ---------------- After Create — the content library, scoped to this import ---------------- */
 
-function PlaceFinish(p: {
+function LibraryView(p: {
   result: ApiResult;
   itemState: Record<string, ItemState>;
   edits: Record<string, unknown>;
   attempts: Record<string, number>;
   remixes: Record<string, number>;
+  importLabel: string;
   sourceLabel: string;
   intentLabel: string;
   engine: string;
-  importName: string;
-  setImportName: (s: string) => void;
-  destination: string;
-  setDestination: (s: string) => void;
-  placement: "draft" | "published";
-  setPlacement: (s: "draft" | "published") => void;
-  placed: boolean;
+  detailsOpen: boolean;
+  setDetailsOpen: (b: boolean) => void;
 }) {
   const kept = p.result.items.filter((i) => p.itemState[i.id] !== "discarded");
   const discarded = p.result.items.filter(
@@ -1608,141 +1558,115 @@ function PlaceFinish(p: {
   const refinedCount = Object.keys(p.attempts).length;
   const remixedCount = Object.keys(p.remixes).length;
 
-  if (p.placed) {
-    return (
-      <div className="space-y-4">
-        <div className="rounded-md border border-emerald-300 bg-emerald-50 p-4 text-sm dark:border-emerald-900 dark:bg-emerald-950/30">
-          <p className="font-medium text-emerald-800 dark:text-emerald-200">
-            ✓ “{p.importName}” placed in {p.destination}
-          </p>
-          <p className="mt-1 text-emerald-700 dark:text-emerald-300">
-            {kept.length} {kept.length === 1 ? "activity" : "activities"}{" "}
-            {p.placement === "published" ? "published" : "saved as draft"}. Each one
-            shows <b>from: {p.importName}</b> in your content library and can be
-            filtered by this import.
+  return (
+    <div className="space-y-4">
+      <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm dark:border-emerald-900 dark:bg-emerald-950/30">
+        <p className="font-medium text-emerald-800 dark:text-emerald-200">
+          ✓ {kept.length} {kept.length === 1 ? "activity" : "activities"} created and
+          added to your content library
+        </p>
+        <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
+          Each is tagged <b>from: {p.importLabel}</b> — your library is filtered to
+          this import below. There is no separate Smart Import folder.
+        </p>
+        <button
+          onClick={() => p.setDetailsOpen(!p.detailsOpen)}
+          className="mt-1 text-xs underline"
+        >
+          {p.detailsOpen ? "Hide import details" : "Open import details"}
+        </button>
+      </div>
+
+      {p.detailsOpen && (
+        <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="font-semibold text-zinc-500">Import · {p.importLabel}</p>
+          <dl className="mt-1 grid gap-x-3 gap-y-0.5 sm:grid-cols-[5rem_1fr]">
+            <dt className="text-zinc-400">Source</dt>
+            <dd className="truncate">{p.sourceLabel}</dd>
+            <dt className="text-zinc-400">Intent</dt>
+            <dd className="truncate">{p.intentLabel}</dd>
+            <dt className="text-zinc-400">Engine</dt>
+            <dd>{p.engine}</dd>
+            <dt className="text-zinc-400">Outcome</dt>
+            <dd>
+              {p.result.items.length} generated → {kept.length} kept
+              {editedCount ? `, ${editedCount} edited` : ""}
+              {refinedCount ? `, ${refinedCount} refined` : ""}
+              {remixedCount ? `, ${remixedCount} remixed` : ""}
+              {discarded.length ? `, ${discarded.length} discarded` : ""}
+            </dd>
+          </dl>
+          {discarded.length > 0 && (
+            <p className="mt-1 text-zinc-400">
+              Discarded:{" "}
+              {discarded
+                .map((i) => contentType(i.contentType)?.label)
+                .join(", ")}
+            </p>
+          )}
+          <p className="mt-1 text-zinc-400">
+            Reopenable from <b>Smart Imports</b>; content links back here.
           </p>
         </div>
-        <ul className="grid gap-2 sm:grid-cols-2">
-          {kept.map((i) => (
-            <li
-              key={i.id}
-              className="rounded-md border border-zinc-200 p-2 text-xs dark:border-zinc-800"
-            >
-              <p className="font-medium">{contentType(i.contentType)?.label}</p>
-              <p className="text-zinc-500">{i.concepts.slice(0, 3).join(", ")}</p>
-            </li>
-          ))}
-        </ul>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-5">
-      <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <p className="font-medium">
-          {kept.length} {kept.length === 1 ? "activity" : "activities"} ready to place
-        </p>
-        <p className="mt-1 text-xs text-zinc-500">
-          from {p.sourceLabel} · {refinedCount} refined · {remixedCount} remixed ·{" "}
-          {editedCount} edited · {discarded.length} discarded · engine {p.engine}
-        </p>
-        <p className="mt-1 truncate text-xs text-zinc-400">
-          intent: {p.intentLabel}
-        </p>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="mb-1 block text-xs text-zinc-500">Name this import</span>
-          <input
-            value={p.importName}
-            onChange={(e) => p.setImportName(e.target.value)}
-            className={fieldInput}
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs text-zinc-500">Destination</span>
-          <select
-            value={p.destination}
-            onChange={(e) => p.setDestination(e.target.value)}
-            className={fieldInput}
-          >
-            {MOCK_DESTINATIONS.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <div className="flex gap-4 text-xs">
-        {(["draft", "published"] as const).map((s) => (
-          <label key={s} className="flex items-center gap-1">
-            <input
-              type="radio"
-              checked={p.placement === s}
-              onChange={() => p.setPlacement(s)}
-            />
-            {s === "draft" ? "Keep as draft" : "Publish set"}
-          </label>
-        ))}
-      </div>
+      )}
 
       <div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-          Created — the import’s own workspace
-        </p>
-        <ul className="space-y-2">
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+          <span className="font-semibold uppercase tracking-wide text-zinc-400">
+            Content library
+          </span>
+          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+            from: {p.importLabel} ✕
+          </span>
+        </div>
+        <ul className="space-y-1.5">
           {kept.map((i) => {
-            const badges: string[] = [];
+            const tags: string[] = [];
             if (p.edits[i.id] && p.edits[i.id] !== i.contentJson)
-              badges.push("edited");
-            if (p.attempts[i.id]) badges.push(`refined ×${p.attempts[i.id] - 1}`);
-            if (p.remixes[i.id]) badges.push("remixed");
+              tags.push("edited");
+            if (p.attempts[i.id]) tags.push(`refined ×${p.attempts[i.id] - 1}`);
+            if (p.remixes[i.id]) tags.push("remixed");
             return (
               <li
                 key={i.id}
-                className="flex items-start justify-between gap-2 rounded-md border border-zinc-200 p-2 text-xs dark:border-zinc-800"
+                className="flex items-center justify-between gap-2 rounded-md border border-zinc-200 p-2 text-xs dark:border-zinc-800"
               >
-                <div>
-                  <p className="font-medium">
-                    {contentType(i.contentType)?.label}
+                <div className="min-w-0">
+                  <p className="truncate font-medium">
+                    {i.title || contentType(i.contentType)?.label}
                   </p>
-                  <p className="text-zinc-500">
-                    {i.concepts.slice(0, 4).join(", ")}
-                  </p>
-                  <p className="mt-0.5 text-[10px] text-zinc-400">
-                    {i.provenance ?? "inferred"} · conf {i.confidence ?? "—"}
-                    {badges.length ? ` · ${badges.join(" · ")}` : ""}
+                  <p className="truncate text-zinc-500">
+                    {contentType(i.contentType)?.label} · from{" "}
+                    <span className="text-blue-600 underline">
+                      {p.importLabel}
+                    </span>{" "}
+                    · just now{tags.length ? ` · ${tags.join(" · ")}` : ""}
                   </p>
                 </div>
-                <button
-                  disabled
-                  className="shrink-0 rounded border border-zinc-300 px-1.5 py-0.5 text-[11px] text-zinc-400 dark:border-zinc-700"
-                >
-                  Open ↗
-                </button>
+                <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800">
+                  draft
+                </span>
               </li>
             );
           })}
         </ul>
-        {discarded.length > 0 && (
-          <p className="mt-2 text-[11px] text-zinc-400">
-            {discarded.length} discarded, not created:{" "}
-            {discarded
-              .map((i) => contentType(i.contentType)?.label)
-              .join(", ")}
-          </p>
-        )}
+        <p className="mt-3 text-[11px] text-zinc-400">
+          — clear the filter to see everything else in the library —
+        </p>
+        <ul className="mt-1 space-y-1.5 opacity-40">
+          {MOCK_LIBRARY_ITEMS.map((m) => (
+            <li
+              key={m.title}
+              className="rounded-md border border-zinc-200 p-2 text-xs dark:border-zinc-800"
+            >
+              <p className="truncate font-medium">{m.title}</p>
+              <p className="truncate text-zinc-500">
+                {m.type} · from {m.from} · {m.modified}
+              </p>
+            </li>
+          ))}
+        </ul>
       </div>
-
-      <p className="rounded-md border border-zinc-200 p-2 text-[11px] text-zinc-500 dark:border-zinc-800">
-        No separate “Smart Import” content folder. These items go straight to{" "}
-        <b>{p.destination}</b>; the import stays a page you can reopen from{" "}
-        <b>Smart Imports</b>, linked both ways to the content it made.
-      </p>
     </div>
   );
 }
