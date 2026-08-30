@@ -40,14 +40,13 @@ async function resolveSourceText(source: TwinSource): Promise<string> {
 }
 
 // --- source read-back (Stage 1) ----------------------------------------------
+// Advisory only. Describes strengths and watch-outs; never blocks or discourages.
 
 const PROCEDURAL = /\b(step \d|first,|next,|then,|finally,|how to|procedure|install)\b/i;
 
-export async function analyzeSource(source: TwinSource): Promise<SourceAnalysis> {
-  const text = await resolveSourceText(source);
+function heuristicAnalysis(text: string): SourceAnalysis {
   const words = text.split(/\s+/).filter(Boolean);
   const sentences = (text.match(/[^.!?]{15,}[.!?]/g) ?? []).map((s) => s.trim());
-  const detectedQuestions = (text.match(/\?/g) ?? []).length;
   const concepts = extractConcepts(text, 6);
   return {
     kind: PROCEDURAL.test(text)
@@ -56,12 +55,64 @@ export async function analyzeSource(source: TwinSource): Promise<SourceAnalysis>
         ? "conceptual"
         : "mixed",
     wordCount: words.length,
+    readingLevel: "not assessed",
     concepts,
-    detectedQuestions,
+    themes: concepts.slice(0, 4),
+    strengths: [
+      `${words.length} words — enough for roughly ${Math.max(4, Math.min(20, Math.round(words.length / 120)))} questions`,
+    ],
+    watchOuts: ["Read-back is running without the model — concepts are frequency-based only"],
+    detectedQuestions: (text.match(/\?/g) ?? []).length,
     suggestedObjectives: concepts
       .slice(0, 3)
-      .map((c) => `Explain the role of ${c.toLowerCase()} and how it relates to the topic.`),
+      .map((c) => `Explain ${c.toLowerCase()} and how it connects to the wider topic.`),
+    engine: "heuristic",
   };
+}
+
+export async function analyzeSource(source: TwinSource): Promise<SourceAnalysis> {
+  const text = await resolveSourceText(source);
+  const words = text.split(/\s+/).filter(Boolean);
+  const detectedQuestions = (text.match(/\?/g) ?? []).length;
+
+  if (!hasModel()) return heuristicAnalysis(text);
+
+  try {
+    const prompt = `Read this source material that a teacher wants to turn into H5P quiz/assessment activities. Return a neutral read-back — describe it so the teacher knows what to expect. Do NOT tell them whether to use it; that is their choice.
+
+SOURCE:
+${text.slice(0, 12000)}
+
+Return ONLY JSON:
+{
+  "kind": "conceptual" | "procedural" | "narrative" | "reference" | "mixed",
+  "readingLevel": "<in a teacher's words, e.g. 'introductory', 'upper-secondary', 'undergraduate', 'dense'>",
+  "concepts": ["<5-8 substantive things a teacher would assess; multi-word allowed; NOT just frequent words>"],
+  "themes": ["<3-5 themes the generated questions will draw on, heaviest-covered first>"],
+  "strengths": ["<2-3 short phrases: what this source is good raw material for>"],
+  "watchOuts": ["<2-3 short phrases: what to expect or what it won't cover well — neutral, e.g. 'fact-dense, so expect what/when questions over why'; NOT 'don't use this'>"],
+  "suggestedObjectives": ["<3-5 real, measurable learning objectives grounded in THIS text; each a full sentence a teacher could keep as-is>"]
+}`;
+    const { text: out } = await generateText({
+      model: openai(process.env.TWIN_ANALYZE_MODEL || "gpt-4o-mini"),
+      prompt,
+      temperature: 0.2,
+    });
+    const json = out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1);
+    const parsed = JSON.parse(json) as Omit<
+      SourceAnalysis,
+      "wordCount" | "detectedQuestions" | "engine"
+    >;
+    return {
+      ...parsed,
+      wordCount: words.length,
+      detectedQuestions,
+      engine: "model",
+    };
+  } catch (err) {
+    console.error("analyze model call failed, using heuristic:", err);
+    return heuristicAnalysis(text);
+  }
 }
 
 /** Rank the catalog against a source analysis + intent — drives recommendations. */

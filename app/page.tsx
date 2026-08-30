@@ -114,14 +114,21 @@ export default function Page() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, wikiUrl, sourceTab, intent.emphasis]);
+  }, [text, wikiUrl, sourceTab]); // source only — analysis doesn't wait on intent
 
   async function generate(useRecommended = false) {
     setGenerating(true);
     setError(null);
     try {
+      // Quick generate never waits on the read-back: use recommendations if
+      // they've landed, else the author's picks, else a sensible default.
+      const recommended = recs.filter((r) => r.recommended).map((r) => r.name);
       const contentTypes = useRecommended
-        ? recs.filter((r) => r.recommended).map((r) => r.name)
+        ? recommended.length
+          ? recommended
+          : intent.contentTypes.length
+            ? intent.contentTypes
+            : ["H5P.SingleChoiceSet"]
         : intent.contentTypes;
       const res = await fetch("/api/twin", {
         method: "POST",
@@ -237,15 +244,15 @@ export default function Page() {
               <>
                 <button
                   onClick={() => generate(true)}
-                  disabled={!analysis || generating}
+                  disabled={!sourceReady || generating}
                   className={btnGhost}
-                  title="Skip activity selection — generate with the recommended set"
+                  title="Skip activity selection — generate now"
                 >
                   {generating ? "…" : "Quick generate"}
                 </button>
                 <button
                   onClick={() => setScreen("activities")}
-                  disabled={!analysis}
+                  disabled={!sourceReady}
                   className={btnPrimary}
                 >
                   Choose activities
@@ -290,6 +297,8 @@ export default function Page() {
     </main>
   );
 }
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const btnPrimary =
   "rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40";
@@ -729,17 +738,53 @@ function Configure(p: {
       {(p.analyzing || p.analysis) && (
         <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-800 dark:bg-zinc-900">
           {p.analyzing && !p.analysis ? (
-            <p className="text-zinc-500">Reading the source…</p>
+            <p className="text-zinc-500">
+              Reading the source… <span className="text-zinc-400">(you can keep going —
+              this is just a heads-up on the material)</span>
+            </p>
           ) : p.analysis ? (
             <>
-              <p>
-                <b>Source read-back:</b> {p.analysis.kind} material,{" "}
-                {p.analysis.wordCount} words. Key concepts:{" "}
-                {p.analysis.concepts.join(", ")}.
+              <p className="text-xs font-medium text-zinc-400">
+                Source read-back — what to expect from this material. Advisory only;
+                using it is your call.
               </p>
+              <p className="mt-1">
+                {cap(p.analysis.kind)} material, {p.analysis.wordCount} words
+                {p.analysis.readingLevel && p.analysis.readingLevel !== "not assessed"
+                  ? `, ${p.analysis.readingLevel} level`
+                  : ""}
+                . Covers: {p.analysis.themes.join(", ") || p.analysis.concepts.join(", ")}.
+              </p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {p.analysis.strengths.length > 0 && (
+                  <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs dark:border-emerald-900 dark:bg-emerald-950/30">
+                    <p className="font-medium text-emerald-700 dark:text-emerald-300">
+                      Strengths
+                    </p>
+                    <ul className="mt-0.5 list-disc pl-4 text-zinc-600 dark:text-zinc-300">
+                      {p.analysis.strengths.map((s, i) => (
+                        <li key={i}>{s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {p.analysis.watchOuts.length > 0 && (
+                  <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs dark:border-amber-900 dark:bg-amber-950/30">
+                    <p className="font-medium text-amber-700 dark:text-amber-300">
+                      Watch-outs
+                    </p>
+                    <ul className="mt-0.5 list-disc pl-4 text-zinc-600 dark:text-zinc-300">
+                      {p.analysis.watchOuts.map((s, i) => (
+                        <li key={i}>{s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
               {p.analysis.detectedQuestions > 3 && (
-                <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs dark:border-amber-800 dark:bg-amber-950/40">
-                  This source contains existing questions.{" "}
+                <div className="mt-2 rounded border border-zinc-300 bg-white p-2 text-xs dark:border-zinc-700 dark:bg-zinc-950">
+                  This source contains ~{p.analysis.detectedQuestions} existing
+                  questions.{" "}
                   <button
                     onClick={() => {
                       const ex = findPreset("extract-questions")!;
@@ -766,8 +811,21 @@ function Configure(p: {
                   </button>
                 </div>
               )}
-              <p className="mt-2 text-xs text-zinc-500">
-                Suggested objectives: {p.analysis.suggestedObjectives.join(" · ")}
+              {p.analysis.suggestedObjectives.length > 0 && (
+                <div className="mt-2 text-xs text-zinc-500">
+                  <span className="font-medium">Draft objectives</span> (a starting
+                  point — use, edit, or ignore):
+                  <ul className="mt-0.5 list-disc pl-4">
+                    {p.analysis.suggestedObjectives.map((o, i) => (
+                      <li key={i}>{o}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <p className="mt-1 text-[10px] text-zinc-400">
+                {p.analysis.engine === "model"
+                  ? "read-back by model"
+                  : "read-back is heuristic (no model key) — concepts are frequency-based"}
               </p>
             </>
           ) : null}

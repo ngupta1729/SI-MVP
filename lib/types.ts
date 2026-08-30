@@ -37,15 +37,30 @@ export interface ImportIntent {
   contentTypes: string[];
 }
 
-/** What the source read-back surfaces before activity selection. */
+/**
+ * What the source read-back surfaces before activity selection. Purely advisory —
+ * it describes the material's strengths and watch-outs so the author knows what to
+ * expect; it never blocks or discourages use.
+ */
 export interface SourceAnalysis {
-  kind: "conceptual" | "procedural" | "narrative" | "mixed";
+  kind: "conceptual" | "procedural" | "narrative" | "reference" | "mixed";
   wordCount: number;
+  /** Reading level in the author's terms, e.g. "upper-secondary", "introductory". */
+  readingLevel: string;
+  /** Substantive concepts a teacher would assess — multi-word allowed. */
   concepts: string[];
+  /** Themes the generated content will draw on, roughly weighted (heaviest first). */
+  themes: string[];
+  /** What this source is good raw material for. */
+  strengths: string[];
+  /** What to expect / what it won't cover well — neutral, not a verdict. */
+  watchOuts: string[];
   /** Questions already present in the source (drives the extract-as-is offer). */
   detectedQuestions: number;
-  /** Suggested learning objectives read off the source. */
+  /** Suggested learning objectives read off the source — real, measurable, editable. */
   suggestedObjectives: string[];
+  /** "model" when the LLM produced this, "heuristic" for the offline fallback. */
+  engine: "model" | "heuristic";
 }
 
 /** One planned artifact, shown in the approval step before it is finalized. */
