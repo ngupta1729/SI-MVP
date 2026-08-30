@@ -63,9 +63,7 @@ function heuristicAnalysis(text: string): SourceAnalysis {
     ],
     watchOuts: ["Read-back is running without the model — concepts are frequency-based only"],
     detectedQuestions: (text.match(/\?/g) ?? []).length,
-    suggestedObjectives: concepts
-      .slice(0, 3)
-      .map((c) => `Explain ${c.toLowerCase()} and how it connects to the wider topic.`),
+    suggestedObjectives: [],
     engine: "heuristic",
   };
 }
@@ -90,8 +88,7 @@ Return ONLY JSON:
   "concepts": ["<5-8 substantive things a teacher would assess; multi-word allowed; NOT just frequent words>"],
   "themes": ["<3-5 themes the generated questions will draw on, heaviest-covered first>"],
   "strengths": ["<2-3 short phrases: what this source is good raw material for>"],
-  "watchOuts": ["<2-3 short phrases: what to expect or what it won't cover well — neutral, e.g. 'fact-dense, so expect what/when questions over why'; NOT 'don't use this'>"],
-  "suggestedObjectives": ["<3-5 real, measurable learning objectives grounded in THIS text; each a full sentence a teacher could keep as-is>"]
+  "watchOuts": ["<2-3 short phrases: what to expect or what it won't cover well — neutral, e.g. 'fact-dense, so expect what/when questions over why'; NOT 'don't use this'>"]
 }`;
     const { text: out } = await generateText({
       model: openai(process.env.TWIN_ANALYZE_MODEL || "gpt-4o-mini"),
@@ -101,12 +98,13 @@ Return ONLY JSON:
     const json = out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1);
     const parsed = JSON.parse(json) as Omit<
       SourceAnalysis,
-      "wordCount" | "detectedQuestions" | "engine"
+      "wordCount" | "detectedQuestions" | "engine" | "suggestedObjectives"
     >;
     return {
       ...parsed,
       wordCount: words.length,
       detectedQuestions,
+      suggestedObjectives: [],
       engine: "model",
     };
   } catch (err) {

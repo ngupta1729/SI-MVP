@@ -370,38 +370,6 @@ function Configure(p: {
   const recentBrief =
     briefTemplates.find((t) => t.id === lastId) ?? briefTemplates[0] ?? null;
 
-  // Draft objectives: all selected by default; author unchecks the ones they don't want.
-  const [droppedObjectives, setDroppedObjectives] = useState<Set<string>>(
-    new Set(),
-  );
-  const chosenObjectives = (p.analysis?.suggestedObjectives ?? []).filter(
-    (o) => !droppedObjectives.has(o),
-  );
-
-  function useObjectives() {
-    if (!chosenObjectives.length) return;
-    const block =
-      "Target these learning objectives:\n" +
-      chosenObjectives.map((o) => `- ${o}`).join("\n");
-    if (p.intent.authoringMode === "brief") {
-      set({ learningGoal: chosenObjectives.join("; ") });
-    } else if (isScratch) {
-      set({
-        prompt: p.intent.prompt.trim()
-          ? `${p.intent.prompt.trim()}\n\n${block}`
-          : block,
-        mode: "generate",
-      });
-    } else {
-      // a predefined prompt is active — start a Scratch prompt from it + the objectives
-      const base = findPreset(p.intent.promptPresetId!)?.prompt ?? "";
-      set({
-        promptPresetId: null,
-        prompt: base ? `${base}\n\n${block}` : block,
-        mode: "generate",
-      });
-    }
-  }
 
   const bundleTypes =
     p.intent.contentTypes.length > 0 ? p.intent.contentTypes : undefined;
@@ -841,44 +809,6 @@ function Configure(p: {
                     className={`underline ${p.intent.mode === "generate" ? "font-semibold" : ""}`}
                   >
                     Generate new
-                  </button>
-                </div>
-              )}
-              {p.analysis.suggestedObjectives.length > 0 && (
-                <div className="mt-2 text-xs">
-                  <p className="font-medium text-zinc-500">
-                    Draft objectives — tick the ones you want, then add them to your{" "}
-                    {p.intent.authoringMode === "brief" ? "brief" : "prompt"}:
-                  </p>
-                  <ul className="mt-1 space-y-1">
-                    {p.analysis.suggestedObjectives.map((o) => (
-                      <li key={o}>
-                        <label className="flex items-start gap-2 text-zinc-600 dark:text-zinc-300">
-                          <input
-                            type="checkbox"
-                            className="mt-0.5"
-                            checked={!droppedObjectives.has(o)}
-                            onChange={() =>
-                              setDroppedObjectives((s) => {
-                                const n = new Set(s);
-                                n.has(o) ? n.delete(o) : n.add(o);
-                                return n;
-                              })
-                            }
-                          />
-                          <span>{o}</span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                  <button
-                    onClick={useObjectives}
-                    disabled={chosenObjectives.length === 0}
-                    className="mt-1.5 rounded-md border border-zinc-300 px-2 py-1 text-zinc-600 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300"
-                  >
-                    {p.intent.authoringMode === "brief"
-                      ? `Use ${chosenObjectives.length} as learning goal`
-                      : `Add ${chosenObjectives.length} to prompt`}
                   </button>
                 </div>
               )}
