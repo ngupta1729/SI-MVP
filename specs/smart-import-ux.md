@@ -228,9 +228,11 @@ automated verbatim-diff check added then.
   generation from `.pptx` is weak. Proper slide + speaker-notes + structure parsing. _(Assumption
   to validate: `.pptx` is a very common lecturer format.)_
 - **Images — deprioritized.** Complex, and low value for the content types Smart Import currently
-  produces (Single Choice Set, Summary, Question Set, Crossword, Drag the Words are all
-  text-based). Revisit when image-based content types (Image Hotspots, image Drag-and-Drop, Find
-  the Hotspot) enter the Smart Import catalog.
+  produces — Crosswords, Question Set, Single Choice Set, Summary, Glossary (difficult words /
+  key concepts), Higher-Order Questions, Interactive Book, Dialog Cards (conceptual / contextual),
+  Drag the Words, The Chase are all text-based; only Interactive Video needs media. Revisit when
+  image-based content types (Image Hotspots, image Drag-and-Drop, Find the Hotspot) enter the
+  Smart Import catalog.
 
 **Considered and not pursuing — "suggest a full prompt from the source."** Mechanically easy, but
 the prompt exists to carry the educator's *intent* — audience, purpose (formative vs. summative),
