@@ -33,13 +33,6 @@ export const INTENT_PRESETS: IntentPreset[] = [
       "Purpose: a short diagnostic to find out what learners already know before teaching. Keep it brief and low-stakes. Spread the questions evenly across the main sub-topics in the source rather than going deep on one. Avoid trick questions.",
   },
   {
-    id: "deep-practice",
-    label: "Deep conceptual practice",
-    mode: "generate",
-    prompt:
-      "Audience: learners who know the basics and need to deepen understanding. Write questions that require connecting ideas, comparing cases, or reasoning about why something is true — not single-fact recall. Distractors should represent common misconceptions, and must still be clearly wrong on a careful reading of the source.",
-  },
-  {
     id: "extract-questions",
     label: "Extract existing questions",
     mode: "extract",

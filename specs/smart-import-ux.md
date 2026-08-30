@@ -121,7 +121,7 @@ each other, and it's ambiguous which wins. A segmented toggle switches between t
 | Element | Behaviour |
 |---|---|
 | Free-text box | The primary input. Lowest friction; default mode. |
-| **Preset prompts** | Clickable, each fills the box with a best-practice prompt: _Exam revision · Introduce a topic · Check prior knowledge · Deep conceptual practice · **Extract existing questions**_. |
+| **Preset prompts** | Clickable, each fills the box with a best-practice prompt: _Exam revision · Introduce a topic · Check prior knowledge · **Extract existing questions**_. |
 | **"Improve this prompt"** | Rewrites the text to best practice. **Shown only for text the educator wrote or edited** — never for a pristine preset (a preset is already best practice; offering to "improve" our own suggestion makes no sense). It reappears the moment the educator edits a preset. |
 
 **Guided brief**
@@ -134,7 +134,7 @@ the brief *is* the intent; the twin serialises it into an instruction internally
 
 | Tier | Source | Editable |
 |---|---|---|
-| **System templates** | The predesigned prompts (Exam revision, Introduce a topic, Check prior knowledge, Deep conceptual practice, Extract existing questions) | Read-only, used as-is |
+| **System templates** | The predesigned prompts (Exam revision, Introduce a topic, Check prior knowledge, Extract existing questions) | Read-only, used as-is |
 | **Personal templates** | Any Scratch prompt the author wrote, or any brief they configured — named and saved | Author's own (rename / delete) |
 | **Org templates** _(admin layer, later)_ | Admins publish org-wide starting points | Read-only to authors |
 
