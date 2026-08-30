@@ -1,13 +1,23 @@
-# Smart Import — Reworked Educator Workflow
+# H5P Smart Import — Reworked Educator Workflow
 
-_Draft, 2026-08-30._
+_Draft, 2026-08-31._
+
+## Goal
+
+**Reduce time-to-value and lift W1→W2 retention for H5P Smart Import.** Today an educator tries
+Smart Import once and does not come back (~20% week-1 → week-2). This project redesigns the
+educator workflow — how they express intent, choose what gets generated, review and refine the
+output, and find it later — so the first result is trusted and cheap enough to build on.
+
+It is delivered as (a) a working prototype that reproduces Smart Import's generate-from-source
+behaviour, renders output in the real H5P player, and layers the redesigned workflow on top, and
+(b) this spec. **The prototype is a means to test and demo the workflow before H5P engineering
+commits — not a deliverable in itself.**
 
 ## Context
 
-**Smart Import** (H5P.com only) turns a source into H5P interactive content using AI. A source
-document is **mandatory** — there is no from-scratch generation, so output is always grounded.
-This proposal reworks the *educator workflow* on top of the existing product UI: how they express
-intent, review what the AI produced, refine it, find it later, and trust it.
+**Smart Import** (H5P.com) turns a source document into H5P interactive content using AI. A source
+is **mandatory** — no from-scratch generation, so output is always grounded.
 
 ### The signal that shapes everything
 
@@ -34,17 +44,126 @@ They don't fix an 80% cliff. The roadmap sequences trust-and-cleanup first.
    content item** dumped flat into one "Smart Import" folder.
 5. **Refine**: open each item → full H5P editor, or View. Export via player Reuse → Download `.h5p`.
 
-### Core friction
+---
 
-| Stage | Problem |
+## The four parts of the workflow
+
+The rework touches four things the educator does. For each: what breaks today (from the H5P.com
+walkthrough) and what we've added — every "reworked" item below is **new vs. the shipped
+product**. This is the opportunity map; the detailed design follows further down.
+
+### 1 · Express intent — *what do I want, from what source*
+
+| Today | Reworked (new) |
 |---|---|
-| Intent | One optional, collapsed free-text box. Blank-page problem. |
-| Activity selection | Blind checkboxes. No fit-to-source signal, no counts, no coverage view. |
-| Generation | Credits spent with **no preview**. Black-box wait. |
-| Output | Activities generated independently → concept overlap, no coherent lesson. |
-| Refinement | Per-artifact, in the full editor. No targeted regen, no natural-language edit. |
-| Discoverability | Every import lands flat in one folder; session→content link is a title prefix. |
-| Trust | Educator can't verify correctness fast; no grounding, no justification, no track record. |
+| One optional, collapsed "Customization" box → blank-page problem, usually skipped | **Intent authoring** — a written prompt **or** a guided brief (mutually exclusive) |
+| No guidance on what a good prompt looks like | **Preset prompts** (Exam revision · Introduce a topic · Check prior knowledge · Extract questions) + **"Improve this prompt"** (rewrites rough text to best practice) |
+| Re-type intent every import | **Prompt / brief library** — save, reuse, MRU-sorted, optionally bundles the activity selection; account-scoped later; org templates later |
+| Source goes in as a black box | **Automatic source read-back** — type, length, reading level, concepts, themes, strengths, watch-outs. Advisory, non-blocking |
+| Always generates new questions | **Verbatim question extraction** — Extract as-is · Generate new · Both |
+| `.pptx` (what lecturers actually use) generates poorly | **`.pptx` as a first-class source** — slide + notes + structure parsing (Phase 2) |
+
+### 2 · Choose what gets made — *activity fit*
+
+| Today | Reworked (new) |
+|---|---|
+| Blind checkboxes across 4 categories, no fit-to-source signal | **Activity recommendation engine v1** — feasibility gate (from source) + desirability rank (from intent) + count logic (1/2/3) |
+| No item counts, no per-activity config | Pre-checked set with **item counts + a one-line reason** each; per-activity mini-controls (count, difficulty) |
+| Easy to over-select → 5 overlapping activities that all need cleanup | Count capped at 3; marginal/infeasible types shown unchecked with the reason; **explicit prompt instructions override** the engine (with feasibility warnings) |
+| No coverage view | **Coverage grid** (objectives × activities) — planned |
+
+### 3 · Review & refine what came back — *trust + fix* — the core
+
+| Today | Reworked (new) |
+|---|---|
+| Credits spent, **no preview** — black-box wait, then N separate content items | **Review & Approve** step — a proposed-content list *before* anything is created; a **"Create N" gate** |
+| To check or fix anything, open each item in the full H5P editor | **Live H5P preview per item** — Review (scan every question without answering) + Play (the real player) |
+| No way to tell if a question is correct | **Per-question trust signals** — the exact source sentence, an answer-key note, a confidence level, extracted-vs-inferred |
+| No targeted regeneration, no natural-language edit | **Refine ▾** — bounded steers (Harder · Easier · Simpler language · More formal · Different focus · Clearer · Answers look wrong · Try again); regenerates the activity for its type |
+| Wrong activity type → discard, go back, re-pick | **Remix ▾** — rebuild as a different type, keeping the concepts |
+| — | **Discard ▾** with a reason · **inline text edit** per item · **approve-by-default** (act on exceptions) |
+| Refinement is per-artifact, one editor at a time | **Refine soft-cap (3)** → nudges to Remix / Discard / manual edit when the source×type pairing isn't working |
+| No feedback loop | **`review_event` stream + `ImportRecord`** — the labelled dataset that answers "is quality good enough" with data, not opinion |
+| One rigid flow | **Two UI shapes to demo** — A: step-by-step wizard · B: full-screen 3-panel workspace (setup · output · refinement chat) |
+
+_Phase 2: scoped natural-language edits · propagate-a-fix · post-generation coverage report._
+
+### 4 · Find & reuse it later — *organization*
+
+| Today | Reworked (new) |
+|---|---|
+| Every import dumps flat into a "Smart Import" folder — in fact **two** (a per-import subfolder *and* a global catch-all) | Content lands in the **content library** among everything else — no dedicated folder |
+| No mapping of which content came from which import (a title prefix is the only clue) | Each item stamped **`from: <import>`** — a two-way link; **provenance as a library filter** |
+| No record of what the import was | **Persisted `ImportRecord`** — source snapshot, intent, engine/model, outcome counts, per-item decisions, kept items. Survives reload and "Start another import" |
+| — | Library view lists items across every persisted import; each `from:` tag opens that import's receipt |
+
+_Phase 3: a standalone "Smart Imports" list screen · lifecycle (archive/delete an import + its content together) · destination-at-import-time._
+
+### Threaded through all four — trust & measurement
+
+Nothing is published without approval; the educator is author of record; every generate/edit is
+audited. The educator's approve / refine / discard decisions **are** a free measurement stream
+(see [Measurement](#measurement)).
+
+---
+
+## Opportunity Solution Tree
+
+```mermaid
+graph TD
+  O["Outcome — cut time-to-value · lift W1→W2 retention"]
+
+  O --> P1["1 · Intent is a blank box, not reusable; source is opaque"]
+  O --> P2["2 · Activity choice is blind; easy to over-pick"]
+  O --> P3["3 · No preview before spend; can't verify; fixing means N editors"]
+  O --> P4["4 · Output dumped in a folder; no link back to the import"]
+
+  P1 --> S1a["Prompt XOR brief · presets · Improve"]
+  P1 --> S1b["Prompt / brief library — save & reuse"]
+  P1 --> S1c["Automatic source read-back"]
+  P1 --> S1d["Verbatim question extraction"]
+
+  P2 --> S2a["Recommendation engine — feasibility + desirability + count"]
+  P2 --> S2b["Pre-checked set with counts + reasons"]
+
+  P3 --> S3a["Review & Approve step + Create-N gate"]
+  P3 --> S3b["Live H5P preview per item"]
+  P3 --> S3c["Per-question trust signals"]
+  P3 --> S3d["Refine / Remix / Discard — bounded"]
+  P3 --> S3e["review_event + ImportRecord eval stream"]
+
+  P4 --> S4a["Content in the library, not a folder"]
+  P4 --> S4b["from: import tag + provenance filter"]
+  P4 --> S4c["Persisted ImportRecord receipt"]
+```
+
+Text form, with the phase each bet lands in:
+
+```
+Outcome — reduce time-to-value · improve W1→W2 retention
+│
+├─ Opportunity 1 · Intent is a blank box, not reusable, source opaque
+│    ├─ Automatic source read-back ......................... Phase 1
+│    ├─ Verbatim question extraction (Pasted Text) ......... Phase 1
+│    ├─ Prompt XOR brief · presets · "Improve" ............. Phase 2
+│    └─ Prompt / brief library (save, reuse, bundle) ....... Phase 2
+│
+├─ Opportunity 2 · Activity choice is blind, easy to over-pick
+│    ├─ Recommendation engine v1 (feasibility + desirability + count) ... Phase 1
+│    └─ Pre-checked set · item counts · one-line reasons ... Phase 1
+│
+├─ Opportunity 3 · No preview before spend; can't verify; N editors to fix   ← the retention fix
+│    ├─ Review & Approve step + "Create N" gate ........... Phase 1  (P0)
+│    ├─ Live H5P preview per item (Review + Play) .......... Phase 1  (P0)
+│    ├─ Per-question trust signals ........................ Phase 1  (P0)
+│    ├─ Refine / Remix / Discard — bounded steers ......... Phase 1–2
+│    └─ review_event + ImportRecord eval stream ........... Phase 1
+│
+└─ Opportunity 4 · Output dumped in a folder, no link to its import
+     ├─ Persisted ImportRecord receipt .................... done (prototype)
+     ├─ Content in the library (no Smart Import folder) ... Phase 3
+     └─ "from: <import>" tag + provenance filter .......... Phase 3
+```
 
 ---
 
@@ -488,14 +607,77 @@ personal track record · confusion-report loop · generation transparency.
 
 ---
 
+## Measurement
+
+**North star — W1→W2 creator retention** (~20% today). Everything below is a leading indicator of it.
+
+### The funnel — adoption → activation → retention
+
+| Stage | Event | Metric |
+|---|---|---|
+| Opened the flow | `import_started` | starts per eligible user per week |
+| Finished setup | `generate_requested` | setup-completion rate |
+| Generation returned | `generate_completed {ok, latencyMs}` | success rate · latency |
+| Acted in review | `review_opened` · `item_previewed {itemId}` | % of items actually previewed |
+| Shipped | `create_completed {kept, discarded}` | **activation — % of starts that create ≥ 1** (target ≥ 60%) |
+| Used it | `content_published` / `content_embedded` | published-not-just-created rate |
+| Returned | next `import_started` by the same user within 7 d | **W1→W2 retention** |
+
+Today the prototype logs `create_completed` (as `create_summary` + the full `ImportRecord`) and
+every review-stage action. The rest are new one-line events.
+
+### Time to value — measure two ways
+
+- **In-flow TTV** = `create_completed − import_started`. Split out `generate_completed →
+  create_completed` — that is **the cost of the review gate**, and it must not balloon vs. today.
+- **Time to usable** = `first content_published − import_started`, plus **total edit-minutes in
+  the 7 days after create** (later edits tied back to `importId`). This is where the rework should
+  *win*: today's path is fast to "content in a folder", slow to "content I'd show a class".
+- **Baseline to beat:** today's Smart Import = source → dump → open each editor → fix. If the
+  live product can't be instrumented, stopwatch 3–5 educator sessions.
+
+### Usage & quality
+
+| Metric | Derived from |
+|---|---|
+| imports per active user per week | `import_started` |
+| activities kept / generated per import | `ImportRecord.outcome` |
+| **approve-without-edit rate** (kept ∧ ¬edited ∧ ¬refined ∧ ¬remixed) | `ImportRecord.decisions` |
+| **rubber-stamp rate** (kept ∧ never `item_previewed`) | events |
+| refine / remix / discard rates + reason breakdown | `review_event` |
+| edit magnitude (`charsDelta`) | `review_event` |
+| post-create edit rate at 7 / 30 d | later content edits keyed by `importId` |
+| learner confusion reports per 100 activities | product signal (later) |
+
+### Retention
+
+W1→W2 and W1→W4 return rate · % of W1 imports whose creator does another in W2 · content-reuse
+rate (created activities embedded in a course).
+
+### A vs B — the two UI shapes
+
+Both variants share the event stream. Tag every event and every `ImportRecord` with `uiVariant`
+and an anonymous `sessionId`. Then, **unit = import**, compare A vs B on: activation rate ·
+in-flow TTV · review-gate cost · approve-without-edit rate · refine actions per import. Live:
+retention by variant.
+
+### To add to the prototype
+
+1. `uiVariant` + `sessionId` (one per browser, `localStorage`) on `review_event` and `ImportRecord`.
+2. Milestone events: `import_started` · `generate_requested` / `generate_completed {latencyMs}` ·
+   `item_previewed` · `create_completed` (rename the current summary).
+3. A small roll-up (a script or `/api/metrics`) that turns `.review-events.jsonl` +
+   `.imports.jsonl` into the funnel + TTV + approve-without-edit numbers — so the demo can *show*
+   the dashboard, not just describe it.
+
+---
+
 ## Roadmap — prioritization, sequencing, success measures
 
 ### North star & guardrail
 
-- **North star: W2 retention** (currently ~20%). Target **35%+ end of Phase 1**, **40%+ end of
-  Phase 2**.
-- **Supporting metrics:** approve-without-edit rate · median edits per approved item · imports
-  per active user per week · published (not just created) rate.
+- **North star: W1→W2 retention** (currently ~20%). Target **35%+ end of Phase 1**, **40%+ end
+  of Phase 2**. Full metric tree in [Measurement](#measurement).
 - **Guardrail — reduce, don't add, time-to-value.** The approval gate must make the *whole* job
   (idea → usable content) faster, not just add a review step. Levers: source read-back runs
   automatically; recommended activities pre-checked; a **Quick generate** path that skips activity
