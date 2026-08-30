@@ -421,20 +421,44 @@ does contain intent and could auto-fill objectives + prompt.
 
 ### Activity recommendation engine (v1)
 
+**In one paragraph.** The engine decides *which activity types to pre-check on Screen 2*, how
+many, and how many items each — nothing else. It reads two inputs. The **source** (via the
+read-back) tells it what a *good* activity of each type would need and whether this material has
+it — that's **feasibility**, a hard gate. The **intent** (the prompt or brief) tells it which of
+the feasible types serve the teacher's goal — that's **desirability**, which only ranks *within*
+what's feasible. Count and item-count are rules layered on top. Every output is a suggestion the
+teacher overrides on Screen 2; an explicit instruction in the prompt ("make 3 crosswords") wins
+outright, bounded only by what the source can support without padding.
+
+**What each decision depends on, and the rule:**
+
+| Decision | Depends on | The rule |
+|---|---|---|
+| **Is type X feasible?** | source read-back: `kind`, whether `concepts` are short terms vs. ideas, `wordCount`, number of `themes`, `detectedQuestions` | a per-type checklist (Step 1) — e.g. Crossword needs many short named terms; Interactive Book needs length **and** multiple sections; Summary needs paraphrasable claims |
+| **Which feasible types?** | intent: `emphasis`, prompt keywords (*vocab / terms / definitions* · *teach / introduce / explain* · *exam / quiz / assess*), the brief's goal | purpose slots (recall / understanding / practice / teach) + an intent tilt; Single Choice Set is the default first pick (Step 2, 4) |
+| **How many types — 1 / 2 / 3?** | `wordCount`, number of `themes`, prompt breadth vs. narrowness (*quick / warm-up / diagnostic* → narrow; *full / comprehensive / cover the unit* → broad) | 2 by default (one recall + one understanding); 1 if the source is short/single-topic or the intent is narrow; 3 only if the source is long **and** multi-section **and** the intent signals breadth. Never > 3 (Step 3) |
+| **Items per type?** | `volume` (light 4 / standard 6 / thorough 10), `wordCount`, number of `concepts` | start at `volume`; cap at ~1 item per 60–100 words of substantive content, or ~1.5 × distinct concepts, whichever is lower; with 2–3 activities, target **10–15 items total across the set**, not per activity (Step 5) |
+
+**Why this shape:**
+
+- **Feasibility before desirability**, always. An intent that wants a Crossword can't force one
+  onto a source with no short terms — a contrived crossword fails the educator at the review gate
+  anyway. Ranking only happens inside the feasible set.
+- **Feasibility is an LLM job; everything else is deterministic rules.** Feasibility needs to
+  *read* the source (short terms? definitional sentences? multiple sections?), so it's folded
+  into the one analyze call that produces the read-back. Purpose slots, count, type selection and
+  item counts are pure functions of the read-back + intent — so they **re-rank instantly** when
+  the teacher changes emphasis, volume, or the prompt, with no extra API call.
+- **A hard cap of 3**, because each activity is another block to review at the gate and multiple
+  activities from one source tend to overlap — more types is usually worse, not better.
+- **Every threshold is a dial.** This is v1; the count boundaries, the words-per-item ratio, the
+  purpose→type mappings and the intent-keyword lists are all expected to move with real usage
+  (see *v1 — expected to be refined* below).
+
 **Output contract.** The engine produces exactly one thing: the **recommended (pre-checked) set
-of content types on Screen 2**, each with a suggested **item count** and a one-line **reason**. It
-does not generate content, pick destinations, or gate progression. Everything it proposes is
-overridable on Screen 2.
-
-**Two inputs, two roles.**
-
-- **Source material → feasibility** _(a gate)_: can a *good* activity of this type be built from
-  this raw material?
-- **Intent (the prompt or the brief) → desirability** _(a ranker)_: among feasible types, which
-  serve the teacher's stated goal?
-
-Source is never overridden by an intent that wants something infeasible; intent never promotes a
-type the source can't support.
+of content types on Screen 2**, each with a suggested **item count** and a **reason that names
+the source trait and the intent trait it is responding to**. It does not generate content, pick
+destinations, or gate progression. Everything it proposes is overridable on Screen 2.
 
 #### Step 1 — Feasibility gate (from the source read-back)
 

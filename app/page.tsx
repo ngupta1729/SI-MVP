@@ -627,6 +627,7 @@ export default function Page() {
             <Activities
               intent={intent}
               recByName={recByName}
+              analysis={shownAnalysis}
               toggle={toggleType}
             />
           )}
@@ -1457,17 +1458,66 @@ function TemplateManager({ lib }: { lib: ReturnType<typeof useTemplates> }) {
 }
 /* ---------------- Screen 2 ---------------- */
 
+const kindVerb = (k: SourceAnalysis["kind"]) =>
+  k === "conceptual"
+    ? "explains ideas"
+    : k === "procedural"
+      ? "describes a process"
+      : k === "reference"
+        ? "is reference / list-like"
+        : k === "narrative"
+          ? "reads as a narrative"
+          : "mixes explanation and fact";
+
 function Activities(p: {
   intent: ImportIntent;
   recByName: Record<string, Recommendation>;
+  analysis: SourceAnalysis | null;
   toggle: (n: string) => void;
 }) {
+  const a = p.analysis;
+  const recs = Object.values(p.recByName).filter((r) => r.recommended);
+  const recLabels = recs
+    .map((r) => contentType(r.name)?.label)
+    .filter(Boolean)
+    .join(" + ");
+  const intentBit =
+    p.intent.authoringMode === "brief"
+      ? `brief — ${p.intent.learningGoal || "no goal set"}, ${p.intent.emphasis} emphasis`
+      : p.intent.prompt.trim()
+        ? `“${p.intent.prompt.trim().slice(0, 90)}${p.intent.prompt.trim().length > 90 ? "…" : ""}”`
+        : `${p.intent.emphasis} emphasis, ${p.intent.volume} volume`;
+  const countWhy =
+    recs.length <= 1
+      ? "one activity — the source is compact, or the intent is a quick check"
+      : recs.length >= 3
+        ? "three — the source is long and multi-theme and the intent asks for breadth"
+        : "two — one to check recall, one to check understanding, with minimal overlap";
+
   return (
     <div className="space-y-5">
-      <p className="text-sm text-zinc-500">
-        Recommended activities are pre-checked from your source and intent. All
-        overridable.
-      </p>
+      {a ? (
+        <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="font-medium text-zinc-500">Why these activities</p>
+          <p className="mt-1 text-zinc-600 dark:text-zinc-300">
+            Your source {kindVerb(a.kind)} — ~{a.wordCount} words,{" "}
+            {a.concepts.length} key{" "}
+            {a.kind === "reference" ? "terms" : "concepts"}
+            {a.themes.length > 1 ? `, ${a.themes.length} themes` : ""}. Your intent:{" "}
+            {intentBit}.
+          </p>
+          <p className="mt-1 text-zinc-600 dark:text-zinc-300">
+            That points to <b>{recLabels || "a recall check"}</b> — {countWhy}. Each
+            recommended card says which source trait and which part of your intent it
+            answers.
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm text-zinc-500">
+          Recommended activities are pre-checked from your source and intent. All
+          overridable.
+        </p>
+      )}
       {CATEGORIES.map((cat) => {
         const items = CONTENT_TYPES.filter((c) => c.category === cat);
         if (!items.length) return null;
@@ -1508,7 +1558,14 @@ function Activities(p: {
                     </div>
                     <p className="mt-1 text-xs text-zinc-500">{ct.blurb}</p>
                     {rec && (
-                      <p className="mt-1 text-[11px] text-zinc-400">
+                      <p
+                        className={`mt-1 text-[11px] ${
+                          rec.recommended
+                            ? "text-emerald-700 dark:text-emerald-400"
+                            : "text-zinc-400"
+                        }`}
+                      >
+                        {rec.recommended ? "Why: " : ""}
                         {rec.reason}
                         {rec.recommended && rec.itemCount
                           ? ` · ~${rec.itemCount} items`
@@ -2016,6 +2073,7 @@ function Workspace(p: {
         <Activities
           intent={p.intent}
           recByName={p.recByName}
+          analysis={p.analysis}
           toggle={p.toggleType}
         />
       </div>

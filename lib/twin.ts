@@ -175,19 +175,47 @@ export function recommendActivities(
     count = 3;
   const picked = new Set(ranked.slice(0, count));
 
+  // one line that names the SOURCE trait and the INTENT trait the type responds to
+  const kindPhrase =
+    analysis.kind === "conceptual"
+      ? "explains ideas"
+      : analysis.kind === "procedural"
+        ? "describes a process"
+        : analysis.kind === "reference"
+          ? "is reference/list-like"
+          : analysis.kind === "narrative"
+            ? "reads as narrative"
+            : "mixes explanation and fact";
+  const goalPhrase = assess
+    ? "you want assessment"
+    : wantsTeach
+      ? "you want to teach the topic"
+      : wantsVocab
+        ? "you flagged vocabulary/terms"
+        : `${intent.emphasis} emphasis`;
   const reasonFor = (name: string, isRec: boolean) => {
     if (!feasible(name))
       return name === "H5P.InteractiveBook"
-        ? "source is short for a chapter book"
+        ? `only ~${analysis.wordCount} words / ${analysis.themes.length} themes — short for a chapter book`
         : name === "H5P.Crossword" || name === "H5P.DragText"
-          ? "few short terms in the source for this"
-          : "marginal fit for this source";
+          ? `only ${analysis.concepts.length} key terms in the source — too few for good clues/gaps`
+          : name === "H5P.InteractiveVideo"
+            ? "no video source in this build"
+            : "marginal fit — the source doesn't give this type much to work with";
     if (!isRec) return "feasible — add it if you want it";
-    if (name === "H5P.SingleChoiceSet") return "works well on this source; covers recall";
-    if (name === "H5P.Summary") return "checks understanding of the key claims";
-    if (name === "H5P.QuestionSet") return "a fuller scored quiz for this material";
-    if (name === "H5P.Crossword") return "the source has good terminology";
-    return "fits your source and intent";
+    if (name === "H5P.SingleChoiceSet")
+      return `source ${kindPhrase} with checkable facts; ${goalPhrase} → efficient recall check`;
+    if (name === "H5P.Summary")
+      return `source has ${analysis.concepts.length} key claims to paraphrase; ${goalPhrase} → tests understanding, not just recall`;
+    if (name === "H5P.QuestionSet")
+      return `${analysis.wordCount} words of distinct facts; ${goalPhrase} → a fuller scored quiz`;
+    if (name === "H5P.Crossword" || name === "H5P.DragText")
+      return `source is term-dense (${analysis.concepts.length} concepts) and ${goalPhrase}`;
+    if (name.startsWith("H5P.Dialogcards"))
+      return `source ${kindPhrase} in term↔meaning pairs; good for spaced practice`;
+    if (name.startsWith("H5P.Accordion"))
+      return `${analysis.concepts.length} concepts worth defining; ${goalPhrase}`;
+    return `fits the source (${kindPhrase}) and your intent (${goalPhrase})`;
   };
 
   return CONTENT_TYPES.map((ct) => ({
@@ -275,7 +303,7 @@ Return ONLY JSON:
   "strengths": ["<2-3 short phrases>"],
   "watchOuts": ["<2-3 short neutral phrases; NOT 'don't use this'>"],
   "recommendations": [
-    { "name": "<one of the catalogue names above>", "recommended": true|false, "reason": "<one line>", "itemCount": <int> }
+    { "name": "<one of the catalogue names above>", "recommended": true|false, "reason": "<ONE sentence that names the SOURCE trait AND the INTENT trait this type responds to — e.g. 'Source explains ideas with checkable facts and you want assessment, so Single Choice Set gives an efficient recall check.' For recommended:false, say what the source lacks.>", "itemCount": <int> }
   ]
 }
 Include an entry for every catalogue type listed above.`;
