@@ -133,7 +133,27 @@ the brief *is* the intent; the twin serialises it into an instruction internally
 **Question extraction** — the *Extract existing questions* preset (and the read-back's "Extract
 them as-is" action) sets a verbatim-extraction instruction and switches the run to extract mode:
 pull each question from the source exactly as written, carry over options and marked answers,
-invent nothing. Prompt-only — no special parser needed.
+invent nothing.
+
+_Prompt vs. architecture:_ the **prompt does the extraction reasoning** — finding questions,
+mapping each to an H5P type. That much is prompt-only and is verified working on clean text
+(a pasted quiz → 3 questions pulled verbatim with answers preserved). The **architecture owns
+input handling and the trust guarantee:**
+
+| Case | Prompt-only enough? | Needs |
+|---|---|---|
+| Pasted text, linear questions | Yes | — |
+| PDF / DOCX / scanned exam papers | No — prompt assumes clean text | Layout-aware extraction (+ OCR) — the same ingestion pipeline `.pptx` needs |
+| Verbatim guarantee on a teacher's own exam | No — LLMs quietly paraphrase, drop options, renumber, or invent a key | A verification pass: extracted item ↔ source-span diff, flag every mismatch |
+| Long banks (50–200 Qs) | No — quality degrades with length | Chunk + stitch + dedup |
+| Separate answer keys | Weak | Structured key resolution |
+| Image-dependent questions | No | Media handling — deferred with image support |
+
+**What makes prompt-only viable now:** the approval gate. The educator checks every extracted
+question against its source span before anything is created, so an imperfect extraction is
+caught, not shipped. Sequencing: ship prompt-only extraction for **Pasted Text** in Phase 1;
+file-based extraction (PDF/DOCX) rides on the `.pptx` ingestion pipeline in Phase 2, with the
+automated verbatim-diff check added then.
 
 **Also in Stage 1:**
 
@@ -208,7 +228,7 @@ personal track record · confusion-report loop · generation transparency.
 | 2 | Answer-key justification per item | P1 | Contributes to approve-without-edit rate ≥ 55% |
 | 3 | Content-type recommendation from source + intent | P1 | ≥ 50% of imports keep the recommended activity set unchanged; "created an activity then deleted it whole" rate ↓ |
 | 3 | Source read-back panel | P1 | Leading indicator: poor-fit activity selections ↓ |
-| 3 | Verbatim question extraction (detect + import-as-is) | P1 | For question-bearing sources, ≥ 50% choose Extract; edit rate on extracted items < 10% |
+| 3 | Verbatim question extraction — **Pasted Text only**, prompt + approval-gate verification | P1 | For question-bearing sources, ≥ 50% choose Extract; edit rate on extracted items < 10% |
 | 4 | Known-limitations disclosure at create time | P2 | First-run on unsupported sources (math/procedural) ↓ |
 | — | **Phase gate** | | **W1→W2 retention 20% → 35%+** |
 
@@ -216,7 +236,8 @@ personal track record · confusion-report loop · generation transparency.
 
 | Seq | Item | Priority | Success measure |
 |---|---|---|---|
-| 1 | PowerPoint (.pptx) first-class ingestion | P1 | `.pptx` approve-without-edit rate reaches clean-article parity; W2 retention for `.pptx`-first users reaches cohort average |
+| 1 | Document ingestion pipeline: `.pptx` + PDF/DOCX (layout-aware, OCR) — file-based question extraction rides on this | P1 | `.pptx` approve-without-edit rate reaches clean-article parity; W2 retention for `.pptx`-first users reaches cohort average |
+| 2 | Extraction verification pass (extracted item ↔ source-span diff, flag paraphrase/drop/renumber, unresolved keys) | P1 | Verbatim-mismatch rate on extracted items < 2%; educator-reported trust in extraction ≥ 4/5 |
 | 1 | Full intent authoring: prompt-XOR-brief toggle · preset prompts · "improve" (user text only) · save named brief | P1 | Prompt or brief used in ≥ 30% of imports by users with ≥ 2 imports; approve-without-edit higher for intent-driven imports |
 | 2 | Inline item actions + scoped natural-language edits (Refine) | P1 | Median edits per approved item trends **down** across a user's successive imports |
 | 2 | Per-activity controls + coverage grid | P2 | Cross-activity concept overlap ↓ (measured); "too many/few questions" feedback ↓ |
