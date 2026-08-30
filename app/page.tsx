@@ -66,17 +66,7 @@ export default function Page() {
       ? /^https?:\/\/\S+wikipedia\.org\/\S+/i.test(wikiUrl)
       : text.trim().length >= 120;
 
-  // TTV: auto-analyze shortly after the source stops changing.
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!sourceReady) return;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(analyze, 600);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, wikiUrl, sourceTab, intent.emphasis]);
 
   async function analyze() {
     if (!sourceReady) return;
@@ -108,6 +98,17 @@ export default function Page() {
       setAnalyzing(false);
     }
   }
+
+  // TTV: auto-analyze shortly after the source stops changing.
+  useEffect(() => {
+    if (!sourceReady) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(analyze, 600);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text, wikiUrl, sourceTab, intent.emphasis]);
 
   async function generate(useRecommended = false) {
     setGenerating(true);
