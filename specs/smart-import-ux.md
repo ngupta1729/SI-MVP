@@ -1,12 +1,27 @@
-# Smart Import — Educator Workflow UX Proposal
+# Smart Import — Reworked Educator Workflow
 
-_Draft, 2026-08-30. Living document — still accumulating ideas._
+_Draft, 2026-08-30._
 
 ## Context
 
-**Smart Import** (H5P.com only) turns a document, URL, or pasted text into H5P interactive
-content using AI. This proposal reworks the *educator workflow* around it — how they express
-what they want, review what the AI produced, refine it, and find it later.
+**Smart Import** (H5P.com only) turns a source into H5P interactive content using AI. A source
+document is **mandatory** — there is no from-scratch generation, so output is always grounded.
+This proposal reworks the *educator workflow* on top of the existing product UI: how they express
+intent, review what the AI produced, refine it, find it later, and trust it.
+
+### The signal that shapes everything
+
+**Smart Import W1→W2 retention is ~20%.** An 80% one-week drop after first use is not an
+activation problem — people are trying it. It is a *"the first output wasn't worth coming back
+for"* problem. Two causes dominate at that magnitude:
+
+1. **Not trusted** — output was off, or the educator couldn't tell if it was right, so they
+   returned to manual authoring.
+2. **Cleanup cost > generation savings** — several activities generated, then an hour fixing them
+   across several separate editors. Net-negative time.
+
+Features that *compound* value (discoverability, preference memory) only help people who return.
+They don't fix an 80% cliff. The roadmap sequences trust-and-cleanup first.
 
 ### Observed happy path (from a live run — "Plate Tectonics", pasted text → Single Choice Set + Summary)
 
@@ -17,298 +32,221 @@ what they want, review what the AI produced, refine it, and find it later.
    Practice & Games / Interactive Media). No per-activity config. → Generate
 4. **Generating Content** (~15–30s for two activities) → each activity becomes a **separate H5P
    content item** dumped flat into one "Smart Import" folder.
-5. **Refine**: open each item → **Edit** in the full H5P editor, or **View**. Export via the
-   player's Reuse → Download as `.h5p`.
+5. **Refine**: open each item → full H5P editor, or View. Export via player Reuse → Download `.h5p`.
 
 ### Core friction
 
 | Stage | Problem |
 |---|---|
-| Intent | One optional, collapsed free-text box. Blank-page problem — the educator must know what to write. |
-| Activity selection | Blind checkboxes. No fit-to-source signal, no item counts, no idea what each will cover. |
+| Intent | One optional, collapsed free-text box. Blank-page problem. |
+| Activity selection | Blind checkboxes. No fit-to-source signal, no counts, no coverage view. |
 | Generation | Credits spent with **no preview**. Black-box wait. |
 | Output | Activities generated independently → concept overlap, no coherent lesson. |
-| Refinement | Per-artifact, in the full editor. No targeted regen, no natural-language edit, no propagating a fix. |
-| Discoverability | Every import from every educator lands flat in one folder; the only session→content link is a title prefix. |
-| Loop | Every import starts from zero. `Confusion feedback` on published content never feeds back in. |
+| Refinement | Per-artifact, in the full editor. No targeted regen, no natural-language edit. |
+| Discoverability | Every import lands flat in one folder; session→content link is a title prefix. |
+| Trust | Educator can't verify correctness fast; no grounding, no justification, no track record. |
 
 ---
 
-## Stage 1 — Intent authoring
+## The reworked workflow (screen by screen, on top of the existing modal)
 
-**One underlying intent object, four on-ramps** — meet educators at their level of willingness to
-spec things out.
+The existing Smart Import modal has a stepper: **Configure Content → Select Activities**. The
+rework keeps that shell and inserts new steps.
+
+### Screen 1 — Configure Content _(existing, enhanced)_
+
+- **Source tabs** unchanged: File · YouTube · Wikipedia · Web Page · Pasted Text.
+- **NEW — Source read-back** (after a source is added): detected type, length, key concepts, and
+  *"this document contains N existing questions"* detection.
+- **NEW — Question handling** when questions are detected:
+  **[Extract as-is]** · **[Generate new]** · **[Both]**. Extraction lifts the educator's own
+  questions into the target H5P type with minimal rewriting — faster, and their own wording.
+- **NEW — Intent authoring** replaces the single Customization box (free-form stays the default
+  view): four on-ramps — free-form prompt · guided brief · preset briefs · "improve this prompt".
+- **Language** unchanged.
+
+### Screen 2 — Select Activities _(existing, enhanced)_
+
+- Activity cards grouped by category, unchanged layout.
+- **NEW — Recommendations**: recommended activities pre-checked with a one-line reason badge;
+  poor-fit activities dimmed with a reason. Driven by source **+** intent.
+- **NEW — Per-activity mini-controls** on the card: item count, difficulty.
+
+### Screen 3 — Review & Approve _(NEW — the core)_
+
+- **Proposed content list**, grouped by activity; each item shows its target concept / objective.
+- **Live interactive H5P preview** of the selected item, rendered in the real player — the
+  educator *plays* it as a learner would.
+- Per item: **Approve · Drop · Edit · Regenerate.**
+- **Trust signals** per item: source-sentence grounding, answer-key justification, confidence,
+  extraction-vs-inference marker.
+- **Coverage grid**: objectives × activities.
+- **Cost line**: "This will use 2 credits and create 18 items."
+- **[Approve N & create]**.
+
+### Screen 4 — Refine _(NEW — post-creation workspace)_
+
+- The created set in one workspace (not scattered into a folder).
+- **Inline item actions**: Regenerate · Easier/Harder · Rephrase · flag distractor · Delete.
+- **Scoped natural-language edits**: "shorten all summary statements", "make Q3–5 about the
+  evidence".
+- **Propagate a fix**: a correction offers to apply across the whole set and stick for next time.
+
+### Screen 5 — Place & Finish _(NEW — replaces silent auto-file)_
+
+- **Choose destination**: a course folder (`Biology 101 / Unit 3`), not just "Smart Import".
+- **Name the import session**; provenance attached to every item.
+- **Publish set** or keep as draft.
+
+---
+
+## Stages (detail)
+
+### Stage 1 — Intent authoring
+
+Four on-ramps feeding **one underlying intent object**:
 
 | On-ramp | What it is | For the educator who… |
 |---|---|---|
-| **Free-form prompt** | The plain text box that exists today. Stays the default, lowest-friction path. | knows what they want and will type a sentence |
-| **Guided brief** | Toggle to a structured form: learning goal(s), audience / grade, assumed prior knowledge, difficulty, emphasis (recall ↔ understanding ↔ application), tone, terminology & spelling conventions, volume. Same intent object, different view. | wants scaffolding and doesn't know what "good" looks like |
-| **Preset briefs** | Clickable starting points that drop in a well-crafted prompt **and** pre-fill the brief fields, ready to edit: _Exam revision · Introduce a new topic · Check prior knowledge · Deep conceptual practice · Accessible / ESL language._ | faces the blank page and wants a running start |
-| **"Improve this prompt"** | Rewrites what they typed using prompt-engineering best practices — specificity, measurable objectives, structure, constraints. Shows a diff; accept or edit. Also teaches what a strong brief looks like. | typed something rough and wants it sharpened |
+| Free-form prompt (keep) | The text box that exists today; default, lowest-friction. | will type a sentence |
+| Guided brief | Structured form: learning goal(s), audience/grade, prior knowledge, difficulty, emphasis (recall↔understanding↔application), tone, terminology/spelling, volume. | wants scaffolding |
+| Preset briefs | Clickable starts (Exam revision, Introduce a topic, Check prior knowledge, Deep practice, Accessible/ESL) that fill prompt + fields. | faces the blank page |
+| "Improve this prompt" | Rewrites their text with prompt-engineering best practice; diff view; teaches. | typed something rough |
 
-**How they interlock**
-- Free-form and guided brief are two views of the same intent — switching loses nothing.
-- Presets seed both views.
-- "Improve this prompt" works on the free-text and **back-fills** the brief fields it inferred.
-- Guided-brief fields are **pre-suggested from the source** (proposed objectives, detected level)
-  — "guided" is not pure data entry.
-- Any resulting intent can be **saved as a reusable named brief** ("My Grade 9 Biology default")
-  — feeds preference memory and Stage 4.
-- After generation, show **which parts of the brief actually shaped the output**.
+Interlocks: prompt ↔ brief are two views of one object; presets seed both; "improve" back-fills
+brief fields; brief fields are pre-suggested from the source; any result can be saved as a
+reusable named brief.
 
-### Content-type recommendation (uses source *and* intent)
+**Also in Stage 1:**
 
-Before activity selection, show a read-back:
+- **Source read-back** before activity selection (type, length, key concepts).
+- **Content-type recommendation from source + intent** — ranked, pre-checked, reason per activity.
+- **Auto-propose learning objectives** from the source.
+- **Verbatim question extraction** — when the source already contains questions (worksheet,
+  question bank, past paper), detect them and offer to import as-is into the chosen H5P type
+  rather than generating new ones. Faster, and it is the educator's own material.
+- **PowerPoint (.pptx) as a first-class source** — lecturers live in PowerPoint; today's
+  generation from `.pptx` is weak. Proper slide + speaker-notes + structure parsing. _(Assumption
+  to validate: `.pptx` is a very common lecturer format.)_
+- **Images — deprioritized.** Complex, and low value for the content types Smart Import currently
+  produces (Single Choice Set, Summary, Question Set, Crossword, Drag the Words are all
+  text-based). Revisit when image-based content types (Image Hotspots, image Drag-and-Drop, Find
+  the Hotspot) enter the Smart Import catalog.
 
-> Your source is conceptual (~500 words, 6 key concepts: …) and your goal is application-level
-> assessment for first-years → **Recommended: Single Choice Set, Question Set, Higher-Order
-> Questions.** Not recommended: Crossword (few factual terms), Dialog Cards (goal is assessment,
-> not memorization).
+### Stage 2 — Approval (review gate before spend)
 
-Activities are ranked and pre-checked, each with a one-line reason. The educator can override.
+Plan preview → proposed-content list → **live interactive H5P preview per item** → per-item
+approve / drop / edit / regenerate → per-activity controls → coverage grid → cost line →
+review workspace (not auto-filed).
 
----
+**Review assist** (not eval infrastructure — lightweight checks that make approval faster and
+more confident, built largely from approval-gate telemetry once edit patterns are visible):
+reading level vs. target · duplicate-concept detection · "distractor may be defensible" ·
+answer-key sanity · coverage vs. objectives · consistency with source. The educator's
+approve/drop/edit decisions are a free measurement stream — the gate exists anyway.
 
-## Stage 2 — Approval (a review gate before spend) — highest leverage
+### Stage 3 — Refinement
 
-Insert a checkpoint between "Generate" and "content exists". This is the single biggest shift.
+Inline item actions · scoped natural-language edits · propagate-a-fix (and remember) ·
+regenerate one artifact · post-generation coverage report with "fill the gap".
 
-- **Plan preview, cheap and fast**: generate only the outline first — per activity: title, target
-  concepts / objectives, item count, 1–2 sample items.
-- **Proposed content list**: every item that will be created, grouped by activity.
-- **Live interactive preview per item**, rendered in the **real H5P player** — the educator plays
-  it exactly as a learner would. No approving blind.
-- Per item: **Approve · Drop · Edit (inline / natural-language) · Regenerate.**
-- Per-activity controls: item count, difficulty override, "focus on objective X", "avoid overlap
-  with [other activity]".
-- **Coverage grid**: objectives × activities — redundancy and gaps visible at a glance.
-- **Cost transparency**: "This plan will use 2 credits and produce ~18 items" before commit.
-- Output lands in a **review workspace**, not auto-filed.
+### Stage 4 — Discoverability & organization
 
-### The approval stage is also an eval surface
+Per-session container · provenance on every item · provenance as a library filter · two-way
+navigation (session ↔ content) · session page as a workspace · choose destination at import
+time · lifecycle (archive/delete session + content together).
 
-- **Automated quality checks, surfaced inline**: reading level vs. target; duplicate-concept
-  detection across items; "this distractor is defensible"; answer-key sanity; coverage vs.
-  stated objectives; factual consistency with the source.
-- **The educator's decisions are labeled signal**: every approve / drop / edit / regenerate feeds
-  (a) a quality score for this generation, (b) tuning signal for future generations, (c)
-  preference memory ("this educator always drops pure-recall questions"). The approval history
-  is stored in the item's provenance (Stage 4).
+### Stage 5 — Trust
 
----
-
-## Stage 3 — Refinement (targeted + conversational)
-
-Move off "open the full editor and hunt through form fields".
-
-- **Inline item actions** on any question / card: Regenerate · Easier / Harder · Rephrase ·
-  "This distractor is actually correct" · Delete — no full editor.
-- **Scoped natural-language edits**: "shorten all summary statements", "make Q3–5 about the
-  evidence, not the mechanism", "swap crossword clues to definitions".
-- **Propagate a fix**: correcting "plate boundary" → "plate margin" offers to apply across every
-  artifact in the import, and remembers it for future imports.
-- **Regenerate one artifact** with adjusted parameters without redoing the whole import.
-- **Post-generation coverage report**: objectives × activities, with a "generate something for
-  the gap" action.
+Source grounding per item · extraction-vs-inference flag · answer-key justification ·
+factual-consistency-vs-source flag · confidence indicator · objective + Bloom's alignment ·
+nothing published without approval · educator is author of record · generate-vs-edit audit
+trail · AI-generated labeling · source-reliability signal · known-limitations disclosure ·
+personal track record · confusion-report loop · generation transparency.
 
 ---
 
-## Stage 4 — Discoverability & organization of generated content
+## Roadmap — prioritization, sequencing, success measures
 
-**Friction:** every import from every educator dumps into one flat "Smart Import" folder; the
-only session→content link is a fragile title prefix (`<Import> - <activity>`); a content item
-carries no provenance; the folder grows unbounded with no lifecycle.
+### North star & guardrail
 
-**Improvements**
-- **Per-session container**: each import creates its own collection / subfolder
-  (`Plate Tectonics — 30 Aug`), or the import session becomes a first-class object that *owns*
-  its generated content.
-- **Provenance on every generated item**: source, link to the import session, the brief used,
-  generation date, model version — in the item's detail panel and as a library filter
-  (`Source: Smart Import → [session]`).
-- **Two-way navigation**: Imports list → *that session's* content; content item → "Created by
-  Smart Import · view session · view source · reopen brief".
-- **Session page as a workspace**: shows its own outputs + status; regenerate / add activities /
-  export the set / publish the set / bulk-move to a course folder.
-- **Choose the destination at import time** (`Biology 101 / Unit 3`) instead of always "Smart
-  Import".
-- **Lifecycle**: archive or delete a session and (optionally) its generated content in one action.
+- **North star: W2 retention** (currently ~20%). Target **35%+ end of Phase 1**, **40%+ end of
+  Phase 2**.
+- **Supporting metrics:** approve-without-edit rate · median edits per approved item · imports
+  per active user per week · published (not just created) rate.
+- **Guardrail:** time-to-first-created-content must not regress > ~20%. The approval gate adds a
+  step — watch that it doesn't hurt activation.
 
-**Connection to Stage 2:** the review workspace and this are the same surface — approved content
-leaves the gate *with provenance attached* and goes to the educator's chosen destination, not an
-anonymous pile.
+### Phase 1 — Fix the cliff (first-run trust + the gate)
 
----
-
-## Stage 5 — Trust
-
-The load-bearing layer. The whole project rests on whether educators (and reviewers) believe
-AI-generated learning content enough to put it in front of learners.
-
-- **Source grounding per item**: every question / statement shows the exact source sentence(s)
-  it was derived from.
-- **Extraction vs. inference flag**: mark items lifted from the source vs. those the AI reasoned
-  beyond it.
-- **Answer-key justification**: a one-line "why this is correct / why the distractors are wrong",
-  checkable at a glance.
-- **Factual-consistency check vs. source**: flag hallucination risk before the educator reviews.
-- **Confidence indicator per item**: direct review attention to where the model is least sure.
-- **Objective + Bloom's alignment shown**: each item mapped to the objective it serves and its
-  cognitive level.
-- **Nothing published without approval**: the Stage 2 gate as an explicit, non-bypassable
-  guarantee.
-- **Educator is author of record**: the AI is assistive; the educator's name and approval are
-  what's attached to the content.
-- **Generate-vs-edit audit trail**: per item, what the AI produced vs. what the educator changed.
-- **AI-generated labeling**: provenance label on content; optional learner-facing disclosure.
-- **Source reliability signal**: "Wikipedia (curated)" vs. "arbitrary web page" — warn on weak
-  sources.
-- **Known-limitations disclosure**: "best for conceptual content; weak for procedural / math"
-  shown at create time.
-- **Personal track record**: "you approved 85% / edited 10% / dropped 5% across your last 5
-  imports" — calibrated trust over time.
-- **Confusion-report loop**: learner confusion on published items flows back with a one-click
-  regenerate.
-- **Generation transparency**: stream what the AI extracted and is drafting per activity, with
-  cancel / adjust.
-
----
-
-## Master opportunity list
-
-| Stage | Opportunity | What it does / why it matters | Priority |
+| Seq | Item | Priority | Success measure |
 |---|---|---|---|
-| 1 · Intent | Free-form prompt (keep) | Lowest-friction default | Baseline |
-| 1 | Guided brief | Structured form — goals, audience/grade, prior knowledge, difficulty, emphasis slider, tone, terminology/spelling, volume | High |
-| 1 | Preset briefs | Clickable starts (Exam revision, Introduce a topic, Check prior knowledge, Deep practice, Accessible/ESL) that fill prompt + fields | High |
-| 1 | "Improve this prompt" | Prompt-engineering rewrite with diff view; teaches what good looks like | Med |
-| 1 | Prompt ↔ brief = one object | Two views, switching loses nothing | High |
-| 1 | "Improve" back-fills brief fields | Inferred goal/audience/difficulty populate the form | Med |
-| 1 | Brief fields pre-suggested from source | Proposed objectives, detected level | High |
-| 1 | Auto-propose learning objectives | Reads source, suggests 1–5 to accept/edit | High |
-| 1 | Save reusable named brief | "My Grade 9 Biology default" | Med |
-| 1 | Source read-back before activity select | "Conceptual, ~500 words, 6 concepts: […]" | High |
-| 1 | Content-type recommendation from source + intent | Ranked, pre-checked, one-line reason each; overridable | High |
-| 1 | Post-gen: show which brief parts shaped output | Helps refine the brief next time | Low |
-| 2 · Approve | Plan preview before full generation | Outline only before spending credits | High — demo |
-| 2 | Proposed content list | Every item to be created, grouped by activity | High — demo |
-| 2 | Live interactive H5P preview per item | Real player, playable as a learner — no approving blind | High — demo |
-| 2 | Per-item: Approve / Drop / Edit / Regenerate | The decision surface | High — demo |
-| 2 | Per-activity controls | Item count, difficulty, focus on objective, avoid overlap | High |
-| 2 | Coverage grid (objectives × activities) | Redundancy and gaps at a glance | Med |
-| 2 | Cost transparency before commit | "2 credits, ~18 items" | Med |
-| 2 | Review workspace (not auto-filed) | Approved → published; rejected → discarded cleanly | High |
-| 2 | Automated eval checks inline | Reading level, duplicate concepts, defensible distractor, answer-key sanity, coverage, source consistency | High |
-| 2 | Decisions captured as eval/tuning signal | Approve/drop/edit/regenerate → quality score + future tuning | Med |
-| 2 | Decisions feed preference memory | "Always drops pure-recall questions" | Med |
-| 3 · Refine | Inline item actions | Regenerate · Easier/Harder · Rephrase · flag distractor · Delete — no full editor | High |
-| 3 | Scoped natural-language edits | "Shorten all summary statements", "make Q3–5 about the evidence" | High |
-| 3 | Propagate a fix across artifacts + remember | "plate boundary" → "plate margin" everywhere, sticks | Med |
-| 3 | Regenerate one artifact | Adjusted params, no full redo | Med |
-| 3 | Post-gen coverage report + "fill the gap" | One-click generate for a gap | Med |
-| 4 · Discover | Per-session container | Each import owns its content — not a flat dump | High |
-| 4 | Provenance on every item | Source, session link, brief, date, model version | High |
-| 4 | Provenance as library filter | `Source: Smart Import → [session]` | Med |
-| 4 | Two-way navigation | Session ↔ content, both directions | High |
-| 4 | Session page as workspace | Outputs + status, regenerate, add activities, export/publish set, bulk-move | Med |
-| 4 | Choose destination folder at import time | `Biology 101 / Unit 3`, not "Smart Import" | Med |
-| 4 | Lifecycle: archive/delete session + content together | Folder stops growing unbounded | Low |
-| 5 · Trust | Source grounding per item | Each question/statement shows the exact source sentence(s) it came from | High |
-| 5 | Extraction vs. inference flag | Mark items lifted from the source vs. reasoned beyond it | High |
-| 5 | Answer-key justification | One-line "why correct / why distractors wrong", checkable fast | High |
-| 5 | Factual-consistency check vs. source | Flag hallucination risk before review | High |
-| 5 | Confidence indicator per item | Direct review attention to where the model is least sure | Med |
-| 5 | Objective + Bloom's alignment shown | Each item mapped to objective + cognitive level | High |
-| 5 | Nothing published without approval | Stage 2 gate as explicit, non-bypassable guarantee | High |
-| 5 | Educator is author of record | AI is assistive; educator's name + approval attached | High |
-| 5 | Generate-vs-edit audit trail | Per item: what the AI produced vs. what the educator changed | Med |
-| 5 | AI-generated labeling | Provenance label; optional learner-facing disclosure | Med |
-| 5 | Source reliability signal | "Wikipedia (curated)" vs. "arbitrary web page" — warn on weak sources | Med |
-| 5 | Known-limitations disclosure | "Best for conceptual; weak for procedural/math" at create time | Med |
-| 5 | Personal track record | "Approved 85% / edited 10% / dropped 5% over last 5 imports" — calibrated trust | Med |
-| 5 | Confusion-report loop | Learner confusion flows back with one-click regenerate | Med |
-| 5 | Generation transparency | Stream what the AI extracted and is drafting per activity; cancel/adjust | Med |
+| 1 | Approval gate: proposed-content list + **live H5P preview per item** + approve/drop/regenerate | P0 | ≥ 60% of imports reach an approved set (vs. abandon after generate); median generate→approved < 5 min |
+| 2 | Source grounding per item (show the source sentence) | P0 | Educator "I could tell if each item was right" ≥ 4/5 in usability test |
+| 2 | Answer-key justification per item | P1 | Contributes to approve-without-edit rate ≥ 55% |
+| 3 | Content-type recommendation from source + intent | P1 | ≥ 50% of imports keep the recommended activity set unchanged; "created an activity then deleted it whole" rate ↓ |
+| 3 | Source read-back panel | P1 | Leading indicator: poor-fit activity selections ↓ |
+| 3 | Verbatim question extraction (detect + import-as-is) | P1 | For question-bearing sources, ≥ 50% choose Extract; edit rate on extracted items < 10% |
+| 4 | Known-limitations disclosure at create time | P2 | First-run on unsupported sources (math/procedural) ↓ |
+| — | **Phase gate** | | **W1→W2 retention 20% → 35%+** |
 
----
+### Phase 2 — Fast & repeatable (returners → regulars)
 
-## What to build for the Sprint 2 demo
+| Seq | Item | Priority | Success measure |
+|---|---|---|---|
+| 1 | PowerPoint (.pptx) first-class ingestion | P1 | `.pptx` approve-without-edit rate reaches clean-article parity; W2 retention for `.pptx`-first users reaches cohort average |
+| 1 | Guided brief + presets + "improve prompt" + save named brief | P1 | Brief used in ≥ 30% of imports by users with ≥ 2 imports; approve-without-edit higher for brief-driven imports |
+| 2 | Inline item actions + scoped natural-language edits (Refine) | P1 | Median edits per approved item trends **down** across a user's successive imports |
+| 2 | Per-activity controls + coverage grid | P2 | Cross-activity concept overlap ↓ (measured); "too many/few questions" feedback ↓ |
+| 3 | Propagate-a-fix + preference memory | P2 | Same correction made twice by the same user → near zero |
+| 3 | Personal track record + confidence indicators | P2 | Approval time decreases as track record accumulates |
+| — | **Phase gate** | | **W2 retention 40%+; imports/active user/week ↑** |
 
-**The Stage 2 plan-preview / approval gate**, with:
-- a slice of Stage 1 structured intent feeding it,
-- a proposed-content list with **live interactive H5P preview per item**,
-- inline approve / drop / regenerate.
+### Phase 3 — Stickiness (habit + team expansion)
 
-Rationale: biggest single UX shift; most demoable (clear before/after vs. "hit Generate and
-pray"); stresses the digital twin hardest — it must produce a *faithful* plan and sample items
-that a mentor believes match what real Smart Import would generate. Shown side-by-side with a
-captured real Smart Import output for the same source.
+| Seq | Item | Priority | Success measure |
+|---|---|---|---|
+| 1 | Per-session containers + provenance + two-way navigation | P1 | % of users who re-open a past import ↑; "find the content from last week's import" task success ≥ 90% |
+| 2 | Session workspace (regenerate / add / export / publish set / bulk-move) | P2 | Published (not just created) rate ↑; bulk actions used |
+| 2 | Choose destination at import time | P2 | ≥ 50% of imports placed outside the "Smart Import" folder |
+| 3 | Confusion-report loop | P2 | % of confusion-flagged items regenerated ↑; downstream confusion rate on regenerated items ↓ |
+| 3 | Assemble into a coherent Interactive Book | P2 | "Assemble" adoption; retention delta assembled vs. loose output |
+| 4 | Lifecycle (archive/delete session + content) | P3 | Per-active-user folder growth rate ↓ |
+| — | **Phase gate** | | **W4→W8 retention ↑; seats per org ↑** |
 
----
+### Deferred
 
-## Roadmap
+| Item | Trigger to revisit |
+|---|---|
+| Image ingestion & image-based content types | Image-based content types (Image Hotspots, image Drag-and-Drop, Find the Hotspot) added to the Smart Import catalog |
 
-### The signal that shapes everything
+### Where to focus
 
-Smart Import retention is declining: **only ~20% of week-1 users use it again in week 2.** An 80%
-one-week drop after first use is not an activation problem — people *are* trying it. It is a
-**"the first output wasn't worth coming back for"** problem. Two causes dominate at that
-magnitude:
+**Phase 1, Seq 1–2: the approval gate + live preview + grounding.** It is the retention fix and
+it is the Sprint 2 demo slice — the demo and the roadmap's first bet are the same thing.
 
-1. **Not trusted** — the output was off, or the educator couldn't tell if it was right, so they
-   returned to manual authoring.
-2. **Cleanup cost > generation savings** — several activities generated, then an hour fixing them
-   across several separate editors. Net-negative time.
-
-Stage 4 (discoverability) and preference memory *compound* value — but only for people who
-return. They do not fix an 80% cliff. The roadmap sequences trust-and-cleanup first.
-
-### Phase 1 — Make the first run trustworthy (fixes the cliff)
-
-Goal: a user's first import produces content they trust and keep, with minimal cleanup.
-
-- **Stage 2**: plan preview + approval gate; live interactive H5P preview per item; inline
-  approve / drop / regenerate.
-- **Stage 5**: source grounding per item; answer-key justification; factual-consistency-vs-source
-  flag; extraction-vs-inference marker.
-- **Stage 1**: source read-back; content-type recommendation from source + intent.
-
-Metrics: W1→W2 retention; % items approved with no edit; time to first approved set; cleanup time.
-
-### Phase 2 — Make it fast and repeatable (returners → regulars)
-
-Goal: the 2nd and 3rd imports are faster and better because the system learned.
-
-- **Stage 1**: guided brief; presets; "improve this prompt"; save named brief; auto-propose
-  objectives.
-- **Stage 3**: inline item actions; scoped natural-language edits; propagate-a-fix; regenerate
-  one artifact.
-- **Stage 2**: per-activity controls; coverage grid; decisions → preference memory.
-- **Stage 5**: personal track record; known-limitations disclosure; source-reliability signal.
-
-Metrics: W2→W4 retention; imports per user per week; edit-rate trend across successive imports.
-
-### Phase 3 — Make it stick in the workflow (habit + team expansion)
-
-Goal: Smart Import content lives in the user's course structure; teams adopt.
-
-- **Stage 4**: per-session containers; provenance; two-way navigation; choose destination;
-  session workspace; lifecycle.
-- **Stage 5**: confusion-report loop; AI-generated labeling; generate-vs-edit audit trail.
-- Assemble into one coherent Interactive Book; "improve this" on existing content.
-
-Metrics: W4→W8 retention; published (not just created) rate; content reuse; seats per org.
-
-### Focus
-
-**Phase 1, and within it the approval gate + trust signals** — which is also the Sprint 2 demo
-slice, so the demo and the roadmap's first bet are the same thing.
-
-**Quick wins that can ship independently:** content-type recommendation; known-limitations
-disclosure at create time; source-grounding display (if generation already produces the spans);
+**Quick wins shippable independently:** known-limitations disclosure · content-type
+recommendation · source-grounding display (if generation already produces the spans) ·
 answer-key justification.
 
-### Why the twin matters here
+### How the twin de-risks this
 
-The digital twin lets you test "approval gate + grounding fixes retention" against *real* Smart
-Import output **before H5P ships anything** — measure edit rate and approval confidence on the
-twin, side-by-side with the real product. The twin de-risks the retention fix.
+The digital twin lets us test "approval gate + grounding fixes retention" against **real Smart
+Import output, before H5P ships anything** — run both across ~15 realistic sources (clean
+article, messy PDF, YouTube transcript, `.pptx`, short paste), measure approve-without-edit,
+defensible-distractor, and objective-alignment rates side-by-side. If quality is genuinely "good
+enough" the numbers show it and Phase 1 shrinks to the gate alone; if not, the retention leak is
+located with evidence.
+
+---
+
+## Sprint 2 demo
+
+**Screen 3 (Review & Approve) built end-to-end**, with a slice of Screen 1 (structured intent +
+source read-back) feeding it: an educator enters a source + intent → sees recommended activities
+→ sees a proposed-content list with a **live playable H5P preview per item** and grounding /
+answer-key trust signals → approves/drops/regenerates → the approved set renders in the real H5P
+player, **side-by-side with a captured real Smart Import output for the same source**.
+
+Feedback question for mentors: *"Is this twin faithful enough that you'd trust a product decision
+made on it?"*
