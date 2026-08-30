@@ -76,7 +76,7 @@ product**. This is the opportunity map; the detailed design follows further down
 
 | Today | Reworked (new) |
 |---|---|
-| Credits spent, **no preview** — black-box wait, then N separate content items | **Review & Approve** step — a proposed-content list *before* anything is created; a **"Create N" gate** |
+| Generation commits **straight to N saved content items** — no checkpoint to see what was made and discard it; the AI ran regardless, and the cost that bites is the cleanup hour, not the credits | **Review & Approve** step — a proposed-content list held *before* anything enters the library; a **"Create N" gate** |
 | To check or fix anything, open each item in the full H5P editor | **Live H5P preview per item** — Review (scan every question without answering) + Play (the real player) |
 | No way to tell if a question is correct | **Per-question trust signals** — the exact source sentence, an answer-key note, a confidence level, extracted-vs-inferred |
 | No targeted regeneration, no natural-language edit | **Refine ▾** — bounded steers (Harder · Easier · Simpler language · More formal · Different focus · Clearer · Answers look wrong · Try again); regenerates the activity for its type |
@@ -115,7 +115,7 @@ graph TD
 
   O --> P1["1 · Intent is a blank box, not reusable; source is opaque"]
   O --> P2["2 · Activity choice is blind; easy to over-pick"]
-  O --> P3["3 · No preview before spend; can't verify; fixing means N editors"]
+  O --> P3["3 · No checkpoint before content is committed; can't verify it; fixing means N editors"]
   O --> P4["4 · Output dumped in a folder; no link back to the import"]
 
   P1 --> S1a["Prompt XOR brief · presets · Improve"]
@@ -152,7 +152,7 @@ Outcome — reduce time-to-value · improve W1→W2 retention
 │    ├─ Recommendation engine v1 (feasibility + desirability + count) ... Phase 1
 │    └─ Pre-checked set · item counts · one-line reasons ... Phase 1
 │
-├─ Opportunity 3 · No preview before spend; can't verify; N editors to fix   ← the retention fix
+├─ Opportunity 3 · No checkpoint before content is committed; can't verify; N editors to fix   ← the retention fix
 │    ├─ Review & Approve step + "Create N" gate ........... Phase 1  (P0)
 │    ├─ Live H5P preview per item (Review + Play) .......... Phase 1  (P0)
 │    ├─ Per-question trust signals ........................ Phase 1  (P0)
@@ -531,7 +531,7 @@ This is a starting rule set; every threshold is a dial. Refinements we anticipat
 usage: the 1/2/3 count thresholds, the words-per-item ratio, the purpose→type mappings, whether
 "marginal" types should ever be pre-checked, and how aggressively intent keywords swap types.
 
-### Stage 2 — Approval (review gate before spend)
+### Stage 2 — Approval (a checkpoint before content is committed)
 
 Plan preview → proposed-content list → **live interactive H5P preview per item** → per-item
 approve / drop / edit / refine → per-activity controls → coverage grid → cost line →
