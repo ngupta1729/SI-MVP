@@ -242,3 +242,73 @@ Rationale: biggest single UX shift; most demoable (clear before/after vs. "hit G
 pray"); stresses the digital twin hardest — it must produce a *faithful* plan and sample items
 that a mentor believes match what real Smart Import would generate. Shown side-by-side with a
 captured real Smart Import output for the same source.
+
+---
+
+## Roadmap
+
+### The signal that shapes everything
+
+Smart Import retention is declining: **only ~20% of week-1 users use it again in week 2.** An 80%
+one-week drop after first use is not an activation problem — people *are* trying it. It is a
+**"the first output wasn't worth coming back for"** problem. Two causes dominate at that
+magnitude:
+
+1. **Not trusted** — the output was off, or the educator couldn't tell if it was right, so they
+   returned to manual authoring.
+2. **Cleanup cost > generation savings** — several activities generated, then an hour fixing them
+   across several separate editors. Net-negative time.
+
+Stage 4 (discoverability) and preference memory *compound* value — but only for people who
+return. They do not fix an 80% cliff. The roadmap sequences trust-and-cleanup first.
+
+### Phase 1 — Make the first run trustworthy (fixes the cliff)
+
+Goal: a user's first import produces content they trust and keep, with minimal cleanup.
+
+- **Stage 2**: plan preview + approval gate; live interactive H5P preview per item; inline
+  approve / drop / regenerate.
+- **Stage 5**: source grounding per item; answer-key justification; factual-consistency-vs-source
+  flag; extraction-vs-inference marker.
+- **Stage 1**: source read-back; content-type recommendation from source + intent.
+
+Metrics: W1→W2 retention; % items approved with no edit; time to first approved set; cleanup time.
+
+### Phase 2 — Make it fast and repeatable (returners → regulars)
+
+Goal: the 2nd and 3rd imports are faster and better because the system learned.
+
+- **Stage 1**: guided brief; presets; "improve this prompt"; save named brief; auto-propose
+  objectives.
+- **Stage 3**: inline item actions; scoped natural-language edits; propagate-a-fix; regenerate
+  one artifact.
+- **Stage 2**: per-activity controls; coverage grid; decisions → preference memory.
+- **Stage 5**: personal track record; known-limitations disclosure; source-reliability signal.
+
+Metrics: W2→W4 retention; imports per user per week; edit-rate trend across successive imports.
+
+### Phase 3 — Make it stick in the workflow (habit + team expansion)
+
+Goal: Smart Import content lives in the user's course structure; teams adopt.
+
+- **Stage 4**: per-session containers; provenance; two-way navigation; choose destination;
+  session workspace; lifecycle.
+- **Stage 5**: confusion-report loop; AI-generated labeling; generate-vs-edit audit trail.
+- Assemble into one coherent Interactive Book; "improve this" on existing content.
+
+Metrics: W4→W8 retention; published (not just created) rate; content reuse; seats per org.
+
+### Focus
+
+**Phase 1, and within it the approval gate + trust signals** — which is also the Sprint 2 demo
+slice, so the demo and the roadmap's first bet are the same thing.
+
+**Quick wins that can ship independently:** content-type recommendation; known-limitations
+disclosure at create time; source-grounding display (if generation already produces the spans);
+answer-key justification.
+
+### Why the twin matters here
+
+The digital twin lets you test "approval gate + grounding fixes retention" against *real* Smart
+Import output **before H5P ships anything** — measure edit rate and approval confidence on the
+twin, side-by-side with the real product. The twin de-risks the retention fix.
