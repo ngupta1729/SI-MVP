@@ -13,8 +13,16 @@ import type {
   ActivityRecommendation,
 } from "./types";
 import { contentType, CONTENT_TYPES } from "./h5p/contentTypes";
-import { buildSummary, buildSingleChoiceSet } from "./h5p/mockContent";
-import { STRUCTURE_REFERENCE } from "./calibration";
+import {
+  buildSummary,
+  buildSingleChoiceSet,
+  buildQuestionSet,
+  buildDialogCards,
+  buildDragText,
+  buildCrossword,
+  buildAccordion,
+} from "./h5p/mockContent";
+import { structureRef } from "./calibration";
 
 const TWIN_MODEL = process.env.TWIN_MODEL || "gpt-4o-mini";
 
@@ -365,6 +373,21 @@ function mockEngine(text: string, intent: ImportIntent): TwinResult {
         | "extracted"
         | "inferred",
     };
+    const perQ = qa.map((q) => ({
+      grounding: q.grounding || "",
+      answerKeyNote:
+        intent.mode === "extract"
+          ? "Lifted from the source; answer as given in the original."
+          : `Answer supported by: "${(q.grounding || "").slice(0, 80)}…"`,
+      confidence: (q.grounding ? "high" : "medium") as "high" | "medium",
+    }));
+    const defs = concepts.map((c, i) => ({
+      term: c,
+      definition: sentences[i]?.slice(0, 160) ?? `A key idea about ${c} from the source.`,
+      body: sentences[i]?.slice(0, 300) ?? `${c}.`,
+      clue: `${sentences[i]?.slice(0, 70) ?? c} (one word)`,
+    }));
+
     let contentJson: unknown;
     let questionSignals: GeneratedItem["questionSignals"];
     switch (typeName) {
@@ -372,16 +395,32 @@ function mockEngine(text: string, intent: ImportIntent): TwinResult {
         contentJson = buildSummary(concepts);
         break;
       case "H5P.SingleChoiceSet":
-      case "H5P.QuestionSet":
         contentJson = buildSingleChoiceSet(qa);
-        questionSignals = qa.map((q) => ({
-          grounding: q.grounding || "",
-          answerKeyNote:
-            intent.mode === "extract"
-              ? "Lifted from the source; answer as given in the original."
-              : `Answer supported by: "${(q.grounding || "").slice(0, 80)}…"`,
-          confidence: (q.grounding ? "high" : "medium") as "high" | "medium",
-        }));
+        questionSignals = perQ;
+        break;
+      case "H5P.QuestionSet":
+        contentJson = buildQuestionSet(qa);
+        questionSignals = perQ;
+        break;
+      case "H5P.Dialogcards:conceptual":
+      case "H5P.Dialogcards:contextual":
+        contentJson = buildDialogCards(defs);
+        break;
+      case "H5P.DragText":
+        contentJson = buildDragText(
+          defs.map((d) => ({ text: d.definition, answer: d.term })),
+        );
+        break;
+      case "H5P.Crossword":
+        contentJson = buildCrossword(
+          defs.map((d) => ({ clue: d.clue, answer: d.term })),
+        );
+        break;
+      case "H5P.Accordion:difficult-words":
+      case "H5P.Accordion:key-concepts":
+        contentJson = buildAccordion(
+          defs.map((d) => ({ title: d.term, body: d.body })),
+        );
         break;
       default:
         contentJson = null;
@@ -401,71 +440,69 @@ function mockEngine(text: string, intent: ImportIntent): TwinResult {
 
 // --- model engine -------------------------------------------------------------
 
-async function modelEngine(text: string, intent: ImportIntent): Promise<TwinResult> {
-  const wantedStructures = intent.contentTypes
-    .map((t) => STRUCTURE_REFERENCE[t] && `=== ${t} content.json shape ===\n${STRUCTURE_REFERENCE[t]}`)
-    .filter(Boolean)
-    .join("\n\n");
-  const sampleBlock =
-    wantedStructures ||
-    "Follow the public H5P content specs for each requested content type.";
+const TYPE_RULE: Record<string, string> = {
+  "H5P.SingleChoiceSet":
+    'contentJson.choices[]: { "subContentId": <uuid v4>, "question": <plain text>, "answers": [<CORRECT answer first>, <distractor>, <distractor>, <distractor>] }.',
+  "H5P.QuestionSet":
+    'contentJson.questions[]: each { "library": "H5P.MultiChoice 1.16", "subContentId": <uuid v4>, "params": { "question": "<p>text</p>", "answers": [{ "text": "<div>opt</div>", "correct": true|false }], "behaviour": { "singleAnswer": true } } } — exactly one answer per question has correct:true.',
+  "H5P.Summary":
+    'contentJson.summaries[]: each { "subContentId": <uuid v4>, "tip": "", "summary": [<the CORRECT statement first>, <a false variant>, <a false variant>] }. Also set "intro".',
+  "H5P.Dialogcards:conceptual":
+    'contentJson.dialogs[]: each { "text": "<p>term / prompt</p>", "answer": "<p>definition / answer</p>", "tips": {} }.',
+  "H5P.Dialogcards:contextual":
+    'contentJson.dialogs[]: each { "text": "<p>scenario / example</p>", "answer": "<p>what applies / the point</p>", "tips": {} }.',
+  "H5P.DragText":
+    'contentJson.textField: ONE string, sentences separated by \\n, each key answer wrapped in asterisks e.g. "The powerhouse of the cell is the *mitochondrion*.". Also set "taskDescription".',
+  "H5P.Crossword":
+    'contentJson.words[]: each { "clue": <the clue>, "answer": <ONE word, letters only, UPPERCASE>, "orientation": "across"|"down", "fixWord": false }.',
+  "H5P.Accordion:difficult-words":
+    'contentJson.panels[]: each { "title": <the difficult word>, "content": { "library": "H5P.AdvancedText 1.1", "subContentId": <uuid v4>, "params": { "text": "<p>plain-language definition</p>" } } }. Also set "hTag": "h3".',
+  "H5P.Accordion:key-concepts":
+    'contentJson.panels[]: each { "title": <the concept>, "content": { "library": "H5P.AdvancedText 1.1", "subContentId": <uuid v4>, "params": { "text": "<p>explanation</p>" } } }. Also set "hTag": "h3".',
+};
 
-  // Intent is authored in exactly one mode.
-  const intentInstruction =
-    intent.authoringMode === "brief"
-      ? `The educator specified a structured brief:
-- Learning goal: ${intent.learningGoal || "(not set)"}
-- Audience level: ${intent.audienceLevel}
-- Emphasis: ${intent.emphasis}
-- Volume: ${intent.volume} (light ≈ 4 questions, standard ≈ 6, thorough ≈ 10)
-- Language: ${intent.language}`
-      : `The educator wrote this instruction:
-"""
-${intent.prompt || "(none — use sensible defaults for a general audience)"}
-"""`;
-
-  const mode =
+async function generateOneItem(
+  typeName: string,
+  text: string,
+  intent: ImportIntent,
+  idx: number,
+): Promise<GeneratedItem | null> {
+  const def = contentType(typeName);
+  if (!def) return null;
+  const ref = await structureRef(typeName);
+  const modeLine =
     intent.mode === "extract"
-      ? `EXTRACTION MODE. The source already contains questions. Extract each one exactly as written — do not rephrase, reword, shorten, reorder, or invent questions. Carry over any answer options and marked correct answers unchanged. Where the source does not indicate the correct answer, choose the one best supported by the source text and set that item's "provenance" to "inferred". Map each into the requested H5P type without changing its substance.`
-      : `GENERATION MODE. Write new questions grounded strictly in the source. Questions must test understanding, not shallow recall. Distractors must be clearly wrong on a careful reading of the source — never defensibly correct.`;
+      ? "EXTRACTION: the source already contains questions. Pull each one out verbatim — do not reword, reorder, or invent. Carry over given options/answers."
+      : "GENERATION: write new items grounded strictly in the source. Test understanding; distractors/false variants must be clearly wrong on a careful read.";
+  const intentLine =
+    intent.authoringMode === "brief"
+      ? `Brief — goal: "${intent.learningGoal || "(none)"}", audience: ${intent.audienceLevel}, emphasis: ${intent.emphasis}, volume: ${intent.volume} (light≈4 / standard≈6 / thorough≈10).`
+      : `Instruction: "${intent.prompt || "(none — sensible defaults)"}"  volume: ${intent.volume}`;
 
-  const prompt = `You are a faithful digital twin of H5P.com's Smart Import. Given source material and an educator's intent, produce a content plan and the content.json for each requested content type.
+  const prompt = `You are H5P.com's Smart Import, producing content.json for ONE activity of type ${def.label} (${typeName}).
 
-${mode}
+${modeLine}
+${intentLine}
 
-${intentInstruction}
+SHAPE (match exactly): ${TYPE_RULE[typeName] ?? "match the example below"}
 
-Rules for H5P.SingleChoiceSet / H5P.QuestionSet content.json:
-- "choices": array. Each: { "subContentId": <uuid v4>, "question": <plain text, NO html tags>, "answers": [<correct answer FIRST>, <distractor>, <distractor>, <distractor>] }
-- 5–8 questions in generation mode unless the brief's volume says otherwise; in extraction mode, one per question found in the source.
-- Also include "behaviour", "overallFeedback", "l10n" using the STRUCTURE below.
+REAL EXAMPLE content.json for this type (copy the structure, replace all content with material from the SOURCE):
+${ref || "(no example — follow the shape line above)"}
 
 SOURCE:
-${text.slice(0, 12000)}
-
-STRUCTURE (format only — all content must come from the SOURCE above):
-${sampleBlock}
+${text.slice(0, 11000)}
 
 Return ONLY JSON:
 {
-  "sourceSummary": string,
-  "planNarrative": string,
-  "items": [{
-    "id": string,
-    "contentType": <one of INTENT.contentTypes>,
-    "title": string,
-    "concepts": string[],
-    "rationale": string,
-    "mainLibrary": string,
-    "contentJson": object,
-    "questionSignals": [
-      { "grounding": <the exact source sentence THIS question is built from>, "answerKeyNote": <one line: why this question's marked answer is correct>, "confidence": "high" | "medium" | "low" }
-    ],
-    "confidence": "high" | "medium" | "low",
-    "provenance": "extracted" | "inferred"
-  }]
+  "title": string,
+  "concepts": [<3-5 topics this activity covers>],
+  "rationale": <one line>,
+  "contentJson": <object exactly in the shape above>,
+  "questionSignals": [ { "grounding": <exact source sentence this element came from>, "answerKeyNote": <one line: why the answer/statement is right>, "confidence": "high"|"medium"|"low" } ],
+  "confidence": "high"|"medium"|"low",
+  "provenance": "${intent.mode === "extract" ? "extracted" : "inferred"}"
 }
-"questionSignals" MUST have one entry per question in this item's contentJson.choices, in the same order. For Summary items, one entry per summary set. Only include contentType values listed in INTENT.contentTypes.`;
+"questionSignals": one entry per element you generated, same order.`;
 
   const { text: out } = await generateText({
     model: openai(TWIN_MODEL),
@@ -473,8 +510,37 @@ Return ONLY JSON:
     temperature: 0.4,
   });
   const json = out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1);
-  const parsed = JSON.parse(json) as Omit<TwinResult, "engine">;
-  return { ...parsed, engine: "model" };
+  const parsed = JSON.parse(json) as Omit<
+    GeneratedItem,
+    "id" | "contentType" | "mainLibrary"
+  >;
+  return {
+    ...parsed,
+    id: `item-${idx}`,
+    contentType: typeName,
+    mainLibrary: def.library,
+  };
+}
+
+async function modelEngine(text: string, intent: ImportIntent): Promise<TwinResult> {
+  const settled = await Promise.allSettled(
+    intent.contentTypes.map((t, i) => generateOneItem(t, text, intent, i)),
+  );
+  const items = settled
+    .map((s) => (s.status === "fulfilled" ? s.value : null))
+    .filter((x): x is GeneratedItem => x !== null);
+
+  if (!items.length) return mockEngine(text, intent);
+
+  const sentences = (text.match(/[^.!?]{20,}[.!?]/g) ?? []).map((s) => s.trim());
+  return {
+    sourceSummary: sentences.slice(0, 2).join(" ") || text.slice(0, 240),
+    planNarrative: `${items.length} activit${items.length === 1 ? "y" : "ies"} generated from the source: ${items
+      .map((i) => contentType(i.contentType)?.label ?? i.contentType)
+      .join(", ")}.`,
+    items,
+    engine: "model",
+  };
 }
 
 export async function runTwin(

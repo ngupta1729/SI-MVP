@@ -42,7 +42,7 @@ export const CONTENT_TYPES: ContentTypeDef[] = [
       "Create a crossword puzzle where learners solve clues to fill in the correct words.",
     library: "H5P.Crossword 0.5",
     renderHost: "crossword",
-    twin: "none",
+    twin: "full",
     goodFor: ["vocabulary", "terminology", "recall"],
   },
   {
@@ -54,7 +54,7 @@ export const CONTENT_TYPES: ContentTypeDef[] = [
       "Create a quiz made up of several activities with a combined final score.",
     library: "H5P.QuestionSet 1.20",
     renderHost: "question-set",
-    twin: "mock",
+    twin: "full",
     goodFor: ["conceptual", "assessment", "mixed", "understanding"],
   },
   {
@@ -78,7 +78,7 @@ export const CONTENT_TYPES: ContentTypeDef[] = [
       "Create an activity where learners select the most important statements from a list.",
     library: "H5P.Summary 1.10",
     renderHost: "summary",
-    twin: "mock",
+    twin: "full",
     goodFor: ["conceptual", "understanding", "review"],
   },
 
@@ -91,7 +91,7 @@ export const CONTENT_TYPES: ContentTypeDef[] = [
     blurb: "Generate or curate definitions for difficult vocabulary.",
     library: "H5P.Accordion 1.0",
     renderHost: "accordion",
-    twin: "none",
+    twin: "full",
     goodFor: ["vocabulary", "terminology", "explanation"],
   },
   {
@@ -103,7 +103,7 @@ export const CONTENT_TYPES: ContentTypeDef[] = [
       "Define and explain important concepts learners need to understand the topic.",
     library: "H5P.Accordion 1.0",
     renderHost: "accordion",
-    twin: "none",
+    twin: "full",
     goodFor: ["conceptual", "explanation", "review"],
   },
   {
@@ -140,7 +140,7 @@ export const CONTENT_TYPES: ContentTypeDef[] = [
       "Create two-sided cards for reviewing key concepts and explanations.",
     library: "H5P.Dialogcards 1.9",
     renderHost: "dialog-cards",
-    twin: "none",
+    twin: "full",
     goodFor: ["memorization", "terminology", "recall", "review"],
   },
   {
@@ -152,7 +152,7 @@ export const CONTENT_TYPES: ContentTypeDef[] = [
       "Create two-sided cards tied to a specific example, case, or scenario.",
     library: "H5P.Dialogcards 1.9",
     renderHost: "dialog-cards",
-    twin: "none",
+    twin: "full",
     goodFor: ["memorization", "application", "recall"],
   },
   {
@@ -164,7 +164,7 @@ export const CONTENT_TYPES: ContentTypeDef[] = [
       "Create a fill-in-the-blank activity where learners drag words into the correct places.",
     library: "H5P.DragText 1.10",
     renderHost: "drag-text",
-    twin: "none",
+    twin: "full",
     goodFor: ["vocabulary", "definitions", "recall"],
   },
   {

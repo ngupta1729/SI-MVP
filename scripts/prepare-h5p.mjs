@@ -1,12 +1,13 @@
-// Extract every data/*.h5p as an H5P player-library bundle into public/h5p/<host>/
-// so h5p-standalone can render the twin's generated content.
+// Fetch H5P library bundles from the content-type hub and extract them so
+// h5p-standalone can render the twin's generated content.
 //
 //   node scripts/prepare-h5p.mjs
 //
-// A .h5p file is a zip: h5p.json (metadata + mainLibrary) at the root, and one
-// folder per bundled library. The bundle's own content/ is irrelevant here — the
-// app writes the twin's content.json into public/h5p/_render/<id>/ at request time
-// and points the player's librariesPath at the extracted bundle.
+// Each hub package (https://api.h5p.org/v1/content-types/<MachineName>) is a
+// full .h5p structure: h5p.json + content/content.json (a working example we
+// keep as a structure reference) + one folder per bundled library.
+//
+// Any *.h5p file dropped in data/ is also extracted (manual override / capture).
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -17,15 +18,23 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dataDir = path.join(root, "data");
 const outDir = path.join(root, "public", "h5p");
 
-const HOST_BY_LIBRARY = {
-  "H5P.Summary": "summary",
+// machineName -> render-host folder under public/h5p/
+const HUB_TYPES = {
   "H5P.SingleChoiceSet": "single-choice-set",
+  "H5P.Summary": "summary",
   "H5P.QuestionSet": "question-set",
-  "H5P.Crossword": "crossword",
-  "H5P.DragText": "drag-text",
   "H5P.Dialogcards": "dialog-cards",
-  "H5P.InteractiveBook": "interactive-book",
+  "H5P.DragText": "drag-text",
+  "H5P.Crossword": "crossword",
+  "H5P.Accordion": "accordion",
 };
+
+async function extractTo(zip, host) {
+  const target = path.join(outDir, host);
+  await fs.rm(target, { recursive: true, force: true });
+  await fs.mkdir(target, { recursive: true });
+  zip.extractAllTo(target, true);
+}
 
 async function main() {
   await fs.mkdir(outDir, { recursive: true });
@@ -35,6 +44,25 @@ async function main() {
   await fs.rm(path.join(outDir, "_assets"), { recursive: true, force: true });
   await fs.cp(hs, path.join(outDir, "_assets"), { recursive: true });
 
+  const prepared = [];
+
+  for (const [machineName, host] of Object.entries(HUB_TYPES)) {
+    try {
+      const res = await fetch(
+        `https://api.h5p.org/v1/content-types/${machineName}`,
+      );
+      if (!res.ok) throw new Error(`hub ${res.status}`);
+      const buf = Buffer.from(await res.arrayBuffer());
+      const zip = new AdmZip(buf);
+      await extractTo(zip, host);
+      prepared.push({ machineName, host });
+      console.log(`  ${machineName}  ->  public/h5p/${host}/`);
+    } catch (e) {
+      console.warn(`  skip ${machineName}: ${e.message}`);
+    }
+  }
+
+  // manual .h5p overrides in data/
   let files = [];
   try {
     files = (await fs.readdir(dataDir)).filter((f) =>
@@ -43,29 +71,19 @@ async function main() {
   } catch {
     /* no data dir */
   }
-  if (files.length === 0) {
-    console.log("No .h5p library bundles in data/. Live preview will be disabled.");
-    return;
-  }
-
-  const hosts = [];
   for (const file of files) {
     const zip = new AdmZip(path.join(dataDir, file));
     const h5pJson = JSON.parse(zip.readAsText("h5p.json"));
-    const mainLibrary = h5pJson.mainLibrary;
-    const host = HOST_BY_LIBRARY[mainLibrary] ?? mainLibrary.toLowerCase();
-    const target = path.join(outDir, host);
-    await fs.rm(target, { recursive: true, force: true });
-    await fs.mkdir(target, { recursive: true });
-    zip.extractAllTo(target, true);
-    hosts.push({ host, mainLibrary });
-    console.log(`${file}  ->  libraries for ${mainLibrary}  at public/h5p/${host}/`);
+    const host = HUB_TYPES[h5pJson.mainLibrary] ?? h5pJson.mainLibrary.toLowerCase();
+    await extractTo(zip, host);
+    console.log(`  data/${file}  ->  public/h5p/${host}/  (override)`);
   }
 
   await fs.writeFile(
     path.join(outDir, "_hosts.json"),
-    JSON.stringify(hosts, null, 2),
+    JSON.stringify(prepared, null, 2),
   );
+  console.log(`\n${prepared.length} content types prepared.`);
 }
 
 main().catch((e) => {

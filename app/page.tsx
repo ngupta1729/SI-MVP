@@ -56,6 +56,7 @@ export default function Page() {
 
   const [analysis, setAnalysis] = useState<SourceAnalysis | null>(null);
   const [recs, setRecs] = useState<Recommendation[]>([]);
+  const [analyzedKey, setAnalyzedKey] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
 
   const [result, setResult] = useState<ApiResult | null>(null);
@@ -65,9 +66,16 @@ export default function Page() {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const activeSourceKey = `${sourceTab}::${sourceTab === "Wikipedia" ? wikiUrl : text}`;
+  // Only ever show the read-back / recommendations computed for the source the
+  // user is on right now. Switch tabs → it hides until it re-runs for that source.
+  const analysisFresh = analyzedKey === activeSourceKey;
+  const shownAnalysis = analysisFresh ? analysis : null;
+  const shownRecs = analysisFresh ? recs : [];
+
   const recByName = useMemo(
-    () => Object.fromEntries(recs.map((r) => [r.name, r])),
-    [recs],
+    () => Object.fromEntries(shownRecs.map((r) => [r.name, r])),
+    [shownRecs],
   );
   const source = () =>
     sourceTab === "Wikipedia"
@@ -82,6 +90,7 @@ export default function Page() {
 
   async function analyze() {
     if (!sourceReady) return;
+    const key = activeSourceKey;
     setAnalyzing(true);
     setError(null);
     try {
@@ -94,6 +103,7 @@ export default function Page() {
       if (!res.ok) throw new Error(data.error);
       setAnalysis(data.analysis);
       setRecs(data.recommendations);
+      setAnalyzedKey(key);
       const preChecked: string[] = (data.recommendations as Recommendation[])
         .filter((r) => r.recommended)
         .map((r) => r.name);
@@ -114,16 +124,18 @@ export default function Page() {
     }
   }
 
-  // TTV: auto-analyze shortly after the source stops changing.
+  // The read-back always reflects the CURRENTLY-selected source tab. Switching
+  // tabs (or emptying the current one) drops the stale read-back; it re-runs,
+  // debounced, once the active tab has a usable source. Whatever tab the user is
+  // on when they hit "Choose activities" is the source that gets used.
   useEffect(() => {
-    if (!sourceReady) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(analyze, 600);
+    if (sourceReady) debounceRef.current = setTimeout(analyze, 600);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, wikiUrl, sourceTab]); // source only — analysis doesn't wait on intent
+  }, [activeSourceKey]);
 
   async function generate() {
     setGenerating(true);
@@ -192,7 +204,7 @@ export default function Page() {
                 setWikiUrl,
                 intent,
                 setIntent,
-                analysis,
+                analysis: shownAnalysis,
                 analyzing,
               }}
             />
@@ -229,10 +241,10 @@ export default function Page() {
           <span className="text-xs text-zinc-400">
             {screen === "review" && result
               ? `${approvedIds.length}/${result.items.length} approved · engine: ${result.engine}`
-              : analysis
-                ? `${analysis.kind}, ${analysis.wordCount} words${
-                    analysis.detectedQuestions > 3
-                      ? ` · ${analysis.detectedQuestions} existing questions`
+              : shownAnalysis
+                ? `${shownAnalysis.kind}, ${shownAnalysis.wordCount} words${
+                    shownAnalysis.detectedQuestions > 3
+                      ? ` · ${shownAnalysis.detectedQuestions} existing questions`
                       : ""
                   }`
                 : analyzing
@@ -1155,6 +1167,105 @@ function Review(p: {
 
 type Choice = { subContentId?: string; question: string; answers: string[] };
 
+const stripHtml = (s: unknown) =>
+  typeof s === "string" ? s.replace(/<[^>]+>/g, "").trim() : "";
+
+/** Review renderer for the non-choices content shapes (Summary, Dialog Cards, Drag Text, Crossword, Accordion, Question Set). */
+function OtherReview({
+  value,
+  signals,
+}: {
+  value: unknown;
+  signals?: QuestionSignal[];
+}) {
+  const v = (value ?? {}) as Record<string, unknown>;
+  let rows: { primary: string; secondary?: string; correct?: string }[] = [];
+
+  if (Array.isArray(v.summaries)) {
+    rows = (v.summaries as { summary: string[] }[]).map((s, i) => ({
+      primary: `Set ${i + 1}`,
+      correct: stripHtml(s.summary?.[0]),
+      secondary: (s.summary ?? []).slice(1).map(stripHtml).join("  ·  "),
+    }));
+  } else if (Array.isArray(v.dialogs)) {
+    rows = (v.dialogs as { text: string; answer: string }[]).map((d) => ({
+      primary: stripHtml(d.text),
+      correct: stripHtml(d.answer),
+    }));
+  } else if (Array.isArray(v.words)) {
+    rows = (v.words as { clue: string; answer: string }[]).map((w) => ({
+      primary: w.clue,
+      correct: w.answer,
+    }));
+  } else if (Array.isArray(v.panels)) {
+    rows = (v.panels as { title: string; content?: { params?: { text?: string } } }[]).map(
+      (pn) => ({
+        primary: pn.title,
+        secondary: stripHtml(pn.content?.params?.text),
+      }),
+    );
+  } else if (Array.isArray(v.questions)) {
+    rows = (v.questions as { params?: { question?: string; answers?: { text: string; correct: boolean }[] } }[]).map(
+      (q) => ({
+        primary: stripHtml(q.params?.question),
+        correct: stripHtml(
+          (q.params?.answers ?? []).find((a) => a.correct)?.text,
+        ),
+        secondary: (q.params?.answers ?? [])
+          .filter((a) => !a.correct)
+          .map((a) => stripHtml(a.text))
+          .join("  ·  "),
+      }),
+    );
+  } else if (typeof v.textField === "string") {
+    rows = v.textField
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => ({
+        primary: line.replace(/\*([^*]+)\*/g, "[ $1 ]"),
+        correct: (line.match(/\*([^*]+)\*/g) ?? [])
+          .map((m) => m.replace(/\*/g, "").split(":")[0])
+          .join(", "),
+      }));
+  }
+
+  if (!rows.length)
+    return (
+      <p className="rounded-md border border-zinc-200 p-3 text-xs text-zinc-500 dark:border-zinc-800">
+        Nothing to list for this type — use Play, or the JSON below.
+      </p>
+    );
+
+  return (
+    <ol className="space-y-2">
+      {rows.map((r, i) => (
+        <li
+          key={i}
+          className="rounded-md border border-zinc-200 p-2 text-xs dark:border-zinc-800"
+        >
+          <p className="font-medium">
+            {i + 1}. {r.primary}
+          </p>
+          {r.correct && (
+            <p className="mt-0.5 text-emerald-700 dark:text-emerald-400">
+              ✓ {r.correct}
+            </p>
+          )}
+          {r.secondary && (
+            <p className="mt-0.5 text-zinc-500">{r.secondary}</p>
+          )}
+          {signals?.[i] && (
+            <p className="mt-1 border-t border-zinc-100 pt-1 text-[10px] text-zinc-400 dark:border-zinc-800">
+              <b>grounded in:</b> “{signals[i].grounding}” · {signals[i].confidence}{" "}
+              confidence
+            </p>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 /** Screen-3 preview panel: Review (scan/act without answering) or Play (real H5P). */
 function ItemPanel(p: {
   item: RenderedItem;
@@ -1306,10 +1417,7 @@ function ItemPanel(p: {
           })}
         </ol>
       ) : (
-        <div className="rounded-md border border-zinc-200 p-3 text-xs text-zinc-500 dark:border-zinc-800">
-          Review list isn’t wired for {p.item.contentType} yet — use Play, or the
-          JSON below.
-        </div>
+        <OtherReview value={p.value} signals={p.item.questionSignals} />
       )}
 
       <details className="text-xs">
