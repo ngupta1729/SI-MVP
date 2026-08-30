@@ -1,8 +1,0 @@
-[
-  {
-    "name": "plate-tectonics-single-choice-set",
-    "mainLibrary": "H5P.SingleChoiceSet 1.11",
-    "sourceHint": "Plate Tectonics - Single Choice Set",
-    "renderHost": "single-choice-set"
-  }
-]
