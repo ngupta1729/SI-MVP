@@ -3,6 +3,7 @@
 // deterministic mock so the whole pipe runs offline.
 
 import { generateText } from "ai";
+import { openai } from "@ai-sdk/openai";
 import type {
   ImportIntent,
   TwinResult,
@@ -14,10 +15,10 @@ import { contentType, CONTENT_TYPES } from "./h5p/contentTypes";
 import { buildSummary, buildSingleChoiceSet } from "./h5p/mockContent";
 import { STRUCTURE_REFERENCE } from "./calibration";
 
-const TWIN_MODEL = process.env.TWIN_MODEL || "anthropic/claude-sonnet-4.5";
+const TWIN_MODEL = process.env.TWIN_MODEL || "gpt-4o-mini";
 
 function hasModel() {
-  return Boolean(process.env.AI_GATEWAY_API_KEY || process.env.ANTHROPIC_API_KEY);
+  return Boolean(process.env.OPENAI_API_KEY);
 }
 
 async function resolveSourceText(source: TwinSource): Promise<string> {
@@ -227,7 +228,7 @@ Return ONLY JSON:
 Only include contentType values listed in INTENT.contentTypes.`;
 
   const { text: out } = await generateText({
-    model: TWIN_MODEL,
+    model: openai(TWIN_MODEL),
     prompt,
     temperature: 0.4,
   });
