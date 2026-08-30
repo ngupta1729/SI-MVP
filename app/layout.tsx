@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "H5P Smart Import — Twin",
+  title: "H5P Smart Import — Reworked",
   description:
-    "A digital twin of H5P.com Smart Import with a reworked educator workflow.",
+    "A working prototype of a reworked H5P.com Smart Import educator workflow.",
 };
 
 export default function RootLayout({

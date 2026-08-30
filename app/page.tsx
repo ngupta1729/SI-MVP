@@ -448,7 +448,8 @@ export default function Page() {
           <h1 className="text-lg font-semibold">Smart Import</h1>
           <Stepper screen={screen} />
           <p className="mt-1 text-xs text-zinc-400">
-            Reworked educator workflow — a digital twin of H5P.com Smart Import.
+            A reworked H5P.com Smart Import — working prototype of the redesigned
+            educator workflow.
           </p>
         </div>
 

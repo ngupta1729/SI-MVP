@@ -1,13 +1,14 @@
-# MVI Spec — H5P Smart Import Twin (Sprint 2)
+# MVI Spec — Reworked H5P Smart Import (Sprint 2)
 
 _Created 2026-08-30. Full UX proposal + roadmap: `specs/smart-import-ux.md`._
 
 ## What this is
 
-A **working twin of H5P.com's Smart Import** — same input (a source + an activity choice), same
-kind of output (H5P content.json rendered in the real player) — with the **reworked educator
-workflow** layered on top and demoed as if live. The twin is the vehicle for prototyping and
-pressure-testing the workflow changes before H5P engineering commits to them.
+A working prototype of a **reworked H5P.com Smart Import** — same input (a source + an activity
+choice), same kind of output (H5P content.json rendered in the real player) — with the
+**redesigned educator workflow** layered on top and demoed as if live. The prototype reproduces
+Smart Import's generate-from-source behaviour so the workflow changes can be pressure-tested
+before H5P engineering commits to them.
 
 All generated content comes strictly from the source the educator provides in the app. Nothing is
 canned or pre-seeded.
@@ -30,7 +31,7 @@ Smart Import's W1→W2 retention is ~20%.
   item** in the real player; per-item **Approve / Edit / Discard** (inline question/answer
   editor); trust signals (source-sentence grounding, answer-key note, confidence, extracted-vs-
   inferred); everything approved by default.
-- **Twin engine**: `POST /api/twin` — source + intent → `{ plan, items:[{contentType,
+- **Generation engine**: `POST /api/twin` — source + intent → `{ plan, items:[{contentType,
   contentJson, grounding, answerKeyNote, confidence}] }`. Model engine (AI Gateway / Anthropic)
   when a key is set; deterministic mock otherwise.
 
@@ -50,8 +51,8 @@ Smart Import's W1→W2 retention is ~20%.
 |---|---|
 | UI | Next.js 16 App Router, one page, H5P-modal-style 3-screen flow |
 | Source read-back | `POST /api/analyze` — source → `{ analysis, recommendations }` |
-| Twin engine | `POST /api/twin` — model engine uses a **format-only** structure reference (no topic content); output is grounded strictly in the provided source |
-| Renderer | `h5p-standalone` in the browser. `scripts/prepare-h5p.mjs` fetches library bundles from the **H5P content-type hub API** (`api.h5p.org/v1/content-types/<name>`) — one GET per type, returns the library + all deps + a real example `content.json` — and extracts them to `public/h5p/<host>/`. The twin's generated `content.json` is written to `public/h5p/_render/<id>/` at request time and rendered against those libraries. The extracted example is also the model's structure reference. |
+| Generation engine | `POST /api/twin` — model engine uses a **format-only** structure reference (no topic content); output is grounded strictly in the provided source |
+| Renderer | `h5p-standalone` in the browser. `scripts/prepare-h5p.mjs` fetches library bundles from the **H5P content-type hub API** (`api.h5p.org/v1/content-types/<name>`) — one GET per type, returns the library + all deps + a real example `content.json` — and extracts them to `public/h5p/<host>/`. The generated `content.json` is written to `public/h5p/_render/<id>/` at request time and rendered against those libraries. The extracted example is also the model's structure reference. |
 
 ## Definition of done (Sprint 2)
 
@@ -62,7 +63,7 @@ approved set) is faster than today's Smart Import path (source → cleaned-up co
 
 ## Top risks
 
-- **Twin believability** — generated `content.json` must be valid H5P and the questions must be
+- **Output believability** — generated `content.json` must be valid H5P and the questions must be
   good enough that the demo lands. Mitigation: format-locked structure reference; model engine;
   live preview so the audience judges real output.
 - **TTV regression** — the review screen must not make the job slower. Mitigation: auto read-back,

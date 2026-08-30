@@ -116,8 +116,8 @@ rework keeps that shell and inserts new steps.
       One click → the whole activity is regenerated for its type with that steer. Warns:
       "regenerates every question, including your edits." Refine keeps the **type** fixed.
     - **Remix ▾** — rebuild this activity as a *different* type (Single Choice Set → Drag Text,
-      etc.), reusing the concepts it already covered. Picker lists the twin-renderable types;
-      one click regenerates in the new format from the same source. Edits are dropped (the type
+      etc.), reusing the concepts it already covered. Picker lists the types the prototype can
+      render; one click regenerates in the new format from the same source. Edits are dropped (the type
       changed) — the menu warns. This is the positive path for "wrong format" — it replaces the
       old "discard + re-pick on Screen 2" detour.
     - **Discard ▾** — a bounded reason picker: wrong activity type · quality too low · redundant
@@ -204,7 +204,7 @@ each other, and it's ambiguous which wins. A segmented toggle switches between t
 
 Structured form: learning goal, audience level, emphasis (recall ↔ understanding ↔ application),
 volume (light / standard / thorough), language. No free-text prompt, no presets, no "improve" —
-the brief *is* the intent; the twin serialises it into an instruction internally.
+the brief *is* the intent; it is serialised into an instruction internally.
 
 **Prompt library** — one library, three tiers:
 
@@ -558,14 +558,14 @@ it is the Sprint 2 demo slice — the demo and the roadmap's first bet are the s
 recommendation · source-grounding display (if generation already produces the spans) ·
 answer-key justification.
 
-### How the twin de-risks this
+### How the prototype de-risks this
 
-The twin is a working reproduction of Smart Import's generate-from-source behaviour, on which the
-reworked workflow (intent → approval → refine → discover → trust) is prototyped and demoed as if
+The prototype is a working reproduction of Smart Import's generate-from-source behaviour, on which
+the reworked workflow (intent → approval → refine → discover → trust) is built and demoed as if
 live — without waiting on H5P engineering. It runs the same input Smart Import takes (a source +
 an activity choice) and produces the same kind of output (H5P content.json rendered in the real
 player). All generated content comes strictly from the source the educator provides; nothing is
-canned. The twin is the vehicle for testing whether the approval gate + grounding move the
+canned. The prototype is the vehicle for testing whether the approval gate + grounding move the
 retention needle before committing engineering to it.
 
 ---

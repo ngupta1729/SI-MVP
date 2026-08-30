@@ -11,25 +11,31 @@ spot** (branches, PRs, merging) and CLI-first tooling/scripting is unfamiliar �
 shell steps before running them, and don't assume prior exposure. Match explanations to a strong
 product thinker who is still building engineering fluency.
 
-**Project:** An AI agent that studies an existing SaaS product through whatever access a PM has
-(live product / sandbox; sometimes code + docs) and builds a **digital twin / working context** of
-it, so PMs can brainstorm, prototype, and demo feature changes as if live — and probe edge cases.
-**Initial focus: the product H5P.** When giving examples or scaffolding, ground them in this
-product-twin-for-PMs framing and in H5P specifically.
+**Project:** A reworked **H5P Smart Import** — the AI feature in H5P.com that turns a source
+document into H5P interactive content. This project redesigns that workflow end-to-end: how
+educators author intent, how they review and approve what the AI generates, how they refine and
+remix it, and how they find it afterward — anchored on Smart Import's declining retention
+(~20% week-1 → week-2). Delivered as (a) a working Next.js prototype that reproduces Smart
+Import's generate-from-source behaviour and layers the redesigned workflow on top, rendered in
+the real H5P player, and (b) a product/UX spec (`specs/smart-import-ux.md`). Ground all examples
+and scaffolding in H5P Smart Import specifically. _The early product walkthrough was only to
+learn the existing flow — this project is dedicated to Smart Import, not a general
+"product twin" tool._
 
-**Starting autonomy level: L2 — AI as Collaborator.** The AI drafts the twin and feature
-prototypes; the participant reviews and approves each pass. Treat this as the current working mode,
+**Starting autonomy level: L2 — AI as Collaborator.** The AI drafts the spec and prototype
+changes; the participant reviews and approves each pass. Treat this as the current working mode,
 and as a starting point they intend to level up from — flag opportunities to move toward L3 as
 trust builds, don't silently operate more autonomously than L2.
 
 **Constraints & cadence:** Cohort 2608, 4-week program ending Sep 18, 2026. **Weekends only**,
 ~2–3 weekends left. Sprint 2 Demo Sep 13, Final Demo Sep 18. Keep scope proposals sized for
-weekend blocks. Chosen milestone shape: **one feature end-to-end** — a single meaningful H5P
-feature-change prototype demoed as if live, building only the context that feature needs, rather
-than a polished twin first.
+weekend blocks. Chosen milestone shape: **one part of the workflow end-to-end** — take a single
+meaningful slice of the Smart Import rework (e.g. the review/approve gate) all the way through
+and demo it as if live, rather than redesigning the whole workflow at once.
 
-**Motivation to reinforce:** giving PMs a fast path to deeply understand a SaaS product and
-experiment with real changes without engineering access or a full dev cycle.
+**Motivation to reinforce:** giving PMs a fast, engineering-free path to prototype and demo a
+real product change — here, making Smart Import's first output good enough that educators keep
+using it instead of abandoning it after one try.
 
 ## Finding What to Work On
 
