@@ -44,7 +44,12 @@ const DEFAULT_INTENT: ImportIntent = {
   contentTypes: [],
 };
 
-type ItemState = "approved" | "editing" | "discarded" | "refining";
+type ItemState =
+  | "approved"
+  | "editing"
+  | "discarded"
+  | "refining"
+  | "remixing";
 
 export default function Page() {
   const [screen, setScreen] = useState<Screen>("configure");
@@ -170,6 +175,7 @@ export default function Page() {
 
   const importId = useMemo(() => crypto.randomUUID(), []);
   const [attempts, setAttempts] = useState<Record<string, number>>({});
+  const [remixes, setRemixes] = useState<Record<string, number>>({});
 
   function logReviewEvent(ev: Record<string, unknown>) {
     const item = result?.items.find((i) => i.id === ev.itemId);
@@ -195,13 +201,18 @@ export default function Page() {
     }).catch(() => {});
   }
 
-  async function refineActivity(itemId: string, adjustment: string) {
-    const item = result?.items.find((i) => i.id === itemId);
-    if (!item || !result) return;
-    const attempt = (attempts[itemId] ?? 1) + 1;
-    setAttempts((a) => ({ ...a, [itemId]: attempt }));
-    setItem(itemId, "refining");
-    logReviewEvent({ action: "refine", itemId, reason: adjustment, attempt });
+  // Shared regenerate call for both Refine (same type, steered) and Remix (new type).
+  async function applyRegen(
+    itemId: string,
+    opts: {
+      contentType: string;
+      adjustment: string;
+      attempt: number;
+      busy: ItemState;
+    },
+  ) {
+    if (!result) return;
+    setItem(itemId, opts.busy);
     try {
       const res = await fetch("/api/regenerate", {
         method: "POST",
@@ -209,18 +220,22 @@ export default function Page() {
         body: JSON.stringify({
           source: source(),
           intent,
-          contentType: item.contentType,
-          adjustment,
+          contentType: opts.contentType,
+          adjustment: opts.adjustment,
           itemId,
-          attempt,
+          attempt: opts.attempt,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setResult({
-        ...result,
-        items: result.items.map((i) => (i.id === itemId ? data.item : i)),
-      });
+      setResult((r) =>
+        r
+          ? {
+              ...r,
+              items: r.items.map((i) => (i.id === itemId ? data.item : i)),
+            }
+          : r,
+      );
       setEdits((e) => {
         const n = { ...e };
         delete n[itemId];
@@ -231,6 +246,34 @@ export default function Page() {
       setError(e instanceof Error ? e.message : String(e));
       setItem(itemId, "approved");
     }
+  }
+
+  async function refineActivity(itemId: string, adjustment: string) {
+    const item = result?.items.find((i) => i.id === itemId);
+    if (!item) return;
+    const attempt = (attempts[itemId] ?? 1) + 1;
+    setAttempts((a) => ({ ...a, [itemId]: attempt }));
+    logReviewEvent({ action: "refine", itemId, reason: adjustment, attempt });
+    await applyRegen(itemId, {
+      contentType: item.contentType,
+      adjustment,
+      attempt,
+      busy: "refining",
+    });
+  }
+
+  async function remixActivity(itemId: string, toType: string) {
+    const item = result?.items.find((i) => i.id === itemId);
+    if (!item) return;
+    const fromType = item.contentType;
+    setRemixes((r) => ({ ...r, [itemId]: (r[itemId] ?? 0) + 1 }));
+    logReviewEvent({ action: "remix", itemId, reason: fromType, toType });
+    await applyRegen(itemId, {
+      contentType: toType,
+      adjustment: "remix:" + (item.concepts ?? []).join(", "),
+      attempt: 1,
+      busy: "remixing",
+    });
   }
 
   function discardActivity(itemId: string, reason: string) {
@@ -265,6 +308,7 @@ export default function Page() {
           edited: kept.filter((i) => edits[i.id] && edits[i.id] !== i.contentJson)
             .length,
           refined: Object.keys(attempts).length,
+          remixed: Object.keys(remixes).length,
           discarded: result.items.length - kept.length,
         },
       }),
@@ -340,7 +384,9 @@ export default function Page() {
               setSelected={setSelected}
               current={current}
               attempts={attempts}
+              remixes={remixes}
               onRefine={refineActivity}
+              onRemix={remixActivity}
               onDiscard={discardActivity}
             />
           )}
@@ -1193,6 +1239,8 @@ const DISCARD_REASONS = [
   "source doesn't support it",
   "not useful",
 ];
+// Remix rebuilds the activity as a different type — only types the twin can render.
+const REMIX_TARGETS = CONTENT_TYPES.filter((c) => c.twin === "full");
 
 function Review(p: {
   result: ApiResult;
@@ -1204,13 +1252,16 @@ function Review(p: {
   setSelected: (id: string) => void;
   current: RenderedItem | null;
   attempts: Record<string, number>;
+  remixes: Record<string, number>;
   onRefine: (itemId: string, adjustment: string) => void;
+  onRemix: (itemId: string, toType: string) => void;
   onDiscard: (itemId: string, reason: string) => void;
 }) {
   const { result, current } = p;
-  const [menu, setMenu] = useState<{ id: string; kind: "regen" | "discard" } | null>(
-    null,
-  );
+  const [menu, setMenu] = useState<{
+    id: string;
+    kind: "regen" | "remix" | "discard";
+  } | null>(null);
 
   return (
     <div className="space-y-4">
@@ -1246,8 +1297,10 @@ function Review(p: {
                   <p className="text-[11px] text-zinc-400">
                     {item.provenance ?? "inferred"} · conf {item.confidence ?? "—"}
                     {p.attempts[item.id] ? ` · refined ×${p.attempts[item.id] - 1}` : ""}
+                    {p.remixes[item.id] ? " · remixed" : ""}
                     {st === "discarded" ? " · discarded" : ""}
                     {st === "refining" ? " · refining…" : ""}
+                    {st === "remixing" ? " · remixing…" : ""}
                   </p>
                 </button>
 
@@ -1278,7 +1331,7 @@ function Review(p: {
                       Edit
                     </button>
                     <button
-                      disabled={st === "refining"}
+                      disabled={st === "refining" || st === "remixing"}
                       onClick={() =>
                         setMenu(
                           menu?.id === item.id && menu.kind === "regen"
@@ -1289,6 +1342,19 @@ function Review(p: {
                       className="rounded border border-zinc-300 px-1.5 py-0.5 disabled:opacity-40 dark:border-zinc-700"
                     >
                       Refine ▾
+                    </button>
+                    <button
+                      disabled={st === "refining" || st === "remixing"}
+                      onClick={() =>
+                        setMenu(
+                          menu?.id === item.id && menu.kind === "remix"
+                            ? null
+                            : { id: item.id, kind: "remix" },
+                        )
+                      }
+                      className="rounded border border-zinc-300 px-1.5 py-0.5 disabled:opacity-40 dark:border-zinc-700"
+                    >
+                      Remix ▾
                     </button>
                     <button
                       onClick={() =>
@@ -1322,6 +1388,30 @@ function Review(p: {
                           className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 dark:border-zinc-700 dark:bg-zinc-900"
                         >
                           {o.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {menu?.id === item.id && menu.kind === "remix" && (
+                  <div className="mt-1 rounded border border-blue-300 bg-blue-50/50 p-1.5 text-[11px] dark:border-blue-900 dark:bg-blue-950/20">
+                    <p className="mb-1 text-zinc-500">
+                      Remix — rebuild this activity as a different type, keeping the
+                      same concepts. Your edits will be lost.
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {REMIX_TARGETS.filter(
+                        (t) => t.name !== item.contentType,
+                      ).map((t) => (
+                        <button
+                          key={t.name}
+                          onClick={() => {
+                            setMenu(null);
+                            p.onRemix(item.id, t.name);
+                          }}
+                          className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 dark:border-zinc-700 dark:bg-zinc-900"
+                        >
+                          {t.label}
                         </button>
                       ))}
                     </div>

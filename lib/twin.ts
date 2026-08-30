@@ -470,6 +470,12 @@ function adjustLine(adjustment: string | undefined, intent: ImportIntent): strin
   if (adjustment.startsWith("focus:")) {
     return `\n\nADJUSTMENT: focus the questions on this concept from the source: "${adjustment.slice(6)}".`;
   }
+  if (adjustment.startsWith("remix:")) {
+    const concepts = adjustment.slice("remix:".length).trim();
+    return `\n\nADJUSTMENT (remix): the educator is rebuilding this activity as a different content type. Cover the SAME concepts it covered before${
+      concepts ? `: ${concepts}` : ""
+    }. Draw every item from the source; suit the new type's format.`;
+  }
   const d = REGEN_ADJUSTMENTS[adjustment];
   return d ? `\n\nADJUSTMENT (regeneration): ${d}` : "";
 }
