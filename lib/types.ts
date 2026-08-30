@@ -59,8 +59,21 @@ export interface SourceAnalysis {
   detectedQuestions: number;
   /** Suggested learning objectives read off the source — real, measurable, editable. */
   suggestedObjectives: string[];
+  /** Activity types the engine recommends (pre-checked on Screen 2), 1–3, best first. */
+  recommendations: ActivityRecommendation[];
   /** "model" when the LLM produced this, "heuristic" for the offline fallback. */
   engine: "model" | "heuristic";
+}
+
+export interface ActivityRecommendation {
+  /** H5P machine name, e.g. "H5P.SingleChoiceSet". */
+  name: string;
+  /** true = pre-check it on Screen 2. */
+  recommended: boolean;
+  /** one line: why (or why not) — shown on the card. */
+  reason: string;
+  /** suggested item count for this activity. */
+  itemCount: number;
 }
 
 /** One planned artifact, shown in the approval step before it is finalized. */

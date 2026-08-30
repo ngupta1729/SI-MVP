@@ -10,6 +10,7 @@ import type {
   TwinSource,
   GeneratedItem,
   SourceAnalysis,
+  ActivityRecommendation,
 } from "./types";
 import { contentType, CONTENT_TYPES } from "./h5p/contentTypes";
 import { buildSummary, buildSingleChoiceSet } from "./h5p/mockContent";
@@ -69,11 +70,114 @@ ${trimmed}`,
 
 const PROCEDURAL = /\b(step \d|first,|next,|then,|finally,|how to|procedure|install)\b/i;
 
-function heuristicAnalysis(text: string): SourceAnalysis {
+const VOLUME_ITEMS: Record<ImportIntent["volume"], number> = {
+  light: 4,
+  standard: 6,
+  thorough: 10,
+};
+
+/**
+ * Deterministic recommendation — the no-model fallback and the desirability
+ * refinement. Guarantees a non-empty set. See spec "Activity recommendation
+ * engine (v1)".
+ */
+export function recommendActivities(
+  analysis: SourceAnalysis,
+  intent: ImportIntent,
+): ActivityRecommendation[] {
+  const sourceCap = Math.max(
+    3,
+    Math.min(
+      15,
+      Math.round(analysis.wordCount / 80),
+      Math.round((analysis.concepts.length || 4) * 1.5),
+    ),
+  );
+  const baseCount = Math.min(VOLUME_ITEMS[intent.volume], sourceCap);
+  const promptText = (
+    intent.authoringMode === "prompt" ? intent.prompt : intent.learningGoal
+  ).toLowerCase();
+  const wantsVocab = /\b(vocab|terms?|terminology|definition|glossary)\b/.test(
+    promptText,
+  );
+  const wantsTeach = /\b(introduc|teach|explain|present|lesson|overview)\b/.test(
+    promptText,
+  );
+  const assess =
+    intent.emphasis === "assessment" || /\b(exam|quiz|assess|test|graded)\b/.test(promptText);
+
+  // feasibility per type (heuristic)
+  const feasible = (name: string): boolean => {
+    switch (name) {
+      case "H5P.Crossword":
+      case "H5P.DragText":
+      case "H5P.DialogCards":
+        return analysis.concepts.length >= 4 && analysis.wordCount >= 150;
+      case "H5P.InteractiveBook":
+        return analysis.wordCount >= 900 && analysis.themes.length >= 3;
+      case "H5P.QuestionSet":
+        return analysis.wordCount >= 250;
+      default: // SingleChoiceSet, Summary
+        return analysis.wordCount >= 80;
+    }
+  };
+
+  // pick order: SCS first, then intent tilt, then the safe understanding pick
+  const ranked: string[] = [];
+  const add = (n: string) => {
+    if (feasible(n) && !ranked.includes(n)) ranked.push(n);
+  };
+  add("H5P.SingleChoiceSet");
+  if (wantsVocab) {
+    add("H5P.Crossword");
+    add("H5P.DragText");
+  }
+  if (wantsTeach) {
+    add("H5P.InteractiveBook");
+    add("H5P.Summary");
+  }
+  if (assess) add("H5P.QuestionSet");
+  add("H5P.Summary");
+  add("H5P.QuestionSet");
+
+  // count: 1 for thin/narrow, 3 for long+broad, else 2
+  const narrow = /\b(quick|short|warm.?up|diagnostic)\b/.test(promptText);
+  let count = 2;
+  if (analysis.wordCount < 400 || narrow || ranked.length === 1) count = 1;
+  else if (analysis.wordCount > 1500 && analysis.themes.length >= 4 && ranked.length >= 3)
+    count = 3;
+  const picked = new Set(ranked.slice(0, count));
+
+  const reasonFor = (name: string, isRec: boolean) => {
+    if (!feasible(name))
+      return name === "H5P.InteractiveBook"
+        ? "source is short for a chapter book"
+        : name === "H5P.Crossword" || name === "H5P.DragText"
+          ? "few short terms in the source for this"
+          : "marginal fit for this source";
+    if (!isRec) return "feasible — add it if you want it";
+    if (name === "H5P.SingleChoiceSet") return "works well on this source; covers recall";
+    if (name === "H5P.Summary") return "checks understanding of the key claims";
+    if (name === "H5P.QuestionSet") return "a fuller scored quiz for this material";
+    if (name === "H5P.Crossword") return "the source has good terminology";
+    return "fits your source and intent";
+  };
+
+  return CONTENT_TYPES.map((ct) => ({
+    name: ct.name,
+    recommended: picked.has(ct.name),
+    reason: reasonFor(ct.name, picked.has(ct.name)),
+    itemCount: ct.name === "H5P.Crossword" ? 8 : Math.max(3, baseCount - (count > 1 ? 1 : 0)),
+  })).sort(
+    (a, b) => Number(b.recommended) - Number(a.recommended),
+  );
+}
+
+function heuristicAnalysis(text: string, intent: ImportIntent): SourceAnalysis {
   const words = text.split(/\s+/).filter(Boolean);
   const sentences = (text.match(/[^.!?]{15,}[.!?]/g) ?? []).map((s) => s.trim());
   const concepts = extractConcepts(text, 6);
-  return {
+  const base: SourceAnalysis = {
     kind: PROCEDURAL.test(text)
       ? "procedural"
       : sentences.length > 6
@@ -86,35 +190,62 @@ function heuristicAnalysis(text: string): SourceAnalysis {
     strengths: [
       `${words.length} words — enough for roughly ${Math.max(4, Math.min(20, Math.round(words.length / 120)))} questions`,
     ],
-    watchOuts: ["Read-back is running without the model — concepts are frequency-based only"],
+    watchOuts: [
+      "Read-back is running without the model — concepts are frequency-based only",
+    ],
     detectedQuestions: (text.match(/\?/g) ?? []).length,
     suggestedObjectives: [],
+    recommendations: [],
     engine: "heuristic",
   };
+  return { ...base, recommendations: recommendActivities(base, intent) };
 }
 
-export async function analyzeSource(source: TwinSource): Promise<SourceAnalysis> {
+export async function analyzeSource(
+  source: TwinSource,
+  intent: ImportIntent,
+): Promise<SourceAnalysis> {
   const text = await resolveSourceText(source);
   const words = text.split(/\s+/).filter(Boolean);
   const detectedQuestions = (text.match(/\?/g) ?? []).length;
 
-  if (!hasModel()) return heuristicAnalysis(text);
+  if (!hasModel()) return heuristicAnalysis(text, intent);
 
   try {
+    const intentLine =
+      intent.authoringMode === "prompt"
+        ? `The teacher's instruction: "${intent.prompt || "(none)"}". Emphasis: ${intent.emphasis}. Volume: ${intent.volume}. Mode: ${intent.mode}.`
+        : `Brief — goal: "${intent.learningGoal || "(none)"}", audience: ${intent.audienceLevel}, emphasis: ${intent.emphasis}, volume: ${intent.volume}.`;
     const prompt = `Read this source material that a teacher wants to turn into H5P quiz/assessment activities. Return a neutral read-back — describe it so the teacher knows what to expect. Do NOT tell them whether to use it; that is their choice.
 
 SOURCE:
 ${text.slice(0, 12000)}
 
+${intentLine}
+
+Also recommend which H5P activity types to pre-check. Available types and what each needs:
+- H5P.SingleChoiceSet — assertable facts with clear answers (works on almost anything). Recall.
+- H5P.QuestionSet — a fuller scored quiz; needs enough distinct facts. Understanding/mixed.
+- H5P.Summary — pick the correct statement; needs paraphrasable explanatory claims. Understanding.
+- H5P.Crossword — needs MANY single-word / short named terms. Recall/vocabulary.
+- H5P.DragText — needs definitional sentences with a clear removable key word. Vocabulary.
+- H5P.DialogCards — needs term↔definition or Q↔A pairs. Practice/recall.
+- H5P.InteractiveBook — needs length AND multiple sub-topics. Teaching.
+Rules: recommend 2 by default (one recall + one understanding, usually SingleChoiceSet + Summary or + QuestionSet); 1 if the source is short (<400 words) or the teacher wants something quick; 3 only if the source is long AND multi-section AND the teacher wants breadth. Never recommend a type the source can't support well — mark it recommended:false with the reason. itemCount from volume (light 4 / standard 6 / thorough 10), capped by what the source can support without repeating; Crossword ~8.
+
 Return ONLY JSON:
 {
   "kind": "conceptual" | "procedural" | "narrative" | "reference" | "mixed",
-  "readingLevel": "<in a teacher's words, e.g. 'introductory', 'upper-secondary', 'undergraduate', 'dense'>",
-  "concepts": ["<5-8 substantive things a teacher would assess; multi-word allowed; NOT just frequent words>"],
-  "themes": ["<3-5 themes the generated questions will draw on, heaviest-covered first>"],
-  "strengths": ["<2-3 short phrases: what this source is good raw material for>"],
-  "watchOuts": ["<2-3 short phrases: what to expect or what it won't cover well — neutral, e.g. 'fact-dense, so expect what/when questions over why'; NOT 'don't use this'>"]
-}`;
+  "readingLevel": "<in a teacher's words>",
+  "concepts": ["<5-8 substantive things a teacher would assess; multi-word allowed>"],
+  "themes": ["<3-5 themes the generated questions will draw on, heaviest first>"],
+  "strengths": ["<2-3 short phrases>"],
+  "watchOuts": ["<2-3 short neutral phrases; NOT 'don't use this'>"],
+  "recommendations": [
+    { "name": "<one of the 7 H5P names above>", "recommended": true|false, "reason": "<one line>", "itemCount": <int> }
+  ]
+}
+Include an entry for every one of the 7 types.`;
     const { text: out } = await generateText({
       model: openai(process.env.TWIN_ANALYZE_MODEL || "gpt-4o-mini"),
       prompt,
@@ -125,47 +256,23 @@ Return ONLY JSON:
       SourceAnalysis,
       "wordCount" | "detectedQuestions" | "engine" | "suggestedObjectives"
     >;
-    return {
+    const analysis: SourceAnalysis = {
       ...parsed,
       wordCount: words.length,
       detectedQuestions,
       suggestedObjectives: [],
+      recommendations: parsed.recommendations ?? [],
       engine: "model",
     };
+    // safety net: if the model recommended nothing, fall back to the deterministic pick
+    if (!analysis.recommendations.some((r) => r.recommended)) {
+      analysis.recommendations = recommendActivities(analysis, intent);
+    }
+    return analysis;
   } catch (err) {
     console.error("analyze model call failed, using heuristic:", err);
-    return heuristicAnalysis(text);
+    return heuristicAnalysis(text, intent);
   }
-}
-
-/** Rank the catalog against a source analysis + intent — drives recommendations. */
-export function recommendActivities(analysis: SourceAnalysis, intent: ImportIntent) {
-  const wantAssessment = intent.emphasis === "assessment";
-  return CONTENT_TYPES.map((ct) => {
-    let score = 0;
-    const reasons: string[] = [];
-    if (ct.goodFor.includes(analysis.kind)) {
-      score += 2;
-      reasons.push(`fits ${analysis.kind} material`);
-    }
-    if (wantAssessment && ct.goodFor.includes("assessment")) {
-      score += 2;
-      reasons.push("matches your assessment emphasis");
-    }
-    if (analysis.kind === "procedural" && ct.goodFor.includes("recall")) {
-      score -= 1;
-    }
-    if (ct.goodFor.includes("vocabulary") && analysis.concepts.length < 4) {
-      score -= 2;
-      reasons.push("few short factual terms in the source");
-    }
-    return {
-      name: ct.name,
-      recommended: score >= 2,
-      reason: reasons[0] ?? "usable, but not a strong fit for this source",
-      score,
-    };
-  }).sort((a, b) => b.score - a.score);
 }
 
 // --- crude concept/QA extraction for the mock engine ---------------------------

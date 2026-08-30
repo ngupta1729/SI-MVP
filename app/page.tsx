@@ -23,6 +23,7 @@ interface Recommendation {
   name: string;
   recommended: boolean;
   reason: string;
+  itemCount?: number;
 }
 
 const DEFAULT_INTENT: ImportIntent = {
@@ -88,14 +89,17 @@ export default function Page() {
       if (!res.ok) throw new Error(data.error);
       setAnalysis(data.analysis);
       setRecs(data.recommendations);
+      const preChecked: string[] = (data.recommendations as Recommendation[])
+        .filter((r) => r.recommended)
+        .map((r) => r.name);
       setIntent((i) =>
         i.contentTypes.length
           ? i
           : {
               ...i,
-              contentTypes: data.recommendations
-                .filter((r: Recommendation) => r.recommended)
-                .map((r: Recommendation) => r.name),
+              contentTypes: preChecked.length
+                ? preChecked
+                : ["H5P.SingleChoiceSet"],
             },
       );
     } catch (e) {
@@ -116,20 +120,11 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, wikiUrl, sourceTab]); // source only — analysis doesn't wait on intent
 
-  async function generate(useRecommended = false) {
+  async function generate() {
     setGenerating(true);
     setError(null);
     try {
-      // Quick generate never waits on the read-back: use recommendations if
-      // they've landed, else the author's picks, else a sensible default.
-      const recommended = recs.filter((r) => r.recommended).map((r) => r.name);
-      const contentTypes = useRecommended
-        ? recommended.length
-          ? recommended
-          : intent.contentTypes.length
-            ? intent.contentTypes
-            : ["H5P.SingleChoiceSet"]
-        : intent.contentTypes;
+      const contentTypes = intent.contentTypes;
       const res = await fetch("/api/twin", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -243,14 +238,6 @@ export default function Page() {
             {screen === "configure" && (
               <>
                 <button
-                  onClick={() => generate(true)}
-                  disabled={!sourceReady || generating}
-                  className={btnGhost}
-                  title="Skip activity selection — generate now"
-                >
-                  {generating ? "…" : "Quick generate"}
-                </button>
-                <button
                   onClick={() => setScreen("activities")}
                   disabled={!sourceReady}
                   className={btnPrimary}
@@ -265,7 +252,7 @@ export default function Page() {
                   Back
                 </button>
                 <button
-                  onClick={() => generate(false)}
+                  onClick={() => generate()}
                   disabled={generating || !intent.contentTypes.length}
                   className={btnPrimary}
                 >
@@ -1047,7 +1034,12 @@ function Activities(p: {
                     </div>
                     <p className="mt-1 text-xs text-zinc-500">{ct.blurb}</p>
                     {rec && (
-                      <p className="mt-1 text-[11px] text-zinc-400">{rec.reason}</p>
+                      <p className="mt-1 text-[11px] text-zinc-400">
+                        {rec.reason}
+                        {rec.recommended && rec.itemCount
+                          ? ` · ~${rec.itemCount} items`
+                          : ""}
+                      </p>
                     )}
                   </button>
                 );
