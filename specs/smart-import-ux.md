@@ -55,9 +55,12 @@ rework keeps that shell and inserts new steps.
 
 ### Screen 1 — Configure Content _(existing, enhanced)_
 
-- **Source tabs** unchanged: File · YouTube · Wikipedia · Web Page · Pasted Text.
-- **NEW — Source read-back** (after a source is added): detected type, length, key concepts, and
-  *"this document contains N existing questions"* detection.
+- **Source**: the rework focuses on **Pasted Text** and **Wikipedia** first — the two lowest-risk,
+  highest-signal inputs. `.pptx` (Phase 2) and the other existing tabs (File / YouTube / Web Page)
+  come after, once the core loop is proven.
+- **NEW — Source read-back** runs **automatically** as the educator types/pastes (no "Analyze"
+  button): detected type, length, key concepts, and *"this source contains N existing questions"*
+  detection.
 - **NEW — Question handling** when questions are detected:
   **[Extract as-is]** · **[Generate new]** · **[Both]**. Extraction lifts the educator's own
   questions into the target H5P type with minimal rewriting — faster, and their own wording.
@@ -77,9 +80,14 @@ rework keeps that shell and inserts new steps.
 - **Proposed content list**, grouped by activity; each item shows its target concept / objective.
 - **Live interactive H5P preview** of the selected item, rendered in the real player — the
   educator *plays* it as a learner would.
-- Per item: **Approve · Drop · Edit · Regenerate.**
+- Per item, three actions only: **Approve · Edit · Discard.** (Edit = inline question/answer
+  editing, no full editor. Regenerate lives inside Edit as "redo this item".)
+- Everything is **approved by default** — the educator scans, edits or discards the exceptions,
+  and ships. Reviewing is opt-out, not opt-in.
 - **Trust signals** per item: source-sentence grounding, answer-key justification, confidence,
   extraction-vs-inference marker.
+- **Real side-by-side** appears **only when a captured real Smart Import run matches this exact
+  source** — never a canned example from a different topic.
 - **Coverage grid**: objectives × activities.
 - **Cost line**: "This will use 2 credits and create 18 items."
 - **[Approve N & create]**.
@@ -174,8 +182,12 @@ personal track record · confusion-report loop · generation transparency.
   Phase 2**.
 - **Supporting metrics:** approve-without-edit rate · median edits per approved item · imports
   per active user per week · published (not just created) rate.
-- **Guardrail:** time-to-first-created-content must not regress > ~20%. The approval gate adds a
-  step — watch that it doesn't hurt activation.
+- **Guardrail — reduce, don't add, time-to-value.** The approval gate must make the *whole* job
+  (idea → usable content) faster, not just add a review step. Levers: source read-back runs
+  automatically; recommended activities pre-checked; a **Quick generate** path that skips activity
+  selection entirely; everything **approved by default** so review is opt-out. Target:
+  **time from source pasted → first approved set is lower than today's source → cleaned-up
+  content**, even though a review screen now exists.
 
 ### Phase 1 — Fix the cliff (first-run trust + the gate)
 
