@@ -24,6 +24,7 @@ export interface SavedTemplate {
 
 const KEY = "smartimport.templates.v1";
 const LAST_KEY = "smartimport.lastTemplate.v1";
+const EMPTY: SavedTemplate[] = []; // stable reference for snapshots
 
 export function lastUsedTemplateId(): string | null {
   try {
@@ -37,19 +38,19 @@ let cache: SavedTemplate[] = [];
 let cacheRaw: string | null = null;
 
 function readList(): SavedTemplate[] {
-  if (typeof window === "undefined") return [];
+  if (typeof window === "undefined") return EMPTY;
   let raw: string | null = null;
   try {
     raw = localStorage.getItem(KEY);
   } catch {
-    return [];
+    return EMPTY;
   }
   if (raw !== cacheRaw) {
     cacheRaw = raw;
     try {
-      cache = raw ? (JSON.parse(raw) as SavedTemplate[]) : [];
+      cache = raw ? (JSON.parse(raw) as SavedTemplate[]) : EMPTY;
     } catch {
-      cache = [];
+      cache = EMPTY;
     }
   }
   return cache;
@@ -90,13 +91,12 @@ function readLast(): string | null {
   }
 }
 
+const serverList = () => EMPTY;
+const serverNull = () => null;
+
 export function useTemplates() {
-  const templates = useSyncExternalStore(
-    subscribe,
-    readList,
-    () => [] as SavedTemplate[],
-  );
-  const lastUsedId = useSyncExternalStore(subscribe, readLast, () => null);
+  const templates = useSyncExternalStore(subscribe, readList, serverList);
+  const lastUsedId = useSyncExternalStore(subscribe, readLast, serverNull);
 
   const savePrompt = useCallback(
     (
