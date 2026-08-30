@@ -58,9 +58,21 @@ rework keeps that shell and inserts new steps.
 - **Source**: the rework focuses on **Pasted Text** and **Wikipedia** first — the two lowest-risk,
   highest-signal inputs. `.pptx` (Phase 2) and the other existing tabs (File / YouTube / Web Page)
   come after, once the core loop is proven.
-- **NEW — Source read-back** runs **automatically** as the educator types/pastes (no "Analyze"
-  button): detected type, length, key concepts, and *"this source contains N existing questions"*
-  detection.
+- **NEW — Source read-back** runs **automatically** and **non-blocking** as the educator
+  types/pastes (no "Analyze" button; "Choose activities" / "Quick generate" are available the
+  moment a source exists, the read-back fills in behind them). It is **advisory** — it describes
+  the material, it does not gate or discourage use:
+  - **What it is**: content type, length, reading level, the themes the questions will draw on
+    (weighted).
+  - **Concepts**: substantive, multi-word things a teacher would assess — not a word-frequency
+    dump.
+  - **Strengths**: what this source is good raw material for.
+  - **Watch-outs**: what to expect / what it won't cover well, phrased neutrally
+    ("fact-dense — expect *what/when* over *why*"), never "don't use this".
+  - **Draft objectives**: 3–5 real, measurable, editable learning objectives grounded in the
+    text.
+  - **Existing questions**: count → the extract-vs-generate choice.
+  Model-backed when a key is present; heuristic fallback otherwise.
 - **NEW — Question handling** when questions are detected:
   **[Extract as-is]** · **[Generate new]** · **[Both]**. Extraction lifts the educator's own
   questions into the target H5P type with minimal rewriting — faster, and their own wording.
@@ -194,7 +206,9 @@ automated verbatim-diff check added then.
 
 **Also in Stage 1:**
 
-- **Source read-back** before activity selection (type, length, key concepts).
+- **Source read-back** before activity selection — advisory, non-blocking: type · length ·
+  reading level · weighted themes · substantive concepts · Strengths · Watch-outs · draft
+  objectives. Describes the material; never a go/no-go verdict.
 - **Content-type recommendation from source + intent** — ranked, pre-checked, reason per activity.
 - **Auto-propose learning objectives** from the source.
 - **Verbatim question extraction** — when the source already contains questions (worksheet,
