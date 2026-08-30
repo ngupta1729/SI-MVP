@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CONTENT_TYPES, CATEGORIES, contentType } from "@/lib/h5p/contentTypes";
 import { INTENT_PRESETS, preset as findPreset } from "@/lib/intent-presets";
+import { useTemplates, type SavedTemplate } from "@/lib/templates";
 import type { ImportIntent, TwinResult, SourceAnalysis } from "@/lib/types";
 import H5PRender from "@/components/H5PRender";
 
@@ -340,6 +341,67 @@ function Configure(p: {
   const promptMode = p.intent.authoringMode === "prompt";
   const isScratch = p.intent.promptPresetId === null;
   const canImprove = promptMode && isScratch && p.intent.prompt.trim().length > 0;
+  const lib = useTemplates();
+  const promptTemplates = lib.templates
+    .filter((t) => t.kind === "prompt")
+    .sort((a, b) => (b.usedAt ?? 0) - (a.usedAt ?? 0));
+  const briefTemplates = lib.templates
+    .filter((t) => t.kind === "brief")
+    .sort((a, b) => (b.usedAt ?? 0) - (a.usedAt ?? 0));
+  const [saving, setSaving] = useState<null | "prompt" | "brief">(null);
+  const [saveName, setSaveName] = useState("");
+  const [loadedId, setLoadedId] = useState<string | null>(null);
+  const lastId = lib.lastUsedId;
+
+  const bundleTypes =
+    p.intent.contentTypes.length > 0 ? p.intent.contentTypes : undefined;
+
+  function loadTemplate(t: SavedTemplate) {
+    if (t.kind === "prompt") {
+      set({
+        authoringMode: "prompt",
+        promptPresetId: null,
+        prompt: t.prompt ?? "",
+        mode: t.mode ?? "generate",
+        ...(t.contentTypes?.length ? { contentTypes: t.contentTypes } : {}),
+      });
+    } else if (t.brief) {
+      set({
+        authoringMode: "brief",
+        ...t.brief,
+        ...(t.contentTypes?.length ? { contentTypes: t.contentTypes } : {}),
+      });
+    }
+    setLoadedId(t.id);
+    lib.markUsed(t.id);
+  }
+
+  function commitSave() {
+    const name = saveName.trim();
+    if (!name) return;
+    if (saving === "prompt") {
+      lib.savePrompt(name, p.intent.prompt, p.intent.mode, bundleTypes);
+    } else if (saving === "brief") {
+      lib.saveBrief(
+        name,
+        {
+          learningGoal: p.intent.learningGoal,
+          audienceLevel: p.intent.audienceLevel,
+          emphasis: p.intent.emphasis,
+          volume: p.intent.volume,
+          language: p.intent.language,
+        },
+        bundleTypes,
+      );
+    }
+    setSaving(null);
+    setSaveName("");
+  }
+
+  const loaded = lib.templates.find((t) => t.id === loadedId);
+  const loadedPromptEdited =
+    loaded?.kind === "prompt" && loaded.prompt !== p.intent.prompt;
+
   return (
     <div className="space-y-6">
       <div>
@@ -446,6 +508,32 @@ function Configure(p: {
                   {preset.label}
                 </button>
               ))}
+              {promptTemplates.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => loadTemplate(t)}
+                  className={`rounded-md border px-2 py-1 ${
+                    loadedId === t.id
+                      ? "border-blue-600 font-medium"
+                      : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                  }`}
+                  title={
+                    t.contentTypes?.length
+                      ? `Your template — also loads ${t.contentTypes.length} activit${t.contentTypes.length === 1 ? "y" : "ies"}`
+                      : "Your saved template"
+                  }
+                >
+                  ★ {t.name}
+                  {t.id === lastId && (
+                    <span className="ml-1 text-[10px] text-zinc-400">· recent</span>
+                  )}
+                  {t.contentTypes?.length ? (
+                    <span className="ml-1 text-[10px] text-zinc-400">
+                      +{t.contentTypes.length}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
             </div>
 
             {isScratch ? (
@@ -457,18 +545,50 @@ function Configure(p: {
                   placeholder="e.g. Assessment for first-year undergrads. Focus on the three boundary types and the evidence. Plain language."
                   className="w-full rounded-md border border-zinc-300 p-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
                 />
-                {canImprove && (
-                  <button
-                    onClick={() =>
-                      set({
-                        prompt: `${p.intent.prompt.trim()} Be specific about measurable objectives, the audience level, and which concepts from the source to prioritise. State how many questions and their difficulty.`,
-                      })
-                    }
-                    className="rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
-                  >
-                    ✨ Improve this prompt
-                  </button>
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  {canImprove && (
+                    <button
+                      onClick={() =>
+                        set({
+                          prompt: `${p.intent.prompt.trim()} Be specific about measurable objectives, the audience level, and which concepts from the source to prioritise. State how many questions and their difficulty.`,
+                        })
+                      }
+                      className="rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                    >
+                      ✨ Improve this prompt
+                    </button>
+                  )}
+                  {loadedPromptEdited && loaded && (
+                    <button
+                      onClick={() =>
+                        lib.update(loaded.id, {
+                          prompt: p.intent.prompt,
+                          mode: p.intent.mode,
+                          contentTypes: bundleTypes,
+                        })
+                      }
+                      className="rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                    >
+                      Update “{loaded.name}”
+                    </button>
+                  )}
+                  {p.intent.prompt.trim().length > 0 &&
+                    (saving === "prompt" ? (
+                      <SaveRow
+                        value={saveName}
+                        onChange={setSaveName}
+                        onSave={commitSave}
+                        onCancel={() => setSaving(null)}
+                      />
+                    ) : (
+                      <button
+                        onClick={() => setSaving("prompt")}
+                        className="rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                      >
+                        + Save {bundleTypes ? "prompt + activities" : "as template"}
+                      </button>
+                    ))}
+                </div>
               </>
             ) : (
               <div className="rounded-md border border-zinc-200 bg-zinc-50 p-2 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
@@ -481,7 +601,46 @@ function Configure(p: {
             )}
           </>
         ) : (
-          <div className="grid gap-3 rounded-md border border-zinc-200 p-3 text-sm sm:grid-cols-2 dark:border-zinc-800">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {briefTemplates.length > 0 && (
+                <>
+                  <span className="text-zinc-400">Load brief:</span>
+                  {briefTemplates.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => loadTemplate(t)}
+                      className={`rounded-md border px-2 py-1 ${
+                        loadedId === t.id
+                          ? "border-blue-600 font-medium"
+                          : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                      }`}
+                    >
+                      ★ {t.name}
+                      {t.id === lastId && (
+                        <span className="ml-1 text-[10px] text-zinc-400">· recent</span>
+                      )}
+                    </button>
+                  ))}
+                </>
+              )}
+              {saving === "brief" ? (
+                <SaveRow
+                  value={saveName}
+                  onChange={setSaveName}
+                  onSave={commitSave}
+                  onCancel={() => setSaving(null)}
+                />
+              ) : (
+                <button
+                  onClick={() => setSaving("brief")}
+                  className="rounded-md border border-zinc-300 px-2 py-1 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                >
+                  + Save this brief
+                </button>
+              )}
+            </div>
+            <div className="grid gap-3 rounded-md border border-zinc-200 p-3 text-sm sm:grid-cols-2 dark:border-zinc-800">
             <Field label="Learning goal">
               <input
                 value={p.intent.learningGoal}
@@ -538,7 +697,12 @@ function Configure(p: {
                 className={fieldInput}
               />
             </Field>
+            </div>
           </div>
+        )}
+
+        {lib.templates.length > 0 && (
+          <TemplateManager lib={lib} />
         )}
       </div>
 
@@ -601,6 +765,106 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="mb-1 block text-xs text-zinc-500">{label}</span>
       {children}
     </label>
+  );
+}
+
+function SaveRow(p: {
+  value: string;
+  onChange: (s: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <input
+        autoFocus
+        value={p.value}
+        onChange={(e) => p.onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") p.onSave();
+          if (e.key === "Escape") p.onCancel();
+        }}
+        placeholder="Template name…"
+        className="rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+      />
+      <button
+        onClick={p.onSave}
+        className="rounded bg-blue-600 px-2 py-1 text-xs text-white"
+      >
+        Save
+      </button>
+      <button onClick={p.onCancel} className="px-1 text-xs text-zinc-400">
+        cancel
+      </button>
+    </span>
+  );
+}
+
+function TemplateManager({ lib }: { lib: ReturnType<typeof useTemplates> }) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  return (
+    <div className="text-xs">
+      <button
+        onClick={() => setOpen(!open)}
+        className="text-zinc-400 underline"
+      >
+        {open ? "Hide" : "Your templates"} ({lib.templates.length})
+      </button>
+      {open && (
+        <ul className="mt-2 space-y-1">
+          {lib.templates.map((t: SavedTemplate) => (
+            <li
+              key={t.id}
+              className="flex items-center gap-2 rounded border border-zinc-200 px-2 py-1 dark:border-zinc-800"
+            >
+              <span className="rounded bg-zinc-100 px-1 text-[10px] text-zinc-500 dark:bg-zinc-800">
+                {t.kind}
+              </span>
+              {editing === t.id ? (
+                <>
+                  <input
+                    autoFocus
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="flex-1 rounded border border-zinc-300 px-1 dark:border-zinc-700 dark:bg-zinc-900"
+                  />
+                  <button
+                    onClick={() => {
+                      lib.rename(t.id, name.trim() || t.name);
+                      setEditing(null);
+                    }}
+                    className="text-blue-600"
+                  >
+                    save
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="flex-1 truncate">★ {t.name}</span>
+                  <button
+                    onClick={() => {
+                      setEditing(t.id);
+                      setName(t.name);
+                    }}
+                    className="text-zinc-400"
+                  >
+                    rename
+                  </button>
+                  <button
+                    onClick={() => lib.remove(t.id)}
+                    className="text-red-500"
+                  >
+                    delete
+                  </button>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 /* ---------------- Screen 2 ---------------- */
