@@ -56,6 +56,15 @@ export interface GeneratedItem extends PlanItem {
   provenance?: "extracted" | "inferred"; // lifted from source vs. reasoned beyond it
 }
 
+export interface RealSampleMatch {
+  name: string;
+  sourceHint: string;
+  h5pJsonPath: string;
+  contentType: string;
+  /** 0–1 token overlap between this import's source and the captured sample's. */
+  similarity: number;
+}
+
 export interface TwinResult {
   /** One-paragraph read of what the source is about. */
   sourceSummary: string;
@@ -63,4 +72,6 @@ export interface TwinResult {
   items: GeneratedItem[];
   /** "model" when produced by an LLM, "mock" for the deterministic fallback. */
   engine: "model" | "mock";
+  /** A captured real Smart Import run for THIS source, if one exists. */
+  realSample: RealSampleMatch | null;
 }

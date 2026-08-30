@@ -66,6 +66,15 @@ async function main() {
       zip.extractAllTo(target, true);
     }
 
+    // optional source sidecar: data/<file>.source.txt -> _samples/<name>/source.txt
+    const sidecar = path.join(dataDir, file.replace(/\.h5p$/i, ".source.txt"));
+    try {
+      await fs.copyFile(sidecar, path.join(samplesDir, name, "source.txt"));
+      console.log(`  + captured source sidecar for ${name}`);
+    } catch {
+      /* no sidecar */
+    }
+
     manifest.push({
       name,
       mainLibrary: `${mainLibrary} ${h5pJson.preloadedDependencies?.find((d) => d.machineName === mainLibrary)?.majorVersion ?? ""}.${h5pJson.preloadedDependencies?.find((d) => d.machineName === mainLibrary)?.minorVersion ?? ""}`.trim(),

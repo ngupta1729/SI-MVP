@@ -12,7 +12,10 @@ import type {
 } from "./types";
 import { contentType, CONTENT_TYPES } from "./h5p/contentTypes";
 import { buildSummary, buildSingleChoiceSet } from "./h5p/mockContent";
-import { loadCalibrationSamples } from "./calibration";
+import { loadCalibrationSamples, similarity } from "./calibration";
+
+const TWIN_MODEL = process.env.TWIN_MODEL || "anthropic/claude-sonnet-4.5";
+const MATCH_THRESHOLD = 0.18; // Jaccard token overlap to call it "the same source"
 
 function hasModel() {
   return Boolean(process.env.AI_GATEWAY_API_KEY || process.env.ANTHROPIC_API_KEY);
@@ -163,11 +166,32 @@ function mockEngine(text: string, intent: ImportIntent): TwinResult {
 
   return {
     sourceSummary: sentences.slice(0, 2).join(" ") || text.slice(0, 240),
-    planNarrative: `Mock plan: ${items.length} artifact(s) built from concepts ${concepts
+    planNarrative: `Mock plan: ${items.length} artifact(s) from concepts ${concepts
       .slice(0, 4)
-      .join(", ")}. Set an API key to use the model engine for calibrated output.`,
+      .join(", ")}. Set AI_GATEWAY_API_KEY (or ANTHROPIC_API_KEY) for calibrated model output.`,
     items,
     engine: "mock",
+    realSample: null,
+  };
+}
+
+// --- match a captured real Smart Import run to THIS source --------------------
+
+async function matchRealSample(text: string) {
+  const samples = await loadCalibrationSamples();
+  let best: { s: (typeof samples)[number]; sim: number } | null = null;
+  for (const s of samples) {
+    if (!s.sourceText) continue;
+    const sim = similarity(text, s.sourceText);
+    if (sim >= MATCH_THRESHOLD && (!best || sim > best.sim)) best = { s, sim };
+  }
+  if (!best) return null;
+  return {
+    name: best.s.name,
+    sourceHint: best.s.sourceHint,
+    h5pJsonPath: `/h5p/_samples/${best.s.name}`,
+    contentType: best.s.contentType,
+    similarity: Number(best.sim.toFixed(2)),
   };
 }
 
@@ -175,22 +199,28 @@ function mockEngine(text: string, intent: ImportIntent): TwinResult {
 
 async function modelEngine(text: string, intent: ImportIntent): Promise<TwinResult> {
   const samples = await loadCalibrationSamples();
-  const model = process.env.AI_GATEWAY_API_KEY
-    ? "anthropic/claude-sonnet-4.5"
-    : "anthropic/claude-sonnet-4-5";
 
   const sampleBlock = samples.length
-    ? `Here are REAL Smart Import outputs to match in structure and style:\n\n${samples
+    ? `REAL Smart Import outputs — match this structure and question quality exactly:\n\n${samples
         .map(
           (s) =>
-            `--- ${s.mainLibrary} (from source: ${s.sourceHint}) ---\n${JSON.stringify(
-              s.contentJson,
-            ).slice(0, 4000)}`,
+            `=== ${s.contentType} ===\n${JSON.stringify(s.contentJson).slice(0, 3500)}`,
         )
         .join("\n\n")}`
-    : "No real Smart Import samples are available for calibration; follow the public H5P content specs.";
+    : "No real samples for calibration; follow the public H5P content specs.";
 
-  const prompt = `You are a faithful digital twin of H5P.com's Smart Import. Given source material and an educator's intent, produce an H5P content plan and the content.json for each requested content type.
+  const mode =
+    intent.mode === "extract"
+      ? "The source already contains questions. EXTRACT them close to verbatim into the target H5P type; do not invent new ones."
+      : "GENERATE new questions grounded strictly in the source.";
+
+  const prompt = `You are a faithful digital twin of H5P.com's Smart Import. Given source material and an educator's intent, produce a content plan and the content.json for each requested content type. ${mode}
+
+Rules for H5P.SingleChoiceSet / H5P.QuestionSet content.json:
+- "choices": array. Each: { "subContentId": <uuid v4>, "question": <plain text, NO html tags>, "answers": [<correct answer FIRST>, <distractor>, <distractor>, <distractor>] }
+- Questions must test understanding, not shallow recall. Distractors must be clearly wrong on the source, never defensibly correct.
+- 5–8 questions unless the intent says otherwise.
+- Also include: "behaviour", "overallFeedback", "l10n" — copy them from the real sample.
 
 SOURCE:
 ${text.slice(0, 12000)}
@@ -200,28 +230,34 @@ ${JSON.stringify(intent, null, 2)}
 
 ${sampleBlock}
 
-Return ONLY JSON of this shape:
+Return ONLY JSON:
 {
   "sourceSummary": string,
   "planNarrative": string,
-  "items": [
-    {
-      "id": string,
-      "contentType": "H5P.Summary" | "H5P.SingleChoiceSet" | "H5P.TrueFalse" | "H5P.Flashcards",
-      "title": string,
-      "concepts": string[],
-      "rationale": string,
-      "mainLibrary": string,
-      "contentJson": object
-    }
-  ]
+  "items": [{
+    "id": string,
+    "contentType": <one of INTENT.contentTypes>,
+    "title": string,
+    "concepts": string[],
+    "rationale": string,
+    "mainLibrary": string,
+    "contentJson": object,
+    "grounding": <the source sentence this item is built from>,
+    "answerKeyNote": <one line: why the marked key is correct>,
+    "confidence": "high" | "medium" | "low",
+    "provenance": "extracted" | "inferred"
+  }]
 }
-Only include contentType values listed in INTENT.contentTypes. Make contentJson valid for the real H5P library.`;
+Only include contentType values listed in INTENT.contentTypes.`;
 
-  const { text: out } = await generateText({ model, prompt, temperature: 0.4 });
+  const { text: out } = await generateText({
+    model: TWIN_MODEL,
+    prompt,
+    temperature: 0.4,
+  });
   const json = out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1);
-  const parsed = JSON.parse(json) as Omit<TwinResult, "engine">;
-  return { ...parsed, engine: "model" };
+  const parsed = JSON.parse(json) as Omit<TwinResult, "engine" | "realSample">;
+  return { ...parsed, engine: "model", realSample: null };
 }
 
 export async function runTwin(
@@ -229,12 +265,17 @@ export async function runTwin(
   intent: ImportIntent,
 ): Promise<TwinResult> {
   const text = await resolveSourceText(source);
+  const realSample = await matchRealSample(text);
+  let result: TwinResult;
   if (hasModel()) {
     try {
-      return await modelEngine(text, intent);
+      result = await modelEngine(text, intent);
     } catch (err) {
       console.error("model engine failed, falling back to mock:", err);
+      result = mockEngine(text, intent);
     }
+  } else {
+    result = mockEngine(text, intent);
   }
-  return mockEngine(text, intent);
+  return { ...result, realSample };
 }
