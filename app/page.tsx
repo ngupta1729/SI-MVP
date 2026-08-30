@@ -356,6 +356,10 @@ function Configure(p: {
   const [saveName, setSaveName] = useState("");
   const [loadedId, setLoadedId] = useState<string | null>(null);
   const lastId = lib.lastUsedId;
+  const recentTemplate =
+    promptTemplates.find((t) => t.id === lastId) ?? promptTemplates[0] ?? null;
+  const recentBrief =
+    briefTemplates.find((t) => t.id === lastId) ?? briefTemplates[0] ?? null;
 
   const bundleTypes =
     p.intent.contentTypes.length > 0 ? p.intent.contentTypes : undefined;
@@ -530,32 +534,26 @@ function Configure(p: {
                   {preset.label}
                 </button>
               ))}
-              {promptTemplates.map((t) => (
+              {recentTemplate && (
                 <button
-                  key={t.id}
-                  onClick={() => loadTemplate(t)}
+                  onClick={() => loadTemplate(recentTemplate)}
                   className={`rounded-md border px-2 py-1 ${
-                    loadedId === t.id
+                    loadedId === recentTemplate.id
                       ? "border-blue-600 font-medium"
                       : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
                   }`}
-                  title={
-                    t.contentTypes?.length
-                      ? `Your template — also loads ${t.contentTypes.length} activit${t.contentTypes.length === 1 ? "y" : "ies"}`
-                      : "Your saved template"
-                  }
+                  title="Your most recently used template"
                 >
-                  ★ {t.name}
-                  {t.id === lastId && (
-                    <span className="ml-1 text-[10px] text-zinc-400">· recent</span>
-                  )}
-                  {t.contentTypes?.length ? (
-                    <span className="ml-1 text-[10px] text-zinc-400">
-                      +{t.contentTypes.length}
-                    </span>
-                  ) : null}
+                  ★ {recentTemplate.name}
+                  <span className="ml-1 text-[10px] text-zinc-400">· recent</span>
                 </button>
-              ))}
+              )}
+              {promptTemplates.length > (recentTemplate ? 1 : 0) && (
+                <span className="text-zinc-400">
+                  + {promptTemplates.length - (recentTemplate ? 1 : 0)} more in 📚
+                  library
+                </span>
+              )}
             </div>
 
             {isScratch ? (
@@ -625,25 +623,25 @@ function Configure(p: {
         ) : (
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2 text-xs">
-              {briefTemplates.length > 0 && (
+              {recentBrief && (
                 <>
                   <span className="text-zinc-400">Load brief:</span>
-                  {briefTemplates.map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => loadTemplate(t)}
-                      className={`rounded-md border px-2 py-1 ${
-                        loadedId === t.id
-                          ? "border-blue-600 font-medium"
-                          : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
-                      }`}
-                    >
-                      ★ {t.name}
-                      {t.id === lastId && (
-                        <span className="ml-1 text-[10px] text-zinc-400">· recent</span>
-                      )}
-                    </button>
-                  ))}
+                  <button
+                    onClick={() => loadTemplate(recentBrief)}
+                    className={`rounded-md border px-2 py-1 ${
+                      loadedId === recentBrief.id
+                        ? "border-blue-600 font-medium"
+                        : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                    }`}
+                  >
+                    ★ {recentBrief.name}
+                    <span className="ml-1 text-[10px] text-zinc-400">· recent</span>
+                  </button>
+                  {briefTemplates.length > 1 && (
+                    <span className="text-zinc-400">
+                      + {briefTemplates.length - 1} more in 📚 library
+                    </span>
+                  )}
                 </>
               )}
               {saving === "brief" ? (
@@ -830,9 +828,10 @@ function LibraryPicker(p: {
   onLoadPreset: (preset: IntentPreset) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const mine = [...p.templates].sort(
-    (a, b) => (b.usedAt ?? b.createdAt) - (a.usedAt ?? a.createdAt),
-  );
+  const [q, setQ] = useState("");
+  const mine = [...p.templates]
+    .sort((a, b) => (b.usedAt ?? b.createdAt) - (a.usedAt ?? a.createdAt))
+    .filter((t) => t.name.toLowerCase().includes(q.trim().toLowerCase()));
   return (
     <div className="relative">
       <button
@@ -844,11 +843,23 @@ function LibraryPicker(p: {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-20 mt-1 max-h-80 w-80 overflow-auto rounded-md border border-zinc-200 bg-white p-2 text-xs shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+          <div className="absolute right-0 z-20 mt-1 flex max-h-96 w-80 flex-col rounded-md border border-zinc-200 bg-white text-xs shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+            {p.templates.length > 6 && (
+              <input
+                autoFocus
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search templates…"
+                className="m-2 rounded border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900"
+              />
+            )}
+            <div className="overflow-auto p-2 pt-0">
             <p className="px-1 py-1 font-semibold text-zinc-400">Your templates</p>
             {mine.length === 0 && (
               <p className="px-1 pb-2 text-zinc-400">
-                None yet. Save a prompt or brief below to reuse it next time.
+                {p.templates.length === 0
+                  ? "None yet. Save a prompt or brief below to reuse it next time."
+                  : "No match."}
               </p>
             )}
             {mine.map((t) => (
@@ -891,6 +902,7 @@ function LibraryPicker(p: {
                 {preset.label}
               </button>
             ))}
+            </div>
           </div>
         </>
       )}
