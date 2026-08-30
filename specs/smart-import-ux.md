@@ -69,10 +69,11 @@ rework keeps that shell and inserts new steps.
   - **Strengths**: what this source is good raw material for.
   - **Watch-outs**: what to expect / what it won't cover well, phrased neutrally
     ("fact-dense — expect *what/when* over *why*"), never "don't use this".
-  - **Draft objectives**: 3–5 real, measurable, editable learning objectives grounded in the
-    text.
   - **Existing questions**: count → the extract-vs-generate choice.
   Model-backed when a key is present; heuristic fallback otherwise.
+  _(Parked: source-derived draft objectives. They're content *targets*, complementary to a
+  predesigned prompt's *framing* — would return as a separate `targetObjectives` chip field, not
+  appended prompt text, and hidden in extract mode.)_
 - **NEW — Question handling** when questions are detected:
   **[Extract as-is]** · **[Generate new]** · **[Both]**. Extraction lifts the educator's own
   questions into the target H5P type with minimal rewriting — faster, and their own wording.
