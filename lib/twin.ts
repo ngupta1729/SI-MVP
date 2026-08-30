@@ -461,11 +461,44 @@ const TYPE_RULE: Record<string, string> = {
     'contentJson.panels[]: each { "title": <the concept>, "content": { "library": "H5P.AdvancedText 1.1", "subContentId": <uuid v4>, "params": { "text": "<p>explanation</p>" } } }. Also set "hTag": "h3".',
 };
 
+function adjustLine(adjustment: string | undefined, intent: ImportIntent): string {
+  if (!adjustment) return "";
+  if (adjustment.startsWith("language:")) {
+    const lang = adjustment.slice("language:".length);
+    return `\n\nADJUSTMENT: write ALL generated content in ${lang}.`;
+  }
+  if (adjustment.startsWith("focus:")) {
+    return `\n\nADJUSTMENT: focus the questions on this concept from the source: "${adjustment.slice(6)}".`;
+  }
+  const d = REGEN_ADJUSTMENTS[adjustment];
+  return d ? `\n\nADJUSTMENT (regeneration): ${d}` : "";
+}
+
+/** Review-stage regenerate adjustments → a directive appended to the generation prompt. */
+export const REGEN_ADJUSTMENTS: Record<string, string> = {
+  harder:
+    "The previous version was too easy. Keep the same concepts but raise the cognitive demand — require applying, comparing, or reasoning about the ideas, not just recalling them.",
+  easier:
+    "The previous version was too hard. Keep the same concepts but lower the demand — shorter stems, one idea per question, plainer options.",
+  simpler:
+    "Rewrite at a simpler reading level — short sentences, everyday words, define any term you must use.",
+  formal:
+    "Use a more formal, academic register throughout.",
+  "less-repetitive":
+    "The previous version was repetitive. Spread the questions across DIFFERENT parts of the source; no two questions should test the same fact.",
+  clearer:
+    "The previous version was awkwardly worded. Keep the same concepts and correct answers, but make every question unambiguous and cleanly phrased.",
+  "different-focus":
+    "Shift the focus: prioritise concepts the previous version under-covered.",
+  retry: "Produce a fresh set of items from the source.",
+};
+
 async function generateOneItem(
   typeName: string,
   text: string,
   intent: ImportIntent,
   idx: number,
+  adjustment?: string,
 ): Promise<GeneratedItem | null> {
   const def = contentType(typeName);
   if (!def) return null;
@@ -478,11 +511,12 @@ async function generateOneItem(
     intent.authoringMode === "brief"
       ? `Brief — goal: "${intent.learningGoal || "(none)"}", audience: ${intent.audienceLevel}, emphasis: ${intent.emphasis}, volume: ${intent.volume} (light≈4 / standard≈6 / thorough≈10).`
       : `Instruction: "${intent.prompt || "(none — sensible defaults)"}"  volume: ${intent.volume}`;
+  const adjLine = adjustLine(adjustment, intent);
 
   const prompt = `You are H5P.com's Smart Import, producing content.json for ONE activity of type ${def.label} (${typeName}).
 
 ${modeLine}
-${intentLine}
+${intentLine}${adjLine}
 
 SHAPE (match exactly): ${TYPE_RULE[typeName] ?? "match the example below"}
 
@@ -556,4 +590,26 @@ export async function runTwin(
     }
   }
   return mockEngine(text, intent);
+}
+
+/** Regenerate one activity (Screen 3), steered by the picked adjustment. */
+export async function regenerateItem(
+  source: TwinSource,
+  intent: ImportIntent,
+  contentTypeName: string,
+  adjustment: string,
+  idx: number,
+): Promise<GeneratedItem | null> {
+  const text = await resolveSourceText(source);
+  if (hasModel()) {
+    try {
+      const it = await generateOneItem(contentTypeName, text, intent, idx, adjustment);
+      if (it) return it;
+    } catch (err) {
+      console.error("regenerate failed, falling back to mock:", err);
+    }
+  }
+  // mock fallback: reuse mockEngine for a single type
+  const one = mockEngine(text, { ...intent, contentTypes: [contentTypeName] });
+  return one.items[0] ?? null;
 }

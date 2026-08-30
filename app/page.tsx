@@ -44,7 +44,7 @@ const DEFAULT_INTENT: ImportIntent = {
   contentTypes: [],
 };
 
-type ItemState = "approved" | "editing" | "discarded";
+type ItemState = "approved" | "editing" | "discarded" | "regenerating";
 
 export default function Page() {
   const [screen, setScreen] = useState<Screen>("configure");
@@ -168,8 +168,114 @@ export default function Page() {
     setItemState((m) => ({ ...m, [id]: s }));
   }
 
-  const approvedIds = result
-    ? result.items.filter((i) => itemState[i.id] === "approved").map((i) => i.id)
+  const importId = useMemo(() => crypto.randomUUID(), []);
+  const [attempts, setAttempts] = useState<Record<string, number>>({});
+
+  function logReviewEvent(ev: Record<string, unknown>) {
+    const item = result?.items.find((i) => i.id === ev.itemId);
+    fetch("/api/review-event", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        importId,
+        engine: result?.engine,
+        sourceKind: sourceTab,
+        readbackKind: shownAnalysis?.kind,
+        sourceLength: shownAnalysis?.wordCount,
+        intent: {
+          mode: intent.mode,
+          authoringMode: intent.authoringMode,
+          preset: intent.promptPresetId ?? "scratch",
+          emphasis: intent.emphasis,
+          volume: intent.volume,
+        },
+        contentType: item?.contentType,
+        ...ev,
+      }),
+    }).catch(() => {});
+  }
+
+  async function regenerateActivity(itemId: string, adjustment: string) {
+    const item = result?.items.find((i) => i.id === itemId);
+    if (!item || !result) return;
+    const attempt = (attempts[itemId] ?? 1) + 1;
+    setAttempts((a) => ({ ...a, [itemId]: attempt }));
+    setItem(itemId, "regenerating");
+    logReviewEvent({ action: "regenerate", itemId, reason: adjustment, attempt });
+    try {
+      const res = await fetch("/api/regenerate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          source: source(),
+          intent,
+          contentType: item.contentType,
+          adjustment,
+          itemId,
+          attempt,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setResult({
+        ...result,
+        items: result.items.map((i) => (i.id === itemId ? data.item : i)),
+      });
+      setEdits((e) => {
+        const n = { ...e };
+        delete n[itemId];
+        return n;
+      });
+      setItem(itemId, "approved");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setItem(itemId, "approved");
+    }
+  }
+
+  function discardActivity(itemId: string, reason: string) {
+    setItem(itemId, "discarded");
+    logReviewEvent({ action: "discard", itemId, reason });
+  }
+
+  function finishCreate() {
+    if (!result) return;
+    // edit events: diff each edited item against its original
+    for (const it of result.items) {
+      if (itemState[it.id] === "discarded") continue;
+      if (edits[it.id] && edits[it.id] !== it.contentJson) {
+        logReviewEvent({
+          action: "edit",
+          itemId: it.id,
+          charsDelta:
+            JSON.stringify(edits[it.id]).length -
+            JSON.stringify(it.contentJson).length,
+        });
+      }
+    }
+    const kept = result.items.filter((i) => itemState[i.id] !== "discarded");
+    fetch("/api/review-event", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        importId,
+        summary: {
+          generated: result.items.length,
+          created: kept.length,
+          edited: kept.filter((i) => edits[i.id] && edits[i.id] !== i.contentJson)
+            .length,
+          regenerated: Object.keys(attempts).length,
+          discarded: result.items.length - kept.length,
+        },
+      }),
+    }).catch(() => {});
+    alert(
+      `Place & Finish: ${kept.length} approved item(s) → chosen destination folder with provenance. Feedback logged. Not built in this slice.`,
+    );
+  }
+
+  const keptIds = result
+    ? result.items.filter((i) => itemState[i.id] !== "discarded").map((i) => i.id)
     : [];
   const current = result?.items.find((i) => i.id === selected) ?? null;
 
@@ -233,6 +339,9 @@ export default function Page() {
               selected={selected}
               setSelected={setSelected}
               current={current}
+              attempts={attempts}
+              onRegenerate={regenerateActivity}
+              onDiscard={discardActivity}
             />
           )}
         </div>
@@ -240,7 +349,7 @@ export default function Page() {
         <div className="flex items-center justify-between gap-3 border-t border-zinc-200 px-6 py-3 dark:border-zinc-800">
           <span className="text-xs text-zinc-400">
             {screen === "review" && result
-              ? `${approvedIds.length}/${result.items.length} approved · engine: ${result.engine}`
+              ? `${keptIds.length}/${result.items.length} kept · engine: ${result.engine}`
               : shownAnalysis
                 ? `${shownAnalysis.kind}, ${shownAnalysis.wordCount} words${
                     shownAnalysis.detectedQuestions > 3
@@ -283,15 +392,11 @@ export default function Page() {
                   Back
                 </button>
                 <button
-                  disabled={!approvedIds.length}
+                  disabled={!keptIds.length}
                   className={btnPrimary}
-                  onClick={() =>
-                    alert(
-                      `Place & Finish: ${approvedIds.length} approved item(s) → chosen destination folder with provenance. Not built in this slice.`,
-                    )
-                  }
+                  onClick={finishCreate}
                 >
-                  Approve {approvedIds.length} &amp; create
+                  Create {keptIds.length}
                 </button>
               </>
             )}
@@ -1071,6 +1176,24 @@ function Activities(p: {
 
 /* ---------------- Screen 3 ---------------- */
 
+const REGEN_OPTIONS: { id: string; label: string }[] = [
+  { id: "harder", label: "Harder" },
+  { id: "easier", label: "Easier" },
+  { id: "simpler", label: "Simpler language" },
+  { id: "formal", label: "More formal" },
+  { id: "less-repetitive", label: "Less repetitive" },
+  { id: "clearer", label: "Clearer wording" },
+  { id: "different-focus", label: "Different focus" },
+  { id: "retry", label: "Just try again" },
+];
+const DISCARD_REASONS = [
+  "wrong activity type",
+  "quality too low",
+  "redundant with another",
+  "source doesn't support it",
+  "not useful",
+];
+
 function Review(p: {
   result: ApiResult;
   itemState: Record<string, ItemState>;
@@ -1080,8 +1203,14 @@ function Review(p: {
   selected: string | null;
   setSelected: (id: string) => void;
   current: RenderedItem | null;
+  attempts: Record<string, number>;
+  onRegenerate: (itemId: string, adjustment: string) => void;
+  onDiscard: (itemId: string, reason: string) => void;
 }) {
   const { result, current } = p;
+  const [menu, setMenu] = useState<{ id: string; kind: "regen" | "discard" } | null>(
+    null,
+  );
 
   return (
     <div className="space-y-4">
@@ -1112,36 +1241,106 @@ function Review(p: {
                     {item.concepts.slice(0, 3).join(", ")}
                   </p>
                   <p className="text-[11px] text-zinc-400">
-                    {item.provenance ?? "inferred"} · confidence{" "}
-                    {item.confidence ?? "—"} ·{" "}
-                    <span
-                      className={
-                        st === "approved"
-                          ? "text-emerald-600"
-                          : st === "discarded"
-                            ? "text-red-500"
-                            : "text-amber-600"
-                      }
-                    >
-                      {st}
-                    </span>
+                    {item.provenance ?? "inferred"} · conf {item.confidence ?? "—"}
+                    {p.attempts[item.id] ? ` · regen ×${p.attempts[item.id] - 1}` : ""}
+                    {st === "discarded" ? " · discarded" : ""}
+                    {st === "regenerating" ? " · regenerating…" : ""}
                   </p>
                 </button>
-                <div className="mt-1 flex gap-1 text-[11px]">
-                  {(["approved", "editing", "discarded"] as ItemState[]).map((s) => (
+
+                {st === "discarded" ? (
+                  <button
+                    onClick={() => p.setItem(item.id, "approved")}
+                    className="mt-1 rounded border border-zinc-300 px-1.5 py-0.5 text-[11px] dark:border-zinc-700"
+                  >
+                    Undo
+                  </button>
+                ) : (
+                  <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
                     <button
-                      key={s}
-                      onClick={() => p.setItem(item.id, s)}
+                      onClick={() =>
+                        p.setItem(
+                          item.id,
+                          st === "editing" ? "approved" : "editing",
+                        )
+                      }
                       className={`rounded border px-1.5 py-0.5 ${
-                        st === s
+                        st === "editing"
                           ? "border-blue-600 font-medium"
                           : "border-zinc-300 dark:border-zinc-700"
                       }`}
                     >
-                      {s === "approved" ? "Approve" : s === "editing" ? "Edit" : "Discard"}
+                      Edit
                     </button>
-                  ))}
-                </div>
+                    <button
+                      disabled={st === "regenerating"}
+                      onClick={() =>
+                        setMenu(
+                          menu?.id === item.id && menu.kind === "regen"
+                            ? null
+                            : { id: item.id, kind: "regen" },
+                        )
+                      }
+                      className="rounded border border-zinc-300 px-1.5 py-0.5 disabled:opacity-40 dark:border-zinc-700"
+                    >
+                      Regenerate ▾
+                    </button>
+                    <button
+                      onClick={() =>
+                        setMenu(
+                          menu?.id === item.id && menu.kind === "discard"
+                            ? null
+                            : { id: item.id, kind: "discard" },
+                        )
+                      }
+                      className="rounded border border-zinc-300 px-1.5 py-0.5 dark:border-zinc-700"
+                    >
+                      Discard ▾
+                    </button>
+                  </div>
+                )}
+
+                {menu?.id === item.id && menu.kind === "regen" && (
+                  <div className="mt-1 rounded border border-blue-300 bg-blue-50/50 p-1.5 text-[11px] dark:border-blue-900 dark:bg-blue-950/20">
+                    <p className="mb-1 text-zinc-500">
+                      Regenerate this activity — replaces all questions, including
+                      your edits. What should change?
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {REGEN_OPTIONS.map((o) => (
+                        <button
+                          key={o.id}
+                          onClick={() => {
+                            setMenu(null);
+                            p.onRegenerate(item.id, o.id);
+                          }}
+                          className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 dark:border-zinc-700 dark:bg-zinc-900"
+                        >
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {menu?.id === item.id && menu.kind === "discard" && (
+                  <div className="mt-1 rounded border border-red-300 bg-red-50/50 p-1.5 text-[11px] dark:border-red-900 dark:bg-red-950/20">
+                    <p className="mb-1 text-zinc-500">Discard because…</p>
+                    <div className="flex flex-wrap gap-1">
+                      {DISCARD_REASONS.map((r) => (
+                        <button
+                          key={r}
+                          onClick={() => {
+                            setMenu(null);
+                            p.onDiscard(item.id, r);
+                          }}
+                          className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 dark:border-zinc-700 dark:bg-zinc-900"
+                        >
+                          {r}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </li>
             );
           })}
@@ -1292,9 +1491,6 @@ function ItemPanel(p: {
     c[ci] = { ...c[ci], ...patch };
     write({ choices: c });
   };
-  const dropChoice = (ci: number) =>
-    write({ choices: choices.filter((_, i) => i !== ci) });
-
   const edited = p.value !== p.item.contentJson;
 
   return (
@@ -1350,29 +1546,20 @@ function ItemPanel(p: {
                 key={c.subContentId ?? ci}
                 className="rounded-md border border-zinc-200 p-2 text-xs dark:border-zinc-800"
               >
-                <div className="flex items-start justify-between gap-2">
-                  {p.editing ? (
-                    <textarea
-                      value={c.question}
-                      onChange={(e) =>
-                        updateChoice(ci, { question: e.target.value })
-                      }
-                      rows={2}
-                      className="w-full rounded border border-zinc-300 p-1 dark:border-zinc-700 dark:bg-zinc-900"
-                    />
-                  ) : (
-                    <p className="font-medium">
-                      {ci + 1}. {c.question}
-                    </p>
-                  )}
-                  <button
-                    onClick={() => dropChoice(ci)}
-                    title="Drop this question"
-                    className="shrink-0 rounded border border-zinc-300 px-1 text-zinc-400 hover:text-red-500 dark:border-zinc-700"
-                  >
-                    ✕
-                  </button>
-                </div>
+                {p.editing ? (
+                  <textarea
+                    value={c.question}
+                    onChange={(e) =>
+                      updateChoice(ci, { question: e.target.value })
+                    }
+                    rows={2}
+                    className="w-full rounded border border-zinc-300 p-1 dark:border-zinc-700 dark:bg-zinc-900"
+                  />
+                ) : (
+                  <p className="font-medium">
+                    {ci + 1}. {c.question}
+                  </p>
+                )}
                 <ul className="mt-1 space-y-0.5">
                   {c.answers.map((a, ai) =>
                     p.editing ? (
