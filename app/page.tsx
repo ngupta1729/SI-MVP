@@ -69,6 +69,11 @@ type ItemState =
   | "refining"
   | "remixing";
 
+// Two demoable shapes of the whole flow. "wizard" = the current step-by-step
+// modal; "workspace" = a full-screen 3-panel overlay. Picked via the A/B toggle.
+type UiVariant = "wizard" | "workspace";
+type ChatTurn = { role: "user" | "system"; text: string };
+
 export default function Page() {
   const [screen, setScreen] = useState<Screen>("configure");
   const [sourceTab, setSourceTab] = useState<SourceTab>("Pasted Text");
@@ -88,6 +93,10 @@ export default function Page() {
   const [selected, setSelected] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [uiVariant, setUiVariant] = useState<UiVariant>("wizard");
+  // per-activity refinement transcript, keyed by item id (workspace variant only)
+  const [transcript, setTranscript] = useState<Record<string, ChatTurn[]>>({});
 
   // Post-create: land in the content library, scoped to this import.
   const [importRecord, setImportRecord] = useState<ImportRecord | null>(null);
@@ -168,6 +177,32 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSourceKey]);
 
+  // A/B variant: ?ui= wins, else last choice from localStorage. One-shot sync on
+  // mount from an external source — the setState here is intentional.
+  useEffect(() => {
+    let next: UiVariant | null = null;
+    const q = new URLSearchParams(window.location.search).get("ui");
+    if (q === "workspace" || q === "wizard") {
+      next = q;
+    } else {
+      try {
+        const s = localStorage.getItem("smartimport.uiVariant.v1");
+        if (s === "workspace" || s === "wizard") next = s;
+      } catch {
+        /* storage unavailable */
+      }
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (next && next !== "wizard") setUiVariant(next);
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("smartimport.uiVariant.v1", uiVariant);
+    } catch {
+      /* storage unavailable */
+    }
+  }, [uiVariant]);
+
   async function generate() {
     setGenerating(true);
     setError(null);
@@ -230,6 +265,7 @@ export default function Page() {
   }
 
   // Shared regenerate call for both Refine (same type, steered) and Remix (new type).
+  // Returns the new item (or null) so the workspace chat can post an accurate turn.
   async function applyRegen(
     itemId: string,
     opts: {
@@ -238,8 +274,8 @@ export default function Page() {
       attempt: number;
       busy: ItemState;
     },
-  ) {
-    if (!result) return;
+  ): Promise<RenderedItem | null> {
+    if (!result) return null;
     setItem(itemId, opts.busy);
     try {
       const res = await fetch("/api/regenerate", {
@@ -270,20 +306,22 @@ export default function Page() {
         return n;
       });
       setItem(itemId, "approved");
+      return data.item as RenderedItem;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setItem(itemId, "approved");
+      return null;
     }
   }
 
   async function refineActivity(itemId: string, adjustment: string) {
     const item = result?.items.find((i) => i.id === itemId);
-    if (!item) return;
+    if (!item) return null;
     const attempt = (attempts[itemId] ?? 1) + 1;
     setAttempts((a) => ({ ...a, [itemId]: attempt }));
     setRefineSteers((s) => ({ ...s, [itemId]: [...(s[itemId] ?? []), adjustment] }));
     logReviewEvent({ action: "refine", itemId, reason: adjustment, attempt });
-    await applyRegen(itemId, {
+    return applyRegen(itemId, {
       contentType: item.contentType,
       adjustment,
       attempt,
@@ -293,12 +331,12 @@ export default function Page() {
 
   async function remixActivity(itemId: string, toType: string) {
     const item = result?.items.find((i) => i.id === itemId);
-    if (!item) return;
+    if (!item) return null;
     const fromType = item.contentType;
     setRemixes((r) => ({ ...r, [itemId]: (r[itemId] ?? 0) + 1 }));
     setRemixFrom((m) => ({ ...m, [itemId]: m[itemId] ?? fromType }));
     logReviewEvent({ action: "remix", itemId, reason: fromType, toType });
-    await applyRegen(itemId, {
+    return applyRegen(itemId, {
       contentType: toType,
       adjustment: "remix:" + (item.concepts ?? []).join(", "),
       attempt: 1,
@@ -426,6 +464,7 @@ export default function Page() {
     setDiscardReason({});
     setRefineSteers({});
     setRemixFrom({});
+    setTranscript({});
     setImportId(crypto.randomUUID());
     setText("");
     setWikiUrl("");
@@ -441,11 +480,117 @@ export default function Page() {
     : [];
   const current = result?.items.find((i) => i.id === selected) ?? null;
 
+  const toggleType = (n: string) =>
+    setIntent((i) => ({
+      ...i,
+      contentTypes: i.contentTypes.includes(n)
+        ? i.contentTypes.filter((t) => t !== n)
+        : [...i.contentTypes, n],
+    }));
+
+  if (uiVariant === "workspace") {
+    return (
+      <div className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-white dark:bg-zinc-950">
+        <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
+          <div>
+            <span className="text-sm font-semibold">Smart Import</span>
+            <span className="ml-2 text-xs text-zinc-400">Workspace</span>
+          </div>
+          <VariantToggle value={uiVariant} onChange={setUiVariant} />
+        </div>
+
+        {error && (
+          <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+            {error}
+          </div>
+        )}
+
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <Workspace
+            sourceTab={sourceTab}
+            setSourceTab={setSourceTab}
+            title={title}
+            setTitle={setTitle}
+            text={text}
+            setText={setText}
+            wikiUrl={wikiUrl}
+            setWikiUrl={setWikiUrl}
+            intent={intent}
+            setIntent={setIntent}
+            analysis={shownAnalysis}
+            analyzing={analyzing}
+            recByName={recByName}
+            toggleType={toggleType}
+            generating={generating}
+            generate={generate}
+            result={result}
+            itemState={itemState}
+            setItem={setItem}
+            edits={edits}
+            setEdits={setEdits}
+            selected={selected}
+            setSelected={setSelected}
+            current={current}
+            attempts={attempts}
+            remixes={remixes}
+            transcript={transcript}
+            setTranscript={setTranscript}
+            onRefine={refineActivity}
+            onRemix={remixActivity}
+            onDiscard={discardActivity}
+            importRecord={importRecord}
+            priorImports={priorImports}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-zinc-200 px-4 py-2 dark:border-zinc-800">
+          <span className="text-xs text-zinc-400">
+            {importRecord
+              ? `${importRecord.outcome.kept} created · in your content library`
+              : result
+                ? `${keptIds.length}/${result.items.length} kept · engine: ${result.engine}`
+                : analyzing
+                  ? "analyzing source…"
+                  : "add a source to begin"}
+          </span>
+          <div className="flex gap-2">
+            {importRecord ? (
+              <button onClick={startAnother} className={btnPrimary}>
+                Start another import
+              </button>
+            ) : result ? (
+              <button
+                disabled={!keptIds.length}
+                onClick={finishCreate}
+                className={btnPrimary}
+              >
+                Create {keptIds.length}
+              </button>
+            ) : (
+              <button
+                onClick={() => generate()}
+                disabled={
+                  generating || !intent.contentTypes.length || !sourceReady
+                }
+                className={btnPrimary}
+              >
+                {generating ? "Generating…" : "Generate"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-8">
       <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
         <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
-          <h1 className="text-lg font-semibold">Smart Import</h1>
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-lg font-semibold">Smart Import</h1>
+            <VariantToggle value={uiVariant} onChange={setUiVariant} />
+          </div>
           <Stepper screen={screen} />
           <p className="mt-1 text-xs text-zinc-400">
             A reworked H5P.com Smart Import — working prototype of the redesigned
@@ -482,14 +627,7 @@ export default function Page() {
             <Activities
               intent={intent}
               recByName={recByName}
-              toggle={(n) =>
-                setIntent((i) => ({
-                  ...i,
-                  contentTypes: i.contentTypes.includes(n)
-                    ? i.contentTypes.filter((t) => t !== n)
-                    : [...i.contentTypes, n],
-                }))
-              }
+              toggle={toggleType}
             />
           )}
           {screen === "review" && result && (
@@ -596,6 +734,35 @@ const btnPrimary =
   "rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40";
 const btnGhost =
   "rounded-md border border-zinc-300 px-4 py-2 text-sm disabled:opacity-40 dark:border-zinc-700";
+
+function VariantToggle(p: {
+  value: UiVariant;
+  onChange: (v: UiVariant) => void;
+}) {
+  return (
+    <div className="inline-flex shrink-0 rounded-md border border-zinc-300 p-0.5 text-xs dark:border-zinc-700">
+      {(
+        [
+          ["wizard", "A · Step-by-step"],
+          ["workspace", "B · Workspace"],
+        ] as const
+      ).map(([v, label]) => (
+        <button
+          key={v}
+          onClick={() => p.onChange(v)}
+          title={label}
+          className={`rounded px-2 py-0.5 ${
+            p.value === v
+              ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+              : "text-zinc-500"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function Stepper({ screen }: { screen: Screen }) {
   const steps: [Screen, string][] = [
@@ -1595,6 +1762,416 @@ function Review(p: {
             <p className="text-sm text-zinc-400">Select an item.</p>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Variant B — full-screen 3-panel workspace ---------------- */
+
+/** Best-effort "N questions / cards / words" from a generated item's contentJson. */
+function countElements(item: { contentJson?: unknown }): string {
+  const v = (item.contentJson ?? {}) as Record<string, unknown>;
+  const len = (k: string) => (Array.isArray(v[k]) ? (v[k] as unknown[]).length : 0);
+  const n =
+    len("choices") ||
+    len("questions") ||
+    len("summaries") ||
+    len("dialogs") ||
+    len("words") ||
+    len("panels") ||
+    (typeof v.textField === "string"
+      ? v.textField.split("\n").filter(Boolean).length
+      : 0);
+  const noun = v.dialogs
+    ? "cards"
+    : v.words
+      ? "words"
+      : v.panels
+        ? "entries"
+        : "questions";
+  return n ? `${n} ${noun}` : "updated";
+}
+
+const chip =
+  "rounded border border-zinc-300 px-1.5 py-0.5 text-[11px] disabled:opacity-40 dark:border-zinc-700";
+
+/** Chip-only refinement chat for one activity. Reuses the Refine / Remix / Discard handlers. */
+function RefineChat(p: {
+  item: RenderedItem;
+  state: ItemState | undefined;
+  turns: ChatTurn[];
+  append: (turn: ChatTurn) => void;
+  onRefine: (id: string, adj: string) => Promise<RenderedItem | null>;
+  onRemix: (id: string, toType: string) => Promise<RenderedItem | null>;
+  onDiscard: (id: string, reason: string) => void;
+  onUndiscard: () => void;
+  onToggleEdit: () => void;
+}) {
+  const [expand, setExpand] = useState<null | "type" | "discard">(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const busy = p.state === "refining" || p.state === "remixing";
+  const editing = p.state === "editing";
+  const discarded = p.state === "discarded";
+
+  useEffect(() => {
+    if (scrollRef.current)
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [p.turns.length, busy]);
+
+  async function run(
+    userText: string,
+    fire: () => Promise<RenderedItem | null>,
+  ) {
+    p.append({ role: "user", text: userText });
+    setExpand(null);
+    const it = await fire();
+    p.append({
+      role: "system",
+      text: it
+        ? `Regenerated — ${countElements(it)}.`
+        : "Couldn't regenerate — try again.",
+    });
+  }
+
+  return (
+    <div className="flex h-full flex-col rounded-md border border-zinc-200 dark:border-zinc-800">
+      <p className="border-b border-zinc-200 px-3 py-2 text-xs font-medium text-zinc-500 dark:border-zinc-800">
+        Refine · {contentType(p.item.contentType)?.label}
+      </p>
+
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 space-y-2 overflow-auto p-3 text-xs"
+      >
+        {p.turns.length === 0 && (
+          <p className="text-zinc-400">No changes yet — pick an action below.</p>
+        )}
+        {p.turns.map((t, i) => (
+          <div key={i} className={t.role === "user" ? "text-right" : ""}>
+            <span
+              className={`inline-block rounded px-2 py-1 ${
+                t.role === "user"
+                  ? "bg-blue-600 text-white"
+                  : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+              }`}
+            >
+              {t.text}
+            </span>
+          </div>
+        ))}
+        {busy && <p className="text-zinc-400">Regenerating…</p>}
+      </div>
+
+      <div className="border-t border-zinc-200 p-2 dark:border-zinc-800">
+        {discarded ? (
+          <button
+            onClick={() => {
+              p.append({ role: "user", text: "Undo discard" });
+              p.onUndiscard();
+            }}
+            className={chip}
+          >
+            Undo discard
+          </button>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-1">
+              {REFINE_OPTIONS.map((o) => (
+                <button
+                  key={o.id}
+                  disabled={busy}
+                  onClick={() => run(o.label, () => p.onRefine(p.item.id, o.id))}
+                  className={chip}
+                >
+                  {o.label}
+                </button>
+              ))}
+              <button
+                disabled={busy}
+                onClick={p.onToggleEdit}
+                className={`${chip} ${editing ? "border-blue-600 font-medium" : ""}`}
+              >
+                {editing ? "Done editing" : "Edit text"}
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => setExpand(expand === "type" ? null : "type")}
+                className={chip}
+              >
+                Change type ▸
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => setExpand(expand === "discard" ? null : "discard")}
+                className={chip}
+              >
+                Discard ▸
+              </button>
+            </div>
+
+            {expand === "type" && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {REMIX_TARGETS.filter((t) => t.name !== p.item.contentType).map(
+                  (t) => (
+                    <button
+                      key={t.name}
+                      onClick={() =>
+                        run(`Change type → ${t.label}`, () =>
+                          p.onRemix(p.item.id, t.name),
+                        )
+                      }
+                      className={`${chip} bg-white dark:bg-zinc-900`}
+                    >
+                      {t.label}
+                    </button>
+                  ),
+                )}
+              </div>
+            )}
+            {expand === "discard" && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {DISCARD_REASONS.map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => {
+                      p.append({ role: "user", text: `Discard — ${r}` });
+                      p.append({ role: "system", text: "Discarded." });
+                      setExpand(null);
+                      p.onDiscard(p.item.id, r);
+                    }}
+                    className={`${chip} bg-white dark:bg-zinc-900`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Workspace(p: {
+  sourceTab: SourceTab;
+  setSourceTab: (s: SourceTab) => void;
+  title: string;
+  setTitle: (s: string) => void;
+  text: string;
+  setText: (s: string) => void;
+  wikiUrl: string;
+  setWikiUrl: (s: string) => void;
+  intent: ImportIntent;
+  setIntent: (f: (i: ImportIntent) => ImportIntent) => void;
+  analysis: SourceAnalysis | null;
+  analyzing: boolean;
+  recByName: Record<string, Recommendation>;
+  toggleType: (n: string) => void;
+  generating: boolean;
+  generate: () => void;
+  result: ApiResult | null;
+  itemState: Record<string, ItemState>;
+  setItem: (id: string, s: ItemState) => void;
+  edits: Record<string, unknown>;
+  setEdits: (f: (e: Record<string, unknown>) => Record<string, unknown>) => void;
+  selected: string | null;
+  setSelected: (id: string) => void;
+  current: RenderedItem | null;
+  attempts: Record<string, number>;
+  remixes: Record<string, number>;
+  transcript: Record<string, ChatTurn[]>;
+  setTranscript: (
+    f: (t: Record<string, ChatTurn[]>) => Record<string, ChatTurn[]>,
+  ) => void;
+  onRefine: (id: string, adj: string) => Promise<RenderedItem | null>;
+  onRemix: (id: string, toType: string) => Promise<RenderedItem | null>;
+  onDiscard: (id: string, reason: string) => void;
+  importRecord: ImportRecord | null;
+  priorImports: ImportRecord[];
+}) {
+  const [editSetup, setEditSetup] = useState(false);
+
+  const setupForm = (
+    <>
+      <Configure
+        sourceTab={p.sourceTab}
+        setSourceTab={p.setSourceTab}
+        title={p.title}
+        setTitle={p.setTitle}
+        text={p.text}
+        setText={p.setText}
+        wikiUrl={p.wikiUrl}
+        setWikiUrl={p.setWikiUrl}
+        intent={p.intent}
+        setIntent={p.setIntent}
+        analysis={p.analysis}
+        analyzing={p.analyzing}
+      />
+      <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+          Activities
+        </p>
+        <Activities
+          intent={p.intent}
+          recByName={p.recByName}
+          toggle={p.toggleType}
+        />
+      </div>
+    </>
+  );
+
+  // (c) after create
+  if (p.importRecord) {
+    return (
+      <div className="h-full overflow-auto p-4">
+        <LibraryView
+          current={p.importRecord}
+          priorImports={p.priorImports}
+        />
+      </div>
+    );
+  }
+
+  // (a) before generate — setup panel prominent, others collapsed
+  if (!p.result) {
+    return (
+      <div className="grid h-full gap-3 overflow-hidden p-3 lg:grid-cols-[minmax(0,1fr)_260px_300px]">
+        <div className="overflow-auto rounded-md border border-zinc-200 p-4 dark:border-zinc-800">
+          {setupForm}
+        </div>
+        <div className="hidden rounded-md border border-dashed border-zinc-300 p-4 text-xs text-zinc-400 lg:block dark:border-zinc-700">
+          Generated activities appear here once you generate.
+        </div>
+        <div className="hidden rounded-md border border-dashed border-zinc-300 p-4 text-xs text-zinc-400 lg:block dark:border-zinc-700">
+          Refinement chat — available once activities exist.
+        </div>
+      </div>
+    );
+  }
+
+  // (b) after generate — 3 panels
+  const cur = p.current;
+  const items = p.result.items;
+  return (
+    <div className="grid h-full gap-3 overflow-hidden p-3 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)_minmax(0,360px)]">
+      {/* Panel 1 — setup rail */}
+      <div className="overflow-auto rounded-md border border-zinc-200 p-3 text-xs dark:border-zinc-800">
+        <div className="flex items-center justify-between">
+          <p className="font-semibold text-zinc-500">Setup</p>
+          <button
+            onClick={() => setEditSetup((v) => !v)}
+            className="text-[11px] underline"
+          >
+            {editSetup ? "Collapse" : "Edit setup"}
+          </button>
+        </div>
+        {editSetup ? (
+          <div className="mt-2">{setupForm}</div>
+        ) : (
+          <div className="mt-1 space-y-1 text-zinc-500">
+            <p className="truncate">
+              {p.sourceTab === "Wikipedia"
+                ? p.wikiUrl || "(no URL)"
+                : `Pasted text · ${p.analysis?.wordCount ?? "?"} words`}
+            </p>
+            <p className="truncate">
+              {p.intent.authoringMode === "brief"
+                ? `Brief: ${p.intent.learningGoal || "—"}`
+                : p.intent.prompt || "(defaults)"}
+            </p>
+            <p>{p.intent.contentTypes.length} activity type(s)</p>
+            <button
+              onClick={() => p.generate()}
+              disabled={p.generating}
+              className={`${chip} mt-1`}
+            >
+              {p.generating ? "Regenerating…" : "Regenerate all"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Panel 2 — output */}
+      <div className="flex min-w-0 flex-col gap-2 overflow-hidden">
+        <ul className="flex shrink-0 gap-2 overflow-x-auto pb-1">
+          {items.map((it) => {
+            const s = p.itemState[it.id];
+            return (
+              <li key={it.id}>
+                <button
+                  onClick={() => p.setSelected(it.id)}
+                  className={`w-40 shrink-0 rounded-md border p-2 text-left text-xs ${
+                    p.selected === it.id
+                      ? "border-blue-600"
+                      : "border-zinc-200 dark:border-zinc-800"
+                  } ${s === "discarded" ? "opacity-40" : ""}`}
+                >
+                  <p className="truncate font-medium">
+                    {contentType(it.contentType)?.label}
+                  </p>
+                  <p className="truncate text-[10px] text-zinc-400">
+                    {p.attempts[it.id]
+                      ? `refined ×${p.attempts[it.id] - 1}`
+                      : "generated"}
+                    {p.remixes[it.id] ? " · remixed" : ""}
+                    {s === "discarded" ? " · discarded" : ""}
+                    {s === "refining" ? " · refining…" : ""}
+                    {s === "remixing" ? " · remixing…" : ""}
+                  </p>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="min-h-0 flex-1 overflow-auto rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+          {cur ? (
+            <ItemPanel
+              key={cur.id}
+              item={cur}
+              value={p.edits[cur.id] ?? cur.contentJson}
+              onChange={(v) =>
+                p.setEdits((e) => ({ ...e, [cur.id]: v }))
+              }
+              editing={p.itemState[cur.id] === "editing"}
+            />
+          ) : (
+            <p className="text-sm text-zinc-400">Select an activity.</p>
+          )}
+        </div>
+      </div>
+
+      {/* Panel 3 — refine chat */}
+      <div className="min-h-0 overflow-hidden">
+        {cur ? (
+          <RefineChat
+            key={cur.id}
+            item={cur}
+            state={p.itemState[cur.id]}
+            turns={p.transcript[cur.id] ?? []}
+            append={(turn) =>
+              p.setTranscript((t) => ({
+                ...t,
+                [cur.id]: [...(t[cur.id] ?? []), turn],
+              }))
+            }
+            onRefine={p.onRefine}
+            onRemix={p.onRemix}
+            onDiscard={p.onDiscard}
+            onUndiscard={() => p.setItem(cur.id, "approved")}
+            onToggleEdit={() =>
+              p.setItem(
+                cur.id,
+                p.itemState[cur.id] === "editing" ? "approved" : "editing",
+              )
+            }
+          />
+        ) : (
+          <div className="h-full rounded-md border border-dashed border-zinc-300 p-4 text-xs text-zinc-400 dark:border-zinc-700">
+            Select an activity to refine it.
+          </div>
+        )}
       </div>
     </div>
   );
