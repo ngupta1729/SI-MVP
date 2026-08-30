@@ -1,0 +1,180 @@
+{
+  "semantics": [
+    {
+      "label": "Spørsmålsliste",
+      "entity": "spørsmål",
+      "widgets": [
+        {
+          "label": "Standard"
+        },
+        {
+          "label": "Tekstbasert"
+        }
+      ],
+      "field": {
+        "label": "Spørsmål og alternativ",
+        "fields": [
+          {
+            "label": "Spørsmål"
+          },
+          {
+            "label": "Alternativ. Det første alternativet er rett.",
+            "entity": "svar",
+            "field": {
+              "label": "Alternativ"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "label": "Samla tilbakemelding",
+      "fields": [
+        {
+          "widgets": [
+            {
+              "label": "Standard"
+            }
+          ],
+          "label": "Opprett poengområde og legg inn tilbakemeldingar",
+          "description": "Klikk på knappen \"Legg til poengområde\" og legg til så mange område du treng. Døme: 0–40 % Svakt resultat, 41–80 % Gjennomsnittleg resultat, 81–100 % Flott resultat!",
+          "entity": "område",
+          "field": {
+            "fields": [
+              {
+                "label": "Poengområde"
+              },
+              {},
+              {
+                "label": "Tilbakemelding for definert poengområde",
+                "placeholder": "Skriv inn tilbakemelding"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "label": "Oppgåveinnstillingar",
+      "fields": [
+        {
+          "label": "Hald fram automatisk",
+          "description": "Gå automatisk vidare til neste spørsmål når eit alternativ er valt. Denne funksjonen må vere deaktivert for at oppgåva skal vere fullt tilgjengeleg med skjermlesar."
+        },
+        {
+          "label": "Pause ved rett svar",
+          "description": "Verdi i millisekund (1000 millisekund = 1 sekund)"
+        },
+        {
+          "label": "Pause ved feil svar",
+          "description": "Verdi i millisekund (1000 millisekund = 1 sekund)"
+        },
+        {
+          "label": "Bruk lydeffektar"
+        },
+        {
+          "label": "Aktiver \"Prøv igjen\"-knapp"
+        },
+        {
+          "label": "\"Vis svar\" knapp",
+          "description": "This feature is not applicable when the new look and feel is enabled."
+        },
+        {
+          "label": "Krav for å bestå",
+          "description": "Prosentdel rette svar som krevst for å bestå."
+        }
+      ]
+    },
+    {
+      "label": "Tilpass språk i leietekstar",
+      "fields": [
+        {
+          "label": "Namn på \"Neste\"-knapp",
+          "default": "Neste spørsmål"
+        },
+        {
+          "label": "Visual label for the \"Next\" button",
+          "default": "Next"
+        },
+        {
+          "label": "Label for the \"Show results\" button",
+          "default": "Show results"
+        },
+        {
+          "label": "Namn på \"Prøv igjen\"-knapp",
+          "default": "Prøv igjen"
+        },
+        {
+          "label": "Tittel på fasitsida",
+          "default": "Rette svar"
+        },
+        {
+          "label": "Skjermlesartekst ved rett svar",
+          "default": "Rett"
+        },
+        {
+          "label": "Skjermlesartekst ved feil svar",
+          "default": "Feil"
+        },
+        {
+          "label": "Alternativet skulle vore valt",
+          "default": "Skulle vore valt"
+        },
+        {
+          "label": "Alternativet skulle ikkje vore valt",
+          "default": "Skulle ikkje vore valt"
+        },
+        {
+          "label": "Namn på \"Lyd av\"-knapp",
+          "default": "Slå av lyd"
+        },
+        {
+          "label": "Merkelapp for \"Lukk\"-knapp",
+          "default": "Lukk"
+        },
+        {
+          "label": "Tekst for sidenummer",
+          "description": "Viser sidenummer for aktuell side og totalt sidetal. Variablane er :num av :total",
+          "default": "Side :num av :total"
+        },
+        {
+          "label": "Tekstalternativ til resultatlinja (for skjermlesere)",
+          "default": "Du fekk :num av :total poeng."
+        },
+        {
+          "label": "Tekst for spørsmålsnummer i lista med rette svar",
+          "description": "Les opp nummeret på spørsmålet i lista med rette svar. Variabel som kan brukast, er :num.",
+          "default": "Spørsmål :num"
+        },
+        {
+          "label": "Beskriving av \"Vis svar\"-knapp (for assisterande teknologi)",
+          "default": "Vis løysing. Oppgåva blir merkt med rette svar."
+        },
+        {
+          "label": "Assistive technology description for \"Retry\" button",
+          "default": "Retry the task. Reset all responses and start the task over again."
+        },
+        {
+          "label": "The main header of the result screen",
+          "default": "Your result:"
+        },
+        {
+          "label": "The score header of the result screen",
+          "default": ":score of :maxScore correct"
+        },
+        {
+          "label": "The Question header of the result screen table",
+          "default": "Question"
+        },
+        {
+          "label": "The Score header of the result screen table",
+          "default": "Score"
+        },
+        {
+          "label": "Correct answer introduction",
+          "default": "Riktig svar"
+        }
+      ]
+    }
+  ]
+}
