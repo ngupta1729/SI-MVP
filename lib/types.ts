@@ -86,14 +86,24 @@ export interface PlanItem {
   rationale: string;
 }
 
+export interface QuestionSignal {
+  /** the source sentence(s) this question was built from */
+  grounding: string;
+  /** one line: why the marked key is correct */
+  answerKeyNote: string;
+  confidence: "high" | "medium" | "low";
+}
+
 export interface GeneratedItem extends PlanItem {
   /** H5P content.json payload for this artifact (null if no mock builder yet). */
   contentJson: unknown;
   /** h5p.json params library string, e.g. "H5P.Summary 1.10". */
   mainLibrary: string;
-  /** Trust signals surfaced at the approval gate. */
-  grounding?: string; // the source sentence(s) this item was built from
-  answerKeyNote?: string; // one-line "why the key is correct"
+  /** Per-question trust signals, parallel to contentJson.choices. */
+  questionSignals?: QuestionSignal[];
+  /** Activity-level trust signals (fallback / summary). */
+  grounding?: string;
+  answerKeyNote?: string;
   confidence?: "high" | "medium" | "low";
   provenance?: "extracted" | "inferred"; // lifted from source vs. reasoned beyond it
 }

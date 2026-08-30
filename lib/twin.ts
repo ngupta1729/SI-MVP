@@ -329,6 +329,7 @@ function mockEngine(text: string, intent: ImportIntent): TwinResult {
         | "inferred",
     };
     let contentJson: unknown;
+    let questionSignals: GeneratedItem["questionSignals"];
     switch (typeName) {
       case "H5P.Summary":
         contentJson = buildSummary(concepts);
@@ -336,13 +337,19 @@ function mockEngine(text: string, intent: ImportIntent): TwinResult {
       case "H5P.SingleChoiceSet":
       case "H5P.QuestionSet":
         contentJson = buildSingleChoiceSet(qa);
+        questionSignals = qa.map((q) => ({
+          grounding: q.grounding || "",
+          answerKeyNote:
+            intent.mode === "extract"
+              ? "Lifted from the source; answer as given in the original."
+              : `Answer supported by: "${(q.grounding || "").slice(0, 80)}…"`,
+          confidence: (q.grounding ? "high" : "medium") as "high" | "medium",
+        }));
         break;
       default:
-        // Catalog type with no mock builder yet — still show it in the plan,
-        // just without a content payload to preview.
         contentJson = null;
     }
-    items.push({ ...base, contentJson });
+    items.push({ ...base, contentJson, questionSignals });
   });
 
   return {
@@ -414,13 +421,14 @@ Return ONLY JSON:
     "rationale": string,
     "mainLibrary": string,
     "contentJson": object,
-    "grounding": <the source sentence this item is built from>,
-    "answerKeyNote": <one line: why the marked key is correct>,
+    "questionSignals": [
+      { "grounding": <the exact source sentence THIS question is built from>, "answerKeyNote": <one line: why this question's marked answer is correct>, "confidence": "high" | "medium" | "low" }
+    ],
     "confidence": "high" | "medium" | "low",
     "provenance": "extracted" | "inferred"
   }]
 }
-Only include contentType values listed in INTENT.contentTypes.`;
+"questionSignals" MUST have one entry per question in this item's contentJson.choices, in the same order. For Summary items, one entry per summary set. Only include contentType values listed in INTENT.contentTypes.`;
 
   const { text: out } = await generateText({
     model: openai(TWIN_MODEL),

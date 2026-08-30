@@ -8,7 +8,12 @@ import {
   type IntentPreset,
 } from "@/lib/intent-presets";
 import { useTemplates, type SavedTemplate } from "@/lib/templates";
-import type { ImportIntent, TwinResult, SourceAnalysis } from "@/lib/types";
+import type {
+  ImportIntent,
+  TwinResult,
+  SourceAnalysis,
+  QuestionSignal,
+} from "@/lib/types";
 import H5PRender from "@/components/H5PRender";
 
 type Screen = "configure" | "activities" | "review";
@@ -1132,60 +1137,13 @@ function Review(p: {
 
         <div className="space-y-3">
           {current ? (
-            <>
-              {p.itemState[current.id] === "editing" && (
-                <InlineEditor
-                  item={current}
-                  value={p.edits[current.id] ?? current.contentJson}
-                  onChange={(v) =>
-                    p.setEdits((e) => ({ ...e, [current.id]: v }))
-                  }
-                />
-              )}
-
-              <div>
-                <p className="mb-1 text-[11px] font-medium text-blue-600">
-                  LIVE PREVIEW
-                </p>
-                {current.hostPrepared && current.contentJson ? (
-                  <H5PRender
-                    h5pJsonPath={current.render.h5pJsonPath}
-                    librariesPath={current.render.librariesPath}
-                    renderKey={current.id}
-                  />
-                ) : (
-                  <div className="rounded-lg border border-dashed border-zinc-300 p-4 text-xs text-zinc-500 dark:border-zinc-700">
-                    Live preview for {current.contentType} needs its H5P library
-                    bundle — drop a .h5p of this type into data/ and run
-                    scripts/prepare-h5p.mjs.
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-md border border-zinc-200 p-3 text-xs dark:border-zinc-800">
-                <p className="font-medium">Trust signals</p>
-                <p className="mt-1 text-zinc-500">
-                  <b>Grounded in:</b>{" "}
-                  {current.grounding ? `“${current.grounding}”` : "—"}
-                </p>
-                <p className="mt-1 text-zinc-500">
-                  <b>Answer key:</b> {current.answerKeyNote ?? "—"}
-                </p>
-              </div>
-
-              <details className="text-xs">
-                <summary className="cursor-pointer text-zinc-400">
-                  twin content.json
-                </summary>
-                <pre className="mt-1 max-h-56 overflow-auto rounded bg-zinc-100 p-2 dark:bg-zinc-900">
-                  {JSON.stringify(
-                    p.edits[current.id] ?? current.contentJson,
-                    null,
-                    2,
-                  )}
-                </pre>
-              </details>
-            </>
+            <ItemPanel
+              key={current.id}
+              item={current}
+              value={p.edits[current.id] ?? current.contentJson}
+              onChange={(v) => p.setEdits((e) => ({ ...e, [current.id]: v }))}
+              editing={p.itemState[current.id] === "editing"}
+            />
           ) : (
             <p className="text-sm text-zinc-400">Select an item.</p>
           )}
@@ -1195,60 +1153,171 @@ function Review(p: {
   );
 }
 
-function InlineEditor(p: {
+type Choice = { subContentId?: string; question: string; answers: string[] };
+
+/** Screen-3 preview panel: Review (scan/act without answering) or Play (real H5P). */
+function ItemPanel(p: {
   item: RenderedItem;
   value: unknown;
   onChange: (v: unknown) => void;
+  editing: boolean;
 }) {
-  const choices =
-    (p.value as { choices?: { question: string; answers: string[] }[] })
-      ?.choices ?? [];
-  if (!choices.length) {
-    return (
-      <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs dark:border-amber-800 dark:bg-amber-950/40">
-        Inline editing for {p.item.contentType} isn’t wired in this slice — use the
-        JSON view below.
-      </p>
-    );
-  }
-  const update = (
-    ci: number,
-    patch: Partial<{ question: string; answers: string[] }>,
-  ) => {
-    const next = structuredClone(p.value) as {
-      choices: { question: string; answers: string[] }[];
-    };
-    next.choices[ci] = { ...next.choices[ci], ...patch };
-    p.onChange(next);
+  const [view, setView] = useState<"review" | "play">("review");
+  const val = (p.value ?? {}) as { choices?: Choice[] };
+  const choices = val.choices ?? [];
+
+  // per-question signals keyed by the stable subContentId of the ORIGINAL choices
+  const original = (p.item.contentJson ?? {}) as { choices?: Choice[] };
+  const sigByCid = new Map<string, QuestionSignal>();
+  (original.choices ?? []).forEach((c, i) => {
+    if (c.subContentId && p.item.questionSignals?.[i])
+      sigByCid.set(c.subContentId, p.item.questionSignals[i]);
+  });
+
+  const write = (next: { choices: Choice[] }) =>
+    p.onChange({ ...(p.value as object), choices: next.choices });
+  const updateChoice = (ci: number, patch: Partial<Choice>) => {
+    const c = [...choices];
+    c[ci] = { ...c[ci], ...patch };
+    write({ choices: c });
   };
+  const dropChoice = (ci: number) =>
+    write({ choices: choices.filter((_, i) => i !== ci) });
+
+  const edited = p.value !== p.item.contentJson;
+
   return (
-    <div className="space-y-2 rounded-md border border-blue-300 bg-blue-50/40 p-3 text-xs dark:border-blue-900 dark:bg-blue-950/20">
-      <p className="font-medium">Edit questions</p>
-      {choices.map((c, ci) => (
-        <div key={ci} className="space-y-1 border-t border-blue-200 pt-2 first:border-0 dark:border-blue-900">
-          <input
-            value={c.question}
-            onChange={(e) => update(ci, { question: e.target.value })}
-            className="w-full rounded border border-zinc-300 p-1 dark:border-zinc-700 dark:bg-zinc-900"
-          />
-          {c.answers.map((a, ai) => (
-            <input
-              key={ai}
-              value={a}
-              onChange={(e) => {
-                const answers = [...c.answers];
-                answers[ai] = e.target.value;
-                update(ci, { answers });
-              }}
-              className={`w-full rounded border p-1 ${
-                ai === 0
-                  ? "border-emerald-400"
-                  : "border-zinc-300 dark:border-zinc-700"
-              } dark:bg-zinc-900`}
+    <div className="space-y-3">
+      <div className="flex items-center gap-1 text-[11px]">
+        {(["review", "play"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            className={`rounded border px-2 py-0.5 ${
+              view === v
+                ? "border-blue-600 font-medium"
+                : "border-zinc-300 dark:border-zinc-700"
+            }`}
+          >
+            {v === "review" ? "Review" : "Play"}
+          </button>
+        ))}
+        <span className="ml-1 text-zinc-400">
+          {view === "review"
+            ? "scan every question without answering"
+            : "the real H5P player — as a learner sees it"}
+        </span>
+      </div>
+
+      {view === "play" ? (
+        p.item.hostPrepared && p.value ? (
+          <>
+            <H5PRender
+              h5pJsonPath={p.item.render.h5pJsonPath}
+              librariesPath={p.item.render.librariesPath}
+              renderKey={p.item.id}
             />
-          ))}
+            {edited && (
+              <p className="text-[11px] text-amber-600">
+                Play shows the originally generated version — your edits appear in
+                Review.
+              </p>
+            )}
+          </>
+        ) : (
+          <div className="rounded-lg border border-dashed border-zinc-300 p-4 text-xs text-zinc-500 dark:border-zinc-700">
+            No H5P library bundle for {p.item.contentType} — add a .h5p of this type
+            to data/ and run scripts/prepare-h5p.mjs.
+          </div>
+        )
+      ) : choices.length ? (
+        <ol className="space-y-2">
+          {choices.map((c, ci) => {
+            const sig = c.subContentId ? sigByCid.get(c.subContentId) : undefined;
+            return (
+              <li
+                key={c.subContentId ?? ci}
+                className="rounded-md border border-zinc-200 p-2 text-xs dark:border-zinc-800"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  {p.editing ? (
+                    <textarea
+                      value={c.question}
+                      onChange={(e) =>
+                        updateChoice(ci, { question: e.target.value })
+                      }
+                      rows={2}
+                      className="w-full rounded border border-zinc-300 p-1 dark:border-zinc-700 dark:bg-zinc-900"
+                    />
+                  ) : (
+                    <p className="font-medium">
+                      {ci + 1}. {c.question}
+                    </p>
+                  )}
+                  <button
+                    onClick={() => dropChoice(ci)}
+                    title="Drop this question"
+                    className="shrink-0 rounded border border-zinc-300 px-1 text-zinc-400 hover:text-red-500 dark:border-zinc-700"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <ul className="mt-1 space-y-0.5">
+                  {c.answers.map((a, ai) =>
+                    p.editing ? (
+                      <li key={ai}>
+                        <input
+                          value={a}
+                          onChange={(e) => {
+                            const answers = [...c.answers];
+                            answers[ai] = e.target.value;
+                            updateChoice(ci, { answers });
+                          }}
+                          className={`w-full rounded border p-1 ${
+                            ai === 0
+                              ? "border-emerald-400"
+                              : "border-zinc-300 dark:border-zinc-700"
+                          } dark:bg-zinc-900`}
+                        />
+                      </li>
+                    ) : (
+                      <li
+                        key={ai}
+                        className={
+                          ai === 0
+                            ? "text-emerald-700 dark:text-emerald-400"
+                            : "text-zinc-500"
+                        }
+                      >
+                        {ai === 0 ? "✓ " : "• "}
+                        {a}
+                      </li>
+                    ),
+                  )}
+                </ul>
+                {sig && (
+                  <p className="mt-1 border-t border-zinc-100 pt-1 text-[10px] text-zinc-400 dark:border-zinc-800">
+                    <b>grounded in:</b> “{sig.grounding}” · <b>key:</b>{" "}
+                    {sig.answerKeyNote} · {sig.confidence} confidence
+                  </p>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <div className="rounded-md border border-zinc-200 p-3 text-xs text-zinc-500 dark:border-zinc-800">
+          Review list isn’t wired for {p.item.contentType} yet — use Play, or the
+          JSON below.
         </div>
-      ))}
+      )}
+
+      <details className="text-xs">
+        <summary className="cursor-pointer text-zinc-400">twin content.json</summary>
+        <pre className="mt-1 max-h-56 overflow-auto rounded bg-zinc-100 p-2 dark:bg-zinc-900">
+          {JSON.stringify(p.value, null, 2)}
+        </pre>
+      </details>
     </div>
   );
 }
