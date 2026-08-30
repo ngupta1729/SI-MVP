@@ -85,9 +85,11 @@ rework keeps that shell and inserts new steps.
 ### Screen 2 — Select Activities _(existing, enhanced)_
 
 - Activity cards grouped by category, unchanged layout.
-- **NEW — Recommendations**: recommended activities pre-checked with a one-line reason badge;
-  poor-fit activities dimmed with a reason. Driven by source **+** intent.
-- **NEW — Per-activity mini-controls** on the card: item count, difficulty.
+- **NEW — Recommendations**: the pre-checked set + per-type item count + a one-line reason, from
+  the **Activity recommendation engine** (see below); marginal / infeasible types shown unchecked
+  with the reason.
+- **NEW — Per-activity mini-controls** on the card: item count (pre-filled by the engine),
+  difficulty.
 
 ### Screen 3 — Review & Approve _(NEW — the core)_
 
@@ -209,7 +211,9 @@ automated verbatim-diff check added then.
 - **Source read-back** before activity selection — advisory, non-blocking: type · length ·
   reading level · weighted themes · substantive concepts · Strengths · Watch-outs · draft
   objectives. Describes the material; never a go/no-go verdict.
-- **Content-type recommendation from source + intent** — ranked, pre-checked, reason per activity.
+- **Content-type recommendation** — the pre-checked activity set + item counts, from the
+  **Activity recommendation engine (v1)** documented below (feasibility gate from the source,
+  desirability rank from the intent, count 1–3, explicit prompt instructions override).
 - **Auto-propose learning objectives** from the source.
 - **Verbatim question extraction** — when the source already contains questions (worksheet,
   question bank, past paper), detect them and offer to import as-is into the chosen H5P type
@@ -231,6 +235,118 @@ the source *can* inform stays in: proposed objectives, content-shape guardrails,
 pre-selection, and nudges after the educator has written something. _Backlog exception:_ if the
 input is a **lesson plan / syllabus / outcomes doc** (source-as-brief, not source-as-content), it
 does contain intent and could auto-fill objectives + prompt.
+
+### Activity recommendation engine (v1)
+
+**Output contract.** The engine produces exactly one thing: the **recommended (pre-checked) set
+of content types on Screen 2**, each with a suggested **item count** and a one-line **reason**. It
+does not generate content, pick destinations, or gate progression. Everything it proposes is
+overridable on Screen 2.
+
+**Two inputs, two roles.**
+
+- **Source material → feasibility** _(a gate)_: can a *good* activity of this type be built from
+  this raw material?
+- **Intent (the prompt or the brief) → desirability** _(a ranker)_: among feasible types, which
+  serve the teacher's stated goal?
+
+Source is never overridden by an intent that wants something infeasible; intent never promotes a
+type the source can't support.
+
+#### Step 1 — Feasibility gate (from the source read-back)
+
+Each catalogue type is marked `feasible | marginal | infeasible`:
+
+| Type | Feasible when the source has… | Infeasible / weak when… |
+|---|---|---|
+| Single Choice Set | assertable facts with clear right answers | pure opinion, nothing assertable |
+| Question Set | enough distinct facts for a multi-item quiz, or existing questions to hold | very short source |
+| Summary | paraphrasable explanatory claims | lists / tables / reference data — nothing to paraphrase |
+| Crossword | many single-word / short named terms (terminology, people, places) | explanatory prose, few named terms → contrived clues |
+| Drag the Words | definitional or structural sentences with an unambiguous removable key word | narrative prose, no clean gaps |
+| Dialog Cards | term↔definition or Q↔A pairs | continuous narrative |
+| Interactive Book | length **+** multiple sub-topics / sections | short single-topic blurb |
+| Interactive Video | a video source | text source (disabled) |
+
+Signals used: read-back `kind`; whether `concepts` are short terms vs. ideas; `wordCount` +
+number of `themes`; `detectedQuestions`; `watchOuts`. Marginal / infeasible types still appear on
+Screen 2 — unchecked, with the reason shown.
+
+#### Step 2 — Purpose slots
+
+A recommendation covers **distinct pedagogical purposes**; at most one activity per purpose:
+
+| Purpose | Types |
+|---|---|
+| Check recall | Single Choice Set · Dialog Cards · Crossword |
+| Check understanding | Summary · Question Set |
+| Practice / consolidate | Dialog Cards · Drag the Words · Crossword |
+| Present / teach | Interactive Book |
+
+#### Step 3 — How many activity types
+
+- **Default 2** — one *recall* + one *understanding* (Single Choice Set + Summary, or + Question
+  Set for a richer source). Different cognitive levels, minimal overlap.
+- **1** if any of: source < ~400 words or single-topic · only one purpose feasible · intent is
+  narrow ("quick check", "diagnostic", "warm-up"). → the single best-fit type for the dominant
+  purpose.
+- **3** only if **all** of: source long **and** multi-section · intent signals breadth ("full
+  revision set", "cover the unit") · a third distinct purpose is feasible.
+- Never auto-check more than 3 — each activity is another block to review at the gate, and
+  multiple activities from one source tend to overlap.
+
+#### Step 4 — Which types, within the count
+
+1. Feasible only.
+2. One per purpose slot — never two recall types.
+3. **Single Choice Set is the default first pick** — it works on almost any expository source, for
+   both assessment and practice.
+4. Intent tilts the rest: assessment emphasis → + Question Set; teaching emphasis → + Summary /
+   Interactive Book; prompt mentions "terms / vocabulary / definitions" → swap in Crossword /
+   Drag the Words.
+
+#### Step 5 — Item count per recommended type
+
+- Start at `volume` (light ≈ 4 · standard ≈ 6 · thorough ≈ 10).
+- **Cap up** by source: ≤ ~1 item per 60–100 words of substantive content, or ~1.5 × the
+  read-back's distinct concepts — whichever is lower.
+- **Cap down** for coherence: with 2–3 activities, ~4–5 each; target **~10–15 items total across
+  the set**, not per activity.
+- Never pad to hit a number.
+
+#### Explicit user instructions override
+
+If the prompt names types, a count of activities, or an item count, **that instruction wins** and
+the engine becomes advisory — it still shows feasibility warnings ("you asked for a Crossword but
+this source has few single-word terms"), it does not override the choice.
+
+```
+explicit prompt instruction
+  >  on-screen manual activity selection (types only)
+  >  volume setting
+  >  engine default
+        ↓  every level capped by  ↓
+   what the source supports without repetition (quality floor)
+```
+
+An explicit number is still bounded by feasibility: "10 questions" on a source that yields 7 good
+ones → generate 7, and say so at the approval gate ("requested 10; source supported 7 without
+repetition"). Never silently ignore, never silently pad. Detected via the LLM intent pass
+(`requestedTypes`, `requestedActivityCount`, `requestedItemCount`) with a regex fast-path.
+
+#### Implementation split
+
+- **Feasibility = LLM** — it needs to read the source (single-word terms? definitional sentences?
+  multiple sections?). Folded into the analyze call that produces the read-back.
+- **Purpose slots, count, type selection, item count = deterministic rules** on the feasible set +
+  intent. Keeps re-ranking **instant** when the user changes emphasis / volume / prompt — no
+  extra API call.
+
+#### v1 — expected to be refined
+
+This is a starting rule set; every threshold is a dial. Refinements we anticipate from real
+usage: the 1/2/3 count thresholds, the words-per-item ratio, the purpose→type mappings, whether
+"marginal" types should ever be pre-checked, and how aggressively intent keywords swap types.
 
 ### Stage 2 — Approval (review gate before spend)
 
