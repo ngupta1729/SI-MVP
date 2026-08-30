@@ -1234,7 +1234,10 @@ function Review(p: {
               >
                 <button
                   className="w-full text-left"
-                  onClick={() => p.setSelected(item.id)}
+                  onClick={() => {
+                    p.setSelected(item.id);
+                    setMenu(null);
+                  }}
                 >
                   <p className="text-sm font-medium">{def?.label}</p>
                   <p className="text-[11px] text-zinc-500">
@@ -1248,6 +1251,8 @@ function Review(p: {
                   </p>
                 </button>
 
+                {p.selected === item.id && (
+                <>
                 {st === "discarded" ? (
                   <button
                     onClick={() => p.setItem(item.id, "approved")}
@@ -1341,6 +1346,8 @@ function Review(p: {
                     </div>
                   </div>
                 )}
+                </>
+                )}
               </li>
             );
           })}
@@ -1369,15 +1376,223 @@ type Choice = { subContentId?: string; question: string; answers: string[] };
 const stripHtml = (s: unknown) =>
   typeof s === "string" ? s.replace(/<[^>]+>/g, "").trim() : "";
 
-/** Review renderer for the non-choices content shapes (Summary, Dialog Cards, Drag Text, Crossword, Accordion, Question Set). */
+/** Review renderer for the non-choices content shapes (Summary, Dialog Cards,
+ *  Drag Text, Crossword, Accordion, Question Set). Read-only by default; inline
+ *  text editing when `editing` + `onChange` are supplied. */
 function OtherReview({
   value,
   signals,
+  editing,
+  onChange,
 }: {
   value: unknown;
   signals?: QuestionSignal[];
+  editing?: boolean;
+  onChange?: (v: unknown) => void;
 }) {
   const v = (value ?? {}) as Record<string, unknown>;
+
+  if (editing && onChange) {
+    const patch = (mutate: (d: Record<string, unknown>) => void) => {
+      const d = structuredClone(v);
+      mutate(d);
+      onChange(d);
+    };
+    const eInp =
+      "w-full rounded border border-zinc-300 p-1 text-xs dark:border-zinc-700 dark:bg-zinc-900";
+    const eBox = "rounded-md border border-zinc-200 p-2 dark:border-zinc-800";
+    const editable = <T,>(list: T[], render: (row: T, i: number) => React.ReactNode) => (
+      <div className="space-y-2">{list.map((row, i) => render(row, i))}</div>
+    );
+
+    if (Array.isArray(v.summaries)) {
+      const sets = v.summaries as { summary: string[] }[];
+      return editable(sets, (s, si) => (
+        <div key={si} className={eBox}>
+          <p className="mb-1 text-[10px] text-zinc-400">
+            Set {si + 1} — first line is the correct statement
+          </p>
+          {s.summary.map((opt, oi) => (
+            <input
+              key={oi}
+              value={opt}
+              onChange={(e) =>
+                patch((d) => {
+                  (d.summaries as { summary: string[] }[])[si].summary[oi] =
+                    e.target.value;
+                })
+              }
+              className={`${eInp} mb-1 ${oi === 0 ? "border-emerald-400" : ""}`}
+            />
+          ))}
+        </div>
+      ));
+    }
+
+    if (Array.isArray(v.dialogs)) {
+      const dialogs = v.dialogs as { text: string; answer: string }[];
+      return editable(dialogs, (d, di) => (
+        <div key={di} className={eBox}>
+          <p className="mb-1 text-[10px] text-zinc-400">Card {di + 1}</p>
+          <input
+            value={d.text}
+            onChange={(e) =>
+              patch((dr) => {
+                (dr.dialogs as { text: string }[])[di].text = e.target.value;
+              })
+            }
+            placeholder="Front (prompt)"
+            className={`${eInp} mb-1`}
+          />
+          <input
+            value={d.answer}
+            onChange={(e) =>
+              patch((dr) => {
+                (dr.dialogs as { answer: string }[])[di].answer = e.target.value;
+              })
+            }
+            placeholder="Back (answer)"
+            className={`${eInp} border-emerald-400`}
+          />
+        </div>
+      ));
+    }
+
+    if (Array.isArray(v.words)) {
+      const words = v.words as { clue: string; answer: string }[];
+      return editable(words, (w, wi) => (
+        <div key={wi} className={eBox}>
+          <p className="mb-1 text-[10px] text-zinc-400">Word {wi + 1}</p>
+          <input
+            value={w.clue}
+            onChange={(e) =>
+              patch((d) => {
+                (d.words as { clue: string }[])[wi].clue = e.target.value;
+              })
+            }
+            placeholder="Clue"
+            className={`${eInp} mb-1`}
+          />
+          <input
+            value={w.answer}
+            onChange={(e) =>
+              patch((d) => {
+                (d.words as { answer: string }[])[wi].answer = e.target.value;
+              })
+            }
+            placeholder="Answer"
+            className={`${eInp} border-emerald-400`}
+          />
+        </div>
+      ));
+    }
+
+    if (Array.isArray(v.panels)) {
+      const panels = v.panels as {
+        title: string;
+        content?: { params?: { text?: string } };
+      }[];
+      return editable(panels, (pn, pi) => (
+        <div key={pi} className={eBox}>
+          <input
+            value={pn.title}
+            onChange={(e) =>
+              patch((d) => {
+                (d.panels as { title: string }[])[pi].title = e.target.value;
+              })
+            }
+            placeholder="Panel title"
+            className={`${eInp} mb-1 font-medium`}
+          />
+          <textarea
+            value={pn.content?.params?.text ?? ""}
+            rows={3}
+            onChange={(e) =>
+              patch((d) => {
+                const p2 = (d.panels as {
+                  content?: { params?: { text?: string } };
+                }[])[pi];
+                if (!p2.content) p2.content = {};
+                if (!p2.content.params) p2.content.params = {};
+                p2.content.params.text = e.target.value;
+              })
+            }
+            className={eInp}
+          />
+        </div>
+      ));
+    }
+
+    if (Array.isArray(v.questions)) {
+      const questions = v.questions as {
+        params?: {
+          question?: string;
+          answers?: { text: string; correct?: boolean }[];
+        };
+      }[];
+      return editable(questions, (q, qi) => (
+        <div key={qi} className={eBox}>
+          <textarea
+            value={q.params?.question ?? ""}
+            rows={2}
+            onChange={(e) =>
+              patch((d) => {
+                const qq = (d.questions as { params?: { question?: string } }[])[qi];
+                if (!qq.params) qq.params = {};
+                qq.params.question = e.target.value;
+              })
+            }
+            className={`${eInp} mb-1`}
+          />
+          {(q.params?.answers ?? []).map((a, ai) => (
+            <input
+              key={ai}
+              value={a.text}
+              onChange={(e) =>
+                patch((d) => {
+                  const qq = (d.questions as {
+                    params?: { answers?: { text: string }[] };
+                  }[])[qi];
+                  if (!qq.params) qq.params = {};
+                  if (!qq.params.answers) qq.params.answers = [];
+                  qq.params.answers[ai].text = e.target.value;
+                })
+              }
+              className={`${eInp} mb-1 ${a.correct ? "border-emerald-400" : ""}`}
+            />
+          ))}
+        </div>
+      ));
+    }
+
+    if (typeof v.textField === "string") {
+      return (
+        <div className="space-y-1">
+          <p className="text-[10px] text-zinc-400">
+            Wrap each word learners must drag in *asterisks*.
+          </p>
+          <textarea
+            value={v.textField}
+            rows={8}
+            onChange={(e) =>
+              patch((d) => {
+                d.textField = e.target.value;
+              })
+            }
+            className={eInp}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <p className="rounded-md border border-zinc-200 p-3 text-xs text-zinc-500 dark:border-zinc-800">
+        Inline editing isn’t available for this type yet — use Regenerate, or edit
+        it after creation.
+      </p>
+    );
+  }
+
   let rows: { primary: string; secondary?: string; correct?: string }[] = [];
 
   if (Array.isArray(v.summaries)) {
@@ -1472,7 +1687,9 @@ function ItemPanel(p: {
   onChange: (v: unknown) => void;
   editing: boolean;
 }) {
-  const [view, setView] = useState<"review" | "play">("review");
+  const [viewChoice, setViewChoice] = useState<"review" | "play">("review");
+  // Editing only exists in the Review view, so force it there while Edit is on.
+  const view = p.editing ? "review" : viewChoice;
   const val = (p.value ?? {}) as { choices?: Choice[] };
   const choices = val.choices ?? [];
 
@@ -1499,8 +1716,9 @@ function ItemPanel(p: {
         {(["review", "play"] as const).map((v) => (
           <button
             key={v}
-            onClick={() => setView(v)}
-            className={`rounded border px-2 py-0.5 ${
+            disabled={p.editing && v === "play"}
+            onClick={() => setViewChoice(v)}
+            className={`rounded border px-2 py-0.5 disabled:opacity-40 ${
               view === v
                 ? "border-blue-600 font-medium"
                 : "border-zinc-300 dark:border-zinc-700"
@@ -1510,9 +1728,11 @@ function ItemPanel(p: {
           </button>
         ))}
         <span className="ml-1 text-zinc-400">
-          {view === "review"
-            ? "scan every question without answering"
-            : "the real H5P player — as a learner sees it"}
+          {p.editing
+            ? "editing — Play is available once you finish"
+            : view === "review"
+              ? "scan every question without answering"
+              : "the real H5P player — as a learner sees it"}
         </span>
       </div>
 
@@ -1604,7 +1824,12 @@ function ItemPanel(p: {
           })}
         </ol>
       ) : (
-        <OtherReview value={p.value} signals={p.item.questionSignals} />
+        <OtherReview
+          value={p.value}
+          signals={p.item.questionSignals}
+          editing={p.editing}
+          onChange={p.onChange}
+        />
       )}
 
       <details className="text-xs">
