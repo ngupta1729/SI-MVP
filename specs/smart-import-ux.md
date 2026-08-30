@@ -149,34 +149,30 @@ field**, and **refine attempt-loops** (≥3 = the source can't support that type
 - **Cost line**: "This will use 2 credits and create 18 items."
 - **[Approve N & create]**.
 
-### Screen 4 — Place & Finish _(NEW — replaces the silent auto-file, and is the import's page)_
+### After "Create N" — land in the content library _(NEW — replaces the silent auto-file)_
 
-One screen, reached by "Create N". It is both the finish step and the **import session page**
-the educator can reopen later.
+Not a step. "Create N" creates the activities in the **content library** — where all H5P content
+lives — and drops the educator there, **filtered to this import**:
 
-- **Provenance summary**: source, the prompt/brief used, engine, and the review record —
-  N generated → kept / edited / refined / remixed / discarded (discards keep their reason).
-- **Name this import** (prefilled from the source/title + date).
-- **Choose destination**: a real course/unit folder (`Biology 101 / Unit 3`) — **not** a
-  "Smart Import" folder. Default is a lightweight **Smart Imports inbox** for content not yet
-  placed.
-- **Draft or publish** the set.
-- **The created activities as the import's workspace** — each card shows its concepts,
-  provenance, confidence, and edited / refined / remixed badges, and links into the editor.
-- On place: each item carries a **`from: <import>`** backlink in the content library and is
-  filterable by the import; the import page and the content stay linked both ways. There is no
-  duplicate "all Smart Import content" folder.
+- Each new item is stamped **`from: <import>`** (auto-named: source/title + date) and shows up
+  among the rest of the library, not in a separate folder. Items land as **draft**.
+- A banner confirms "N created", and **"Open import details"** expands the receipt inline:
+  source, prompt/brief, engine, and the outcome — N generated → kept / edited / refined /
+  remixed / discarded (with discard reasons). It is a click-through, not a screen you pass
+  through.
+- The import mapping *is* the organisation: filter the library by an import, or click an item's
+  `from:` tag to open its import. No name step, no destination picker, no publish gate.
 - **Start another import** re-enters the flow.
 
 **Two objects, one home each.** The import is an event (immutable receipt: source, intent,
-decisions); the content items are living objects. Keep both indexes — "what did I import?" (the
-Smart Imports list) and "what content do I have?" (the library) — but each content item lives in
-exactly one place (the chosen folder), with a two-way link to its import. Merge the *folders*
-(per-import subfolder + global catch-all → one inbox for unplaced content), not the *views*.
+decisions); the content items are living objects that live in the library. Keep both indexes —
+"what did I import?" (the Smart Imports list) and "what content do I have?" (the library) —
+bound by a two-way link, **not** by a folder. Collapse today's two folders (per-import subfolder
++ global catch-all) into nothing: content is just in the library, found via the import filter.
 
-_Phase 2 — post-creation Refine workspace:_ scoped natural-language edits ("shorten all summary
-statements", "make Q3–5 about the evidence"), propagate-a-fix-and-remember, inline
-flag-distractor — the deeper editing surface once the content already exists.
+_Phase 2:_ per-import destination on create (course/unit) for teams that want it · a
+post-creation Refine workspace — scoped natural-language edits ("shorten all summary
+statements"), propagate-a-fix-and-remember, inline flag-distractor · publish-set-as-a-batch.
 
 ---
 
@@ -456,16 +452,15 @@ failing for this type — try a different type").
 
 ### Stage 4 — Discoverability & organization
 
-Per-session container · provenance on every item · provenance as a library filter · two-way
-navigation (session ↔ content) · session page as a workspace · choose destination at import
-time · lifecycle (archive/delete session + content together).
+Per-import stamp on every item · provenance as a library filter · two-way navigation (import ↔
+content) · import-details receipt · lifecycle (archive/delete import + its content together).
 
-**No dedicated "Smart Import" content folder.** Today's product has two: a per-import subfolder
-*and* a global catch-all, with no clear mapping between an import and its content. Collapse both
-into a single **Smart Imports inbox** that only holds content not yet placed; placed content
-lives in its real course/unit folder. Keep two *indexes* — the Smart Imports list ("what did I
-import?") and the content library ("what content do I have?") — bound by a two-way link, not by
-a folder full of duplicates. See Screen 4.
+**No dedicated "Smart Import" content folder.** Today's product has two — a per-import subfolder
+*and* a global catch-all — with no clear mapping between an import and its content. Drop both:
+content just lives in the library, and the **import mapping** (a `from:` tag + a filter) is what
+ties a set together. Keep two *indexes* — the Smart Imports list ("what did I import?") and the
+content library ("what content do I have?") — bound by a two-way link, not by a folder full of
+duplicates. See "After Create N".
 
 ### Stage 5 — Trust
 
@@ -561,13 +556,13 @@ retention needle before committing engineering to it.
 
 ## Sprint 2 demo
 
-**Screens 3–4 (Review & Approve → Place & Finish) built end-to-end**, with a slice of Screen 1
-(auto source read-back + intent + recommended activities) feeding it: an educator pastes a source
-(or a Wikipedia URL), optionally states intent → recommended activities are pre-checked →
-generates → sees a proposed-content list with a **live playable H5P preview per item** rendered
-in the real player, plus grounding / answer-key trust signals → edits / refines / remixes /
-discards → "Create N" → names the import, picks a real destination folder, sees the provenance
-summary and the import's workspace.
+**Review & Approve → content library, built end-to-end**, with a slice of Screen 1 (auto source
+read-back + intent + recommended activities) feeding it: an educator pastes a source (or a
+Wikipedia URL), optionally states intent → recommended activities are pre-checked → generates →
+sees a proposed-content list with a **live playable H5P preview per item** rendered in the real
+player, plus grounding / answer-key trust signals → edits / refines / remixes / discards →
+"Create N" → lands in the content library filtered to the import, each item tagged `from:` it,
+with the import-details receipt one click away.
 
 All previewed content is generated from that source in the session. Feedback question for
 mentors: *"Would you trust this enough to put it in front of learners with only light review?"*
