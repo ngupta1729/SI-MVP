@@ -101,32 +101,44 @@ rework keeps that shell and inserts new steps.
   - **Play** — the real H5P player, the learner experience, for a feel check.
 - **Actions — MVP.** Approve is the **default, not a click**; the educator acts on the exceptions.
   - **Item level** (one question / card / word): **Edit only** — inline text, manual, no AI.
-    (Regenerating one question in isolation risks breaking coherence with the rest — so
-    regeneration is activity-level.)
+    (Regenerating one question in isolation risks breaking coherence with the rest — so AI
+    refinement is activity-level.)
   - **Activity level:**
-    - **Regenerate ▾** — a bounded picker that *steers* the regeneration, not just a re-roll:
-      Harder · Easier · Simpler language · More formal · In [language] · Less repetitive ·
-      Clearer wording · Different focus · Just try again. One click → the whole activity is
-      regenerated for its type with that adjustment. Warns: "replaces every question, including
-      your edits."
+    - **Refine ▾** — a bounded picker that *steers* a full regeneration of the activity, not
+      just a re-roll. Grouped:
+      - _Difficulty:_ Harder · Easier
+      - _Language & tone:_ Simpler wording · More formal · In another language ▸ (fixed
+        language list — note: questions change, it is not a translation)
+      - _Coverage:_ Different focus ▸ (submenu built from the source read-back's concept list) ·
+        Less repetitive
+      - _Quality:_ Clearer wording · Answers look wrong
+      - _Blunt:_ Just try again
+      One click → the whole activity is regenerated for its type with that steer. Warns:
+      "regenerates every question, including your edits." **Changing the activity type is not
+      here** — that lives on the Discard path (see below).
     - **Discard ▾** — a bounded reason picker: wrong activity type · quality too low · redundant
-      with another · source doesn't support it · not useful. Drops the activity.
+      with another · source doesn't support it · not useful. Drops the activity. (MVP: to
+      swap type, discard + re-pick on Screen 2. Phase 2: inline "replace with ▸ [type]".)
+  - **Refine cap:** soft limit of **3 refines per activity**. Tries 1–3 behave normally; after
+    the 3rd, the button stops being a plain re-roll and surfaces "three tries haven't landed
+    this — the source may not support a strong [type] here" with Discard / Switch type / Edit
+    manually made primary. A 4th is still possible, just not the default.
   - **Gate button:** "Create N" — N = every activity not discarded.
-  - _Deliberately out of MVP:_ item-level regenerate/drop · diagnosis→strategy branching for
-    regenerate · "regenerate instead of discard" redirects · difficulty/count/type as standalone
-    controls (they're regenerate adjustments) · coverage-grid-tied Add-item.
+  - _Deliberately out of MVP:_ item-level regenerate/drop · diagnosis→strategy branching on
+    Refine · "refine instead of discard" redirects · difficulty/count/type as standalone
+    controls (they're Refine steers) · coverage-grid-tied Add-item.
 - **Trust signals are per question**, not per activity: each question shows the exact source
   sentence it was built from, a one-line answer-key note, and a confidence level.
 
 **Feedback → eval stream.** Every review-stage action writes a `review_event`:
 `{ importId, contentType, engine, model, sourceKind, readbackKind, sourceLength, intent{mode,
-authoringMode, preset, emphasis, volume}, action: "edit"|"regenerate"|"discard", reason (the
-picker value), field?, charsDelta?, attempt?, timestamp }` — plus one `create_summary` per import
-(generated / created / edited / regenerated / discarded). This is the labelled dataset that gives
-**approve-without-edit rate**, **which adjustment people reach for** (→ tune defaults: lots of
-"Harder" = generate harder), **discard reasons per source kind**, **edit magnitude per field**,
-and **regenerate attempt-loops** (≥3 = the source can't support that type). It also answers "is
-quality good enough" with data instead of opinion.
+authoringMode, preset, emphasis, volume}, action: "edit"|"refine"|"discard", reason (the
+picker value / steer), field?, charsDelta?, attempt?, timestamp }` — plus one `create_summary`
+per import (generated / created / edited / refined / discarded). This is the labelled dataset
+that gives **approve-without-edit rate**, **which steer people reach for** (→ tune defaults: lots
+of "Harder" = generate harder), **discard reasons per source kind**, **edit magnitude per
+field**, and **refine attempt-loops** (≥3 = the source can't support that type). It also answers
+"is quality good enough" with data instead of opinion.
 - **Coverage grid**: objectives × activities.
 - **Cost line**: "This will use 2 credits and create 18 items."
 - **[Approve N & create]**.
@@ -134,7 +146,7 @@ quality good enough" with data instead of opinion.
 ### Screen 4 — Refine _(NEW — post-creation workspace)_
 
 - The created set in one workspace (not scattered into a folder).
-- **Inline item actions**: Regenerate · Easier/Harder · Rephrase · flag distractor · Delete.
+- **Inline item actions**: Refine · Easier/Harder · Rephrase · flag distractor · Delete.
 - **Scoped natural-language edits**: "shorten all summary statements", "make Q3–5 about the
   evidence".
 - **Propagate a fix**: a correction offers to apply across the whole set and stick for next time.
@@ -378,7 +390,7 @@ usage: the 1/2/3 count thresholds, the words-per-item ratio, the purpose→type 
 ### Stage 2 — Approval (review gate before spend)
 
 Plan preview → proposed-content list → **live interactive H5P preview per item** → per-item
-approve / drop / edit / regenerate → per-activity controls → coverage grid → cost line →
+approve / drop / edit / refine → per-activity controls → coverage grid → cost line →
 review workspace (not auto-filed).
 
 **Review assist** (not eval infrastructure — lightweight checks that make approval faster and
@@ -393,22 +405,29 @@ approve/drop/edit decisions are a free measurement stream — the gate exists an
 natural-language editing:
 
 - **Item level: Edit only.** Inline manual text edit of one question / card / gap. No per-item
-  AI regenerate — regenerating a single item in isolation breaks coherence with the rest of the
+  AI refine — regenerating a single item in isolation breaks coherence with the rest of the
   activity.
-- **Activity level: Regenerate ▾ and Discard ▾.** Regenerate re-runs the whole activity for its
-  type with one *steering adjustment* picked from a closed list — Harder · Easier · Simpler
-  language · More formal · In [language] · Less repetitive · Clearer wording · Different focus ·
-  Just try again. Each adjustment rewrites the generation prompt; it is not just logged. Discard
-  takes a reason from a closed list (wrong activity type · quality too low · redundant · source
-  doesn't support it · not useful). Regenerate replaces every item in the activity, edits
-  included — the UI warns.
+- **Activity level: Refine ▾ and Discard ▾.** Refine re-runs the whole activity for its type
+  with one *steer* picked from a closed, grouped list — Difficulty (Harder / Easier), Language &
+  tone (Simpler wording / More formal / In another language), Coverage (Different focus /
+  Less repetitive), Quality (Clearer wording / Answers look wrong), or just "Try again". Each
+  steer rewrites the generation prompt; it is not just logged. Language and tone and difficulty
+  are Refine steers — not a separate mechanism. **Activity-type changes are not a Refine steer**
+  — discard with reason "wrong activity type" and re-pick (MVP), or an inline type-swap on the
+  discard path (Phase 2). Discard takes a reason from a closed list (wrong activity type ·
+  quality too low · redundant · source doesn't support it · not useful). Refine regenerates
+  every item in the activity, edits included — the UI warns.
+- **Refine cap: soft limit of 3 per activity.** After 3 unsuccessful refines, the control stops
+  offering a plain re-roll and points at Discard / switch type / manual edit — the source×type
+  pairing is the likely problem, and a 3-refine activity is a strong "this source can't support
+  this type" label for the recommendation engine.
 
 Every action writes a `review_event` (schema in the Screen 3 section); this is the labelled
-eval stream — approve-without-edit rate, which adjustment people reach for, discard reasons by
-source kind, regenerate attempt-loops.
+eval stream — approve-without-edit rate, which steer people reach for, discard reasons by
+source kind, refine attempt-loops.
 
 **Phase 2 (not built).** Scoped natural-language edits · propagate-a-fix (and remember) ·
-diagnosis→strategy branching on Regenerate · "regenerate instead of discard" redirect ·
+diagnosis→strategy branching on Refine · "refine instead of discard" redirect ·
 difficulty / count / activity-type as standalone controls · post-generation coverage report
 with "fill the gap" / coverage-grid-tied Add-item · attempt-loop escalation ("this source keeps
 failing for this type — try a different type").
@@ -448,7 +467,7 @@ personal track record · confusion-report loop · generation transparency.
 
 | Seq | Item | Priority | Success measure |
 |---|---|---|---|
-| 1 | Approval gate: proposed-content list + **live H5P preview per item** + approve/drop/regenerate | P0 | ≥ 60% of imports reach an approved set (vs. abandon after generate); median generate→approved < 5 min |
+| 1 | Approval gate: proposed-content list + **live H5P preview per item** + approve/drop/refine | P0 | ≥ 60% of imports reach an approved set (vs. abandon after generate); median generate→approved < 5 min |
 | 2 | Source grounding per item (show the source sentence) | P0 | Educator "I could tell if each item was right" ≥ 4/5 in usability test |
 | 2 | Answer-key justification per item | P1 | Contributes to approve-without-edit rate ≥ 55% |
 | 3 | Activity recommendation engine v1 (feasibility gate + desirability rank + count logic; see spec) | P1 | ≥ 50% of imports keep the recommended activity set unchanged; "created an activity then deleted it whole" rate ↓ |
@@ -476,7 +495,7 @@ personal track record · confusion-report loop · generation transparency.
 | Seq | Item | Priority | Success measure |
 |---|---|---|---|
 | 1 | Per-session containers + provenance + two-way navigation | P1 | % of users who re-open a past import ↑; "find the content from last week's import" task success ≥ 90% |
-| 2 | Session workspace (regenerate / add / export / publish set / bulk-move) | P2 | Published (not just created) rate ↑; bulk actions used |
+| 2 | Session workspace (refine / add / export / publish set / bulk-move) | P2 | Published (not just created) rate ↑; bulk actions used |
 | 2 | Choose destination at import time | P2 | ≥ 50% of imports placed outside the "Smart Import" folder |
 | 3 | Confusion-report loop | P2 | % of confusion-flagged items regenerated ↑; downstream confusion rate on regenerated items ↓ |
 | 3 | Assemble into a coherent Interactive Book | P2 | "Assemble" adoption; retention delta assembled vs. loose output |

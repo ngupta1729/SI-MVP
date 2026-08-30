@@ -44,7 +44,7 @@ const DEFAULT_INTENT: ImportIntent = {
   contentTypes: [],
 };
 
-type ItemState = "approved" | "editing" | "discarded" | "regenerating";
+type ItemState = "approved" | "editing" | "discarded" | "refining";
 
 export default function Page() {
   const [screen, setScreen] = useState<Screen>("configure");
@@ -195,13 +195,13 @@ export default function Page() {
     }).catch(() => {});
   }
 
-  async function regenerateActivity(itemId: string, adjustment: string) {
+  async function refineActivity(itemId: string, adjustment: string) {
     const item = result?.items.find((i) => i.id === itemId);
     if (!item || !result) return;
     const attempt = (attempts[itemId] ?? 1) + 1;
     setAttempts((a) => ({ ...a, [itemId]: attempt }));
-    setItem(itemId, "regenerating");
-    logReviewEvent({ action: "regenerate", itemId, reason: adjustment, attempt });
+    setItem(itemId, "refining");
+    logReviewEvent({ action: "refine", itemId, reason: adjustment, attempt });
     try {
       const res = await fetch("/api/regenerate", {
         method: "POST",
@@ -264,7 +264,7 @@ export default function Page() {
           created: kept.length,
           edited: kept.filter((i) => edits[i.id] && edits[i.id] !== i.contentJson)
             .length,
-          regenerated: Object.keys(attempts).length,
+          refined: Object.keys(attempts).length,
           discarded: result.items.length - kept.length,
         },
       }),
@@ -340,7 +340,7 @@ export default function Page() {
               setSelected={setSelected}
               current={current}
               attempts={attempts}
-              onRegenerate={regenerateActivity}
+              onRefine={refineActivity}
               onDiscard={discardActivity}
             />
           )}
@@ -1176,7 +1176,7 @@ function Activities(p: {
 
 /* ---------------- Screen 3 ---------------- */
 
-const REGEN_OPTIONS: { id: string; label: string }[] = [
+const REFINE_OPTIONS: { id: string; label: string }[] = [
   { id: "harder", label: "Harder" },
   { id: "easier", label: "Easier" },
   { id: "simpler", label: "Simpler language" },
@@ -1204,7 +1204,7 @@ function Review(p: {
   setSelected: (id: string) => void;
   current: RenderedItem | null;
   attempts: Record<string, number>;
-  onRegenerate: (itemId: string, adjustment: string) => void;
+  onRefine: (itemId: string, adjustment: string) => void;
   onDiscard: (itemId: string, reason: string) => void;
 }) {
   const { result, current } = p;
@@ -1245,9 +1245,9 @@ function Review(p: {
                   </p>
                   <p className="text-[11px] text-zinc-400">
                     {item.provenance ?? "inferred"} · conf {item.confidence ?? "—"}
-                    {p.attempts[item.id] ? ` · regen ×${p.attempts[item.id] - 1}` : ""}
+                    {p.attempts[item.id] ? ` · refined ×${p.attempts[item.id] - 1}` : ""}
                     {st === "discarded" ? " · discarded" : ""}
-                    {st === "regenerating" ? " · regenerating…" : ""}
+                    {st === "refining" ? " · refining…" : ""}
                   </p>
                 </button>
 
@@ -1278,7 +1278,7 @@ function Review(p: {
                       Edit
                     </button>
                     <button
-                      disabled={st === "regenerating"}
+                      disabled={st === "refining"}
                       onClick={() =>
                         setMenu(
                           menu?.id === item.id && menu.kind === "regen"
@@ -1288,7 +1288,7 @@ function Review(p: {
                       }
                       className="rounded border border-zinc-300 px-1.5 py-0.5 disabled:opacity-40 dark:border-zinc-700"
                     >
-                      Regenerate ▾
+                      Refine ▾
                     </button>
                     <button
                       onClick={() =>
@@ -1308,16 +1308,16 @@ function Review(p: {
                 {menu?.id === item.id && menu.kind === "regen" && (
                   <div className="mt-1 rounded border border-blue-300 bg-blue-50/50 p-1.5 text-[11px] dark:border-blue-900 dark:bg-blue-950/20">
                     <p className="mb-1 text-zinc-500">
-                      Regenerate this activity — replaces all questions, including
+                      Refine this activity — regenerates all questions, including
                       your edits. What should change?
                     </p>
                     <div className="flex flex-wrap gap-1">
-                      {REGEN_OPTIONS.map((o) => (
+                      {REFINE_OPTIONS.map((o) => (
                         <button
                           key={o.id}
                           onClick={() => {
                             setMenu(null);
-                            p.onRegenerate(item.id, o.id);
+                            p.onRefine(item.id, o.id);
                           }}
                           className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 dark:border-zinc-700 dark:bg-zinc-900"
                         >
@@ -1587,7 +1587,7 @@ function OtherReview({
 
     return (
       <p className="rounded-md border border-zinc-200 p-3 text-xs text-zinc-500 dark:border-zinc-800">
-        Inline editing isn’t available for this type yet — use Regenerate, or edit
+        Inline editing isn’t available for this type yet — use Refine, or edit
         it after creation.
       </p>
     );
