@@ -33,22 +33,45 @@ export function buildSummary(concepts: string[]) {
   };
 }
 
+let scid = 0;
+const uuid = () =>
+  "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    // deterministic-ish; fine for a mock
+    const r = (scid++ * 9301 + 49297) % 233280;
+    const v = c === "x" ? r % 16 : (r % 4) + 8;
+    return v.toString(16);
+  });
+
+/**
+ * Structure calibrated against a real Smart Import export
+ * (data/plate-tectonics-single-choice-set.h5p): plain-text questions (no <p>),
+ * answers[0] is the correct one, each choice carries a subContentId.
+ */
 export function buildSingleChoiceSet(qa: QA[]) {
   return {
     choices: qa.slice(0, 8).map((q) => ({
-      question: `<p>${q.question}</p>\n`,
-      answers: [
-        `<p>${q.correct}</p>\n`,
-        ...q.distractors.slice(0, 3).map((d) => `<p>${d}</p>\n`),
-      ],
+      subContentId: uuid(),
+      question: q.question,
+      answers: [q.correct, ...q.distractors.slice(0, 3)],
     })),
-    overallFeedback: [{ from: 0, to: 100 }],
-    behaviour: { autoContinue: true, timeoutCorrect: 2000, timeoutWrong: 3000, soundEffectsEnabled: true, enableRetry: true, enableSolutionsButton: true, passPercentage: 100 },
+    behaviour: {
+      timeoutCorrect: 1000,
+      timeoutWrong: 1000,
+      soundEffectsEnabled: false,
+      enableRetry: true,
+      enableSolutionsButton: true,
+      passPercentage: 100,
+      autoContinue: false,
+    },
+    overallFeedback: [
+      { from: 0, to: 100, feedback: "You got :numcorrect of :maxscore correct" },
+    ],
     l10n: {
       nextButtonLabel: "Next question",
-      showSolutionButtonLabel: "Show solution",
+      nextButton: "Next",
+      showResultsButtonLabel: "Show results",
       retryButtonLabel: "Retry",
-      solutionViewTitle: "Solution",
+      solutionViewTitle: "Solution list",
       correctText: "Correct!",
       incorrectText: "Incorrect!",
       shouldSelect: "Should have been selected",
@@ -58,7 +81,15 @@ export function buildSingleChoiceSet(qa: QA[]) {
       slideOfTotal: "Slide :num of :total",
       scoreBarLabel: "You got :num out of :total points",
       solutionListQuestionNumber: "Question :num",
-      resultSlideTitle: "You got :score out of :total points",
+      a11yShowSolution:
+        "Show the solution. The task will be marked with its correct solution.",
+      a11yRetry:
+        "Retry the task. Reset all responses and start the task over again.",
+      resultHeader: "Your result:",
+      totalScore: ":score of :maxScore correct",
+      resultTableHeader: "Question",
+      resultScoreTableHeader: "Score",
+      correctAnswerIntroduction: "Correct answer",
     },
   };
 }

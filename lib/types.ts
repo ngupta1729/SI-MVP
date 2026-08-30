@@ -10,13 +10,28 @@ export interface TwinSource {
 
 /** The reworked "intent" step — richer than Smart Import's language + checkboxes. */
 export interface ImportIntent {
+  /** Free-form prompt (the default on-ramp). */
+  prompt: string;
   learningGoal: string;
   audienceLevel: "beginner" | "intermediate" | "advanced";
   /** What the educator wants to weight. */
   emphasis: "assessment" | "concept_explanation" | "balanced";
   language: string;
+  /** "generate" new items, or "extract" questions already present in the source. */
+  mode: "generate" | "extract";
   /** H5P content-type machine names the educator wants generated. */
   contentTypes: string[];
+}
+
+/** What the source read-back surfaces before activity selection. */
+export interface SourceAnalysis {
+  kind: "conceptual" | "procedural" | "narrative" | "mixed";
+  wordCount: number;
+  concepts: string[];
+  /** Questions already present in the source (drives the extract-as-is offer). */
+  detectedQuestions: number;
+  /** Suggested learning objectives read off the source. */
+  suggestedObjectives: string[];
 }
 
 /** One planned artifact, shown in the approval step before it is finalized. */
@@ -30,10 +45,15 @@ export interface PlanItem {
 }
 
 export interface GeneratedItem extends PlanItem {
-  /** H5P content.json payload for this artifact. */
+  /** H5P content.json payload for this artifact (null if no mock builder yet). */
   contentJson: unknown;
   /** h5p.json params library string, e.g. "H5P.Summary 1.10". */
   mainLibrary: string;
+  /** Trust signals surfaced at the approval gate. */
+  grounding?: string; // the source sentence(s) this item was built from
+  answerKeyNote?: string; // one-line "why the key is correct"
+  confidence?: "high" | "medium" | "low";
+  provenance?: "extracted" | "inferred"; // lifted from source vs. reasoned beyond it
 }
 
 export interface TwinResult {
