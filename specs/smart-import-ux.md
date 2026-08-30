@@ -130,6 +130,27 @@ Structured form: learning goal, audience level, emphasis (recall ↔ understandi
 volume (light / standard / thorough), language. No free-text prompt, no presets, no "improve" —
 the brief *is* the intent; the twin serialises it into an instruction internally.
 
+**Prompt & brief library** — one library, three tiers:
+
+| Tier | Source | Editable |
+|---|---|---|
+| **System templates** | The predesigned prompts (Exam revision, Introduce a topic, Check prior knowledge, Deep conceptual practice, Extract existing questions) | Read-only, used as-is |
+| **Personal templates** | Any Scratch prompt the author wrote, or any brief they configured — named and saved | Author's own (rename / delete) |
+| **Org templates** _(admin layer, later)_ | Admins publish org-wide starting points | Read-only to authors |
+
+A saved template captures whichever mode it was made in — a prompt **or** a brief. Personal
+templates appear in the "Start from:" row next to the system ones
+(`[Scratch] [system…] [★ My Grade 9 Bio]`); brief mode gets a "Load / Save brief" control. This
+turns intent authoring from per-import typing into pick-a-template for regular users — a direct
+repeat-use / TTV win.
+
+_Governance (Phase 3):_ authors keep full freedom over their own briefs and templates. Org
+consistency (house style, spelling, accessibility, integrity) is enforced through an **invisible
+admin-set generation policy** appended to every prompt — not by locking the author-facing brief.
+Admins may *add* org templates and at most 1–2 required fields (course, curriculum standard),
+never *remove* the core fields or restrict free-text prompt mode. Heavy admin-controlled forms
+would work against the TTV guardrail.
+
 **Question extraction** — the *Extract existing questions* preset (and the read-back's "Extract
 them as-is" action) sets a verbatim-extraction instruction and switches the run to extract mode:
 pull each question from the source exactly as written, carry over options and marked answers,
@@ -248,7 +269,8 @@ personal track record · confusion-report loop · generation transparency.
 |---|---|---|---|
 | 1 | Document ingestion pipeline: `.pptx` + PDF/DOCX (layout-aware, OCR) — file-based question extraction rides on this | P1 | `.pptx` approve-without-edit rate reaches clean-article parity; W2 retention for `.pptx`-first users reaches cohort average |
 | 2 | Extraction verification pass (extracted item ↔ source-span diff, flag paraphrase/drop/renumber, unresolved keys) | P1 | Verbatim-mismatch rate on extracted items < 2%; educator-reported trust in extraction ≥ 4/5 |
-| 1 | Full intent authoring: prompt-XOR-brief toggle · preset prompts · "improve" (user text only) · save named brief | P1 | Prompt or brief used in ≥ 30% of imports by users with ≥ 2 imports; approve-without-edit higher for intent-driven imports |
+| 1 | Full intent authoring: prompt-XOR-brief toggle · preset prompts · "improve" (user text only) | P1 | Prompt or brief used in ≥ 30% of imports by users with ≥ 2 imports; approve-without-edit higher for intent-driven imports |
+| 2 | **Prompt & brief library** — system templates + author-saved personal templates (prompt or brief), shown in "Start from:" | P1 | Among users with ≥ 3 imports, ≥ 40% start from a saved or system template; median time-to-generate ↓ for template starts |
 | 2 | Inline item actions + scoped natural-language edits (Refine) | P1 | Median edits per approved item trends **down** across a user's successive imports |
 | 2 | Per-activity controls + coverage grid | P2 | Cross-activity concept overlap ↓ (measured); "too many/few questions" feedback ↓ |
 | 3 | Propagate-a-fix + preference memory | P2 | Same correction made twice by the same user → near zero |
@@ -264,6 +286,7 @@ personal track record · confusion-report loop · generation transparency.
 | 2 | Choose destination at import time | P2 | ≥ 50% of imports placed outside the "Smart Import" folder |
 | 3 | Confusion-report loop | P2 | % of confusion-flagged items regenerated ↑; downstream confusion rate on regenerated items ↓ |
 | 3 | Assemble into a coherent Interactive Book | P2 | "Assemble" adoption; retention delta assembled vs. loose output |
+| 3 | **Org layer**: admin-set generation policy (invisible: house style, spelling, accessibility, integrity) + org-published prompt/brief templates + optional 1–2 admin brief fields (course, standard) | P2 | Orgs with a policy set show lower cross-author style variance; ≥ 25% of enterprise/K-12 authors start from an org template |
 | 4 | Lifecycle (archive/delete session + content) | P3 | Per-active-user folder growth rate ↓ |
 | — | **Phase gate** | | **W4→W8 retention ↑; seats per org ↑** |
 
