@@ -8,6 +8,14 @@ import {
   type IntentPreset,
 } from "@/lib/intent-presets";
 import { useTemplates, type SavedTemplate } from "@/lib/templates";
+import {
+  type ImportRecord,
+  type ImportItemDecision,
+  type ImportKeptItem,
+  fetchImports,
+  saveImport,
+  intentLabel,
+} from "@/lib/import-records";
 import type {
   ImportIntent,
   TwinResult,
@@ -30,7 +38,10 @@ type RenderedItem = TwinResult["items"][number] & {
   render: { librariesPath: string; h5pJsonPath: string };
   hostPrepared: boolean;
 };
-type ApiResult = Omit<TwinResult, "items"> & { items: RenderedItem[] };
+type ApiResult = Omit<TwinResult, "items"> & {
+  items: RenderedItem[];
+  model?: string | null;
+};
 interface Recommendation {
   name: string;
   recommended: boolean;
@@ -79,8 +90,12 @@ export default function Page() {
   const [error, setError] = useState<string | null>(null);
 
   // Post-create: land in the content library, scoped to this import.
-  const [importLabel, setImportLabel] = useState("");
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [importRecord, setImportRecord] = useState<ImportRecord | null>(null);
+  const [priorImports, setPriorImports] = useState<ImportRecord[]>([]);
+  // review-stage decision metadata that isn't otherwise kept in state:
+  const [discardReason, setDiscardReason] = useState<Record<string, string>>({});
+  const [refineSteers, setRefineSteers] = useState<Record<string, string[]>>({});
+  const [remixFrom, setRemixFrom] = useState<Record<string, string>>({});
 
   const activeSourceKey = `${sourceTab}::${sourceTab === "Wikipedia" ? wikiUrl : text}`;
   // Only ever show the read-back / recommendations computed for the source the
@@ -184,7 +199,9 @@ export default function Page() {
     setItemState((m) => ({ ...m, [id]: s }));
   }
 
-  const importId = useMemo(() => crypto.randomUUID(), []);
+  // One id per import session; carried on every review_event and the final record.
+  // Fresh on "Start another import" (a plain useMemo would collide the 2nd import).
+  const [importId, setImportId] = useState<string>(() => crypto.randomUUID());
   const [attempts, setAttempts] = useState<Record<string, number>>({});
   const [remixes, setRemixes] = useState<Record<string, number>>({});
 
@@ -264,6 +281,7 @@ export default function Page() {
     if (!item) return;
     const attempt = (attempts[itemId] ?? 1) + 1;
     setAttempts((a) => ({ ...a, [itemId]: attempt }));
+    setRefineSteers((s) => ({ ...s, [itemId]: [...(s[itemId] ?? []), adjustment] }));
     logReviewEvent({ action: "refine", itemId, reason: adjustment, attempt });
     await applyRegen(itemId, {
       contentType: item.contentType,
@@ -278,6 +296,7 @@ export default function Page() {
     if (!item) return;
     const fromType = item.contentType;
     setRemixes((r) => ({ ...r, [itemId]: (r[itemId] ?? 0) + 1 }));
+    setRemixFrom((m) => ({ ...m, [itemId]: m[itemId] ?? fromType }));
     logReviewEvent({ action: "remix", itemId, reason: fromType, toType });
     await applyRegen(itemId, {
       contentType: toType,
@@ -289,6 +308,7 @@ export default function Page() {
 
   function discardActivity(itemId: string, reason: string) {
     setItem(itemId, "discarded");
+    setDiscardReason((m) => ({ ...m, [itemId]: reason }));
     logReviewEvent({ action: "discard", itemId, reason });
   }
 
@@ -330,8 +350,68 @@ export default function Page() {
         ? decodeURIComponent(wikiUrl.split("/wiki/")[1] ?? "").replace(/_/g, " ")
         : "") ||
       "Smart import";
-    setImportLabel(`${stem} · ${new Date().toISOString().slice(0, 10)}`);
-    setDetailsOpen(false);
+    const label = `${stem} · ${new Date().toISOString().slice(0, 10)}`;
+
+    const keptSet = new Set(kept.map((i) => i.id));
+    const decisions: ImportItemDecision[] = result.items.map((it) => {
+      const editedJson = !!edits[it.id] && edits[it.id] !== it.contentJson;
+      return {
+        itemId: it.id,
+        contentType: it.contentType,
+        kept: keptSet.has(it.id),
+        edited: editedJson,
+        charsDelta: editedJson
+          ? JSON.stringify(edits[it.id]).length -
+            JSON.stringify(it.contentJson).length
+          : undefined,
+        refineAttempts: attempts[it.id] ? attempts[it.id] - 1 : 0,
+        refineSteers: refineSteers[it.id] ?? [],
+        remixCount: remixes[it.id] ?? 0,
+        remixFrom: remixFrom[it.id],
+        discarded: !keptSet.has(it.id),
+        discardReason: discardReason[it.id],
+      };
+    });
+    const recordItems: ImportKeptItem[] = kept.map((i) => ({
+      id: i.id,
+      title: i.title,
+      contentType: i.contentType,
+      concepts: i.concepts,
+      contentJson: edits[i.id] ?? i.contentJson,
+      render: i.render,
+      hostPrepared: i.hostPrepared,
+    }));
+    const record: ImportRecord = {
+      id: importId,
+      name: label,
+      createdAt: Date.now(),
+      source: {
+        kind: sourceTab === "Wikipedia" ? "url" : "text",
+        value: sourceTab === "Wikipedia" ? wikiUrl : text,
+        wordCount: shownAnalysis?.wordCount,
+        readbackKind: shownAnalysis?.kind,
+      },
+      intent,
+      promptPresetId: intent.promptPresetId,
+      engine: result.engine,
+      model: result.model ?? null,
+      outcome: {
+        generated: result.items.length,
+        kept: kept.length,
+        edited: kept.filter((i) => edits[i.id] && edits[i.id] !== i.contentJson)
+          .length,
+        refined: Object.keys(attempts).length,
+        remixed: Object.keys(remixes).length,
+        discarded: result.items.length - kept.length,
+      },
+      decisions,
+      items: recordItems,
+    };
+    saveImport(record);
+    setImportRecord(record);
+    fetchImports().then((list) =>
+      setPriorImports(list.filter((r) => r.id !== record.id)),
+    );
     setScreen("library");
   }
 
@@ -342,8 +422,11 @@ export default function Page() {
     setSelected(null);
     setAttempts({});
     setRemixes({});
-    setImportLabel("");
-    setDetailsOpen(false);
+    setImportRecord(null);
+    setDiscardReason({});
+    setRefineSteers({});
+    setRemixFrom({});
+    setImportId(crypto.randomUUID());
     setText("");
     setWikiUrl("");
     setTitle("");
@@ -425,35 +508,18 @@ export default function Page() {
               onDiscard={discardActivity}
             />
           )}
-          {screen === "library" && result && (
+          {screen === "library" && importRecord && (
             <LibraryView
-              result={result}
-              itemState={itemState}
-              edits={edits}
-              attempts={attempts}
-              remixes={remixes}
-              importLabel={importLabel}
-              sourceLabel={
-                sourceTab === "Wikipedia"
-                  ? wikiUrl
-                  : title.trim() || `${text.trim().slice(0, 60)}…`
-              }
-              intentLabel={
-                intent.authoringMode === "brief"
-                  ? `Brief — ${intent.learningGoal || "no goal set"} · ${intent.audienceLevel} · ${intent.emphasis}`
-                  : intent.prompt || "(defaults)"
-              }
-              engine={result.engine}
-              detailsOpen={detailsOpen}
-              setDetailsOpen={setDetailsOpen}
+              current={importRecord}
+              priorImports={priorImports}
             />
           )}
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-zinc-200 px-6 py-3 dark:border-zinc-800">
           <span className="text-xs text-zinc-400">
-            {screen === "library" && result
-              ? `${keptIds.length} created · in your content library`
+            {screen === "library" && importRecord
+              ? `${importRecord.outcome.kept} created · in your content library`
               : screen === "review" && result
               ? `${keptIds.length}/${result.items.length} kept · engine: ${result.engine}`
               : shownAnalysis
@@ -1533,114 +1599,140 @@ function Review(p: {
   );
 }
 
-/* ---------------- After Create — the content library, scoped to this import ---------------- */
+/* ---------------- After Create — the content library, with this import's receipt ---------------- */
+
+/** The persisted import-details receipt, rendered from an ImportRecord. */
+function ImportReceipt({ rec }: { rec: ImportRecord }) {
+  const o = rec.outcome;
+  const discarded = rec.decisions.filter((d) => d.discarded);
+  return (
+    <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-900">
+      <p className="font-semibold text-zinc-500">Import · {rec.name}</p>
+      <dl className="mt-1 grid gap-x-3 gap-y-0.5 sm:grid-cols-[5rem_1fr]">
+        <dt className="text-zinc-400">Source</dt>
+        <dd className="truncate">
+          {rec.source.kind === "url"
+            ? rec.source.value
+            : `${rec.source.value.slice(0, 80)}…`}
+          {rec.source.wordCount ? ` (${rec.source.wordCount} words)` : ""}
+        </dd>
+        <dt className="text-zinc-400">Intent</dt>
+        <dd className="truncate">
+          {intentLabel(rec.intent)} · preset: {rec.promptPresetId ?? "scratch"}
+        </dd>
+        <dt className="text-zinc-400">Engine</dt>
+        <dd>
+          {rec.engine}
+          {rec.model ? ` (${rec.model})` : ""}
+        </dd>
+        <dt className="text-zinc-400">Outcome</dt>
+        <dd>
+          {o.generated} generated → {o.kept} kept
+          {o.edited ? `, ${o.edited} edited` : ""}
+          {o.refined ? `, ${o.refined} refined` : ""}
+          {o.remixed ? `, ${o.remixed} remixed` : ""}
+          {o.discarded ? `, ${o.discarded} discarded` : ""}
+        </dd>
+      </dl>
+      {discarded.length > 0 && (
+        <p className="mt-1 text-zinc-400">
+          Discarded:{" "}
+          {discarded
+            .map(
+              (d) =>
+                `${contentType(d.contentType)?.label ?? d.contentType}` +
+                (d.discardReason ? ` (${d.discardReason})` : ""),
+            )
+            .join(", ")}
+        </p>
+      )}
+      <p className="mt-1 text-zinc-400">
+        Persisted receipt — open it again from any item&rsquo;s <b>from:</b> tag.
+      </p>
+    </div>
+  );
+}
 
 function LibraryView(p: {
-  result: ApiResult;
-  itemState: Record<string, ItemState>;
-  edits: Record<string, unknown>;
-  attempts: Record<string, number>;
-  remixes: Record<string, number>;
-  importLabel: string;
-  sourceLabel: string;
-  intentLabel: string;
-  engine: string;
-  detailsOpen: boolean;
-  setDetailsOpen: (b: boolean) => void;
+  current: ImportRecord;
+  priorImports: ImportRecord[];
 }) {
-  const kept = p.result.items.filter((i) => p.itemState[i.id] !== "discarded");
-  const discarded = p.result.items.filter(
-    (i) => p.itemState[i.id] === "discarded",
+  const allRecords = [p.current, ...p.priorImports];
+  const [openReceiptId, setOpenReceiptId] = useState<string | null>(null);
+  const shown = allRecords.find((r) => r.id === openReceiptId) ?? null;
+
+  const rows = allRecords.flatMap((rec) =>
+    rec.items.map((it) => ({ rec, it })),
   );
-  const editedCount = kept.filter(
-    (i) => p.edits[i.id] && p.edits[i.id] !== i.contentJson,
-  ).length;
-  const refinedCount = Object.keys(p.attempts).length;
-  const remixedCount = Object.keys(p.remixes).length;
 
   return (
     <div className="space-y-4">
       <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm dark:border-emerald-900 dark:bg-emerald-950/30">
         <p className="font-medium text-emerald-800 dark:text-emerald-200">
-          ✓ {kept.length} {kept.length === 1 ? "activity" : "activities"} created and
+          ✓ {p.current.outcome.kept}{" "}
+          {p.current.outcome.kept === 1 ? "activity" : "activities"} created and
           added to your content library
         </p>
         <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
-          Each is tagged <b>from: {p.importLabel}</b> — your library is filtered to
-          this import below. There is no separate Smart Import folder.
+          Each is tagged <b>from: {p.current.name}</b>. There is no separate Smart
+          Import folder — click a <b>from:</b> tag to open that import&rsquo;s
+          details.
         </p>
         <button
-          onClick={() => p.setDetailsOpen(!p.detailsOpen)}
+          onClick={() =>
+            setOpenReceiptId(
+              openReceiptId === p.current.id ? null : p.current.id,
+            )
+          }
           className="mt-1 text-xs underline"
         >
-          {p.detailsOpen ? "Hide import details" : "Open import details"}
+          {openReceiptId === p.current.id
+            ? "Hide import details"
+            : "Open import details"}
         </button>
       </div>
 
-      {p.detailsOpen && (
-        <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="font-semibold text-zinc-500">Import · {p.importLabel}</p>
-          <dl className="mt-1 grid gap-x-3 gap-y-0.5 sm:grid-cols-[5rem_1fr]">
-            <dt className="text-zinc-400">Source</dt>
-            <dd className="truncate">{p.sourceLabel}</dd>
-            <dt className="text-zinc-400">Intent</dt>
-            <dd className="truncate">{p.intentLabel}</dd>
-            <dt className="text-zinc-400">Engine</dt>
-            <dd>{p.engine}</dd>
-            <dt className="text-zinc-400">Outcome</dt>
-            <dd>
-              {p.result.items.length} generated → {kept.length} kept
-              {editedCount ? `, ${editedCount} edited` : ""}
-              {refinedCount ? `, ${refinedCount} refined` : ""}
-              {remixedCount ? `, ${remixedCount} remixed` : ""}
-              {discarded.length ? `, ${discarded.length} discarded` : ""}
-            </dd>
-          </dl>
-          {discarded.length > 0 && (
-            <p className="mt-1 text-zinc-400">
-              Discarded:{" "}
-              {discarded
-                .map((i) => contentType(i.contentType)?.label)
-                .join(", ")}
-            </p>
-          )}
-          <p className="mt-1 text-zinc-400">
-            Reopenable from <b>Smart Imports</b>; content links back here.
-          </p>
-        </div>
-      )}
+      {shown && <ImportReceipt rec={shown} />}
 
       <div>
         <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
           <span className="font-semibold uppercase tracking-wide text-zinc-400">
             Content library
           </span>
-          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-            from: {p.importLabel} ✕
-          </span>
+          {p.priorImports.length > 0 && (
+            <span className="text-zinc-400">
+              {rows.length} items across {allRecords.length} imports
+            </span>
+          )}
         </div>
         <ul className="space-y-1.5">
-          {kept.map((i) => {
+          {rows.map(({ rec, it }) => {
+            const d = rec.decisions.find((x) => x.itemId === it.id);
             const tags: string[] = [];
-            if (p.edits[i.id] && p.edits[i.id] !== i.contentJson)
-              tags.push("edited");
-            if (p.attempts[i.id]) tags.push(`refined ×${p.attempts[i.id] - 1}`);
-            if (p.remixes[i.id]) tags.push("remixed");
+            if (d?.edited) tags.push("edited");
+            if (d && d.refineAttempts > 0)
+              tags.push(`refined ×${d.refineAttempts}`);
+            if (d && d.remixCount > 0) tags.push("remixed");
+            const fresh = rec.id === p.current.id;
             return (
               <li
-                key={i.id}
+                key={`${rec.id}:${it.id}`}
                 className="flex items-center justify-between gap-2 rounded-md border border-zinc-200 p-2 text-xs dark:border-zinc-800"
               >
                 <div className="min-w-0">
                   <p className="truncate font-medium">
-                    {i.title || contentType(i.contentType)?.label}
+                    {it.title || contentType(it.contentType)?.label}
                   </p>
                   <p className="truncate text-zinc-500">
-                    {contentType(i.contentType)?.label} · from{" "}
-                    <span className="text-blue-600 underline">
-                      {p.importLabel}
-                    </span>{" "}
-                    · just now{tags.length ? ` · ${tags.join(" · ")}` : ""}
+                    {contentType(it.contentType)?.label} · from{" "}
+                    <button
+                      onClick={() => setOpenReceiptId(rec.id)}
+                      className="text-blue-600 underline"
+                    >
+                      {rec.name}
+                    </button>{" "}
+                    · {fresh ? "just now" : relTime(rec.createdAt)}
+                    {tags.length ? ` · ${tags.join(" · ")}` : ""}
                   </p>
                 </div>
                 <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800">
@@ -1651,7 +1743,7 @@ function LibraryView(p: {
           })}
         </ul>
         <p className="mt-3 text-[11px] text-zinc-400">
-          — clear the filter to see everything else in the library —
+          — the rest of your library —
         </p>
         <ul className="mt-1 space-y-1.5 opacity-40">
           {MOCK_LIBRARY_ITEMS.map((m) => (
@@ -1669,6 +1761,15 @@ function LibraryView(p: {
       </div>
     </div>
   );
+}
+
+function relTime(ts: number): string {
+  const mins = Math.round((Date.now() - ts) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.round(hrs / 24)}d ago`;
 }
 
 type Choice = { subContentId?: string; question: string; answers: string[] };

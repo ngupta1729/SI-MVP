@@ -45,3 +45,6 @@ next-env.d.ts
 
 # review-stage eval log (MVP)
 /.review-events.jsonl
+
+# persisted import records (MVP)
+/.imports.jsonl

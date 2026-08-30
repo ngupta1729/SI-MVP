@@ -115,4 +115,6 @@ export interface TwinResult {
   items: GeneratedItem[];
   /** "model" when produced by an LLM, "mock" for the deterministic fallback. */
   engine: "model" | "mock";
+  /** Model id when engine === "model", else null. Set by the API route. */
+  model?: string | null;
 }

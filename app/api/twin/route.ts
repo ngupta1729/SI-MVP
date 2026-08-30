@@ -54,7 +54,14 @@ export async function POST(req: NextRequest) {
     items.push({ ...item, render, hostPrepared: await hostExists(host) });
   }
 
-  return NextResponse.json({ ...result, items });
+  return NextResponse.json({
+    ...result,
+    items,
+    model:
+      result.engine === "model"
+        ? process.env.TWIN_MODEL || "gpt-4o-mini"
+        : null,
+  });
 }
 
 async function hostExists(host: string) {

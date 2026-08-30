@@ -139,8 +139,14 @@ rework keeps that shell and inserts new steps.
 authoringMode, preset, emphasis, volume}, action: "edit"|"refine"|"remix"|"discard", reason (the
 picker value / steer / from-type), toType? (remix), field?, charsDelta?, attempt?, timestamp }`
 — plus one `create_summary` per import (generated / created / edited / refined / remixed /
-discarded), and a `placement` event on finish (name / destination / draft|published / items).
-This is the labelled dataset
+discarded). The `create_summary` is additionally **persisted in full as an `ImportRecord`**
+(`POST /api/imports` → `.imports.jsonl`, beside `.review-events.jsonl`, gitignored):
+`{ id (=importId), name, createdAt, source{kind, value (the real text/URL), wordCount,
+readbackKind}, intent, promptPresetId, engine, model, outcome{generated,kept,edited,refined,
+remixed,discarded}, decisions[{itemId, contentType, kept, edited, charsDelta, refineAttempts,
+refineSteers[], remixCount, remixFrom, discarded, discardReason}], items[{id,title,contentType,
+concepts,contentJson}] }`. That record is the receipt — reached from any content item's `from:`
+tag — and it survives "Start another import" and a reload. This is the labelled dataset
 that gives **approve-without-edit rate**, **which steer people reach for** (→ tune defaults: lots
 of "Harder" = generate harder), **discard reasons per source kind**, **edit magnitude per
 field**, and **refine attempt-loops** (≥3 = the source can't support that type). It also answers
@@ -157,12 +163,14 @@ lives — and drops the educator there, **filtered to this import**:
 - Each new item is stamped **`from: <import>`** (auto-named: source/title + date) and shows up
   among the rest of the library, not in a separate folder. Items land as **draft**.
 - A banner confirms "N created", and **"Open import details"** expands the receipt inline:
-  source, prompt/brief, engine, and the outcome — N generated → kept / edited / refined /
-  remixed / discarded (with discard reasons). It is a click-through, not a screen you pass
-  through.
-- The import mapping *is* the organisation: filter the library by an import, or click an item's
-  `from:` tag to open its import. No name step, no destination picker, no publish gate.
-- **Start another import** re-enters the flow.
+  source, prompt/brief, engine + model, and the outcome — N generated → kept / edited / refined /
+  remixed / discarded (with per-item discard reasons). It is a click-through, not a screen you
+  pass through. The receipt is a **persisted `ImportRecord`** (see the eval-stream note above),
+  so it is still there after "Start another import" or a reload.
+- The import mapping *is* the organisation: the library view lists items across every persisted
+  import, and each item's `from:` tag opens that import's receipt. No name step, no destination
+  picker, no publish gate.
+- **Start another import** re-enters the flow; the just-finished import stays in the library.
 
 **Two objects, one home each.** The import is an event (immutable receipt: source, intent,
 decisions); the content items are living objects that live in the library. Keep both indexes —
@@ -458,9 +466,17 @@ content) · import-details receipt · lifecycle (archive/delete import + its con
 **No dedicated "Smart Import" content folder.** Today's product has two — a per-import subfolder
 *and* a global catch-all — with no clear mapping between an import and its content. Drop both:
 content just lives in the library, and the **import mapping** (a `from:` tag + a filter) is what
-ties a set together. Keep two *indexes* — the Smart Imports list ("what did I import?") and the
-content library ("what content do I have?") — bound by a two-way link, not by a folder full of
-duplicates. See "After Create N".
+ties a set together.
+
+**Built (prototype):** each finished import is a server-persisted `ImportRecord`
+(`.imports.jsonl`); the library view lists items across every persisted import, and each item's
+`from:` tag opens that import's receipt. Survives "Start another import" and reload.
+
+**Phase 3:** a standalone **Smart Imports list** screen (the second index — "what did I import?"),
+full two-way navigation, and lifecycle (archive/delete an import + its content together). Render
+output is not yet namespaced by import (`public/h5p/_render/<itemId>/` collides across imports),
+so a *reopened* past import shows item metadata but is not re-playable — namespacing + `_render`
+GC is a Phase-3 item.
 
 ### Stage 5 — Trust
 
@@ -561,8 +577,9 @@ read-back + intent + recommended activities) feeding it: an educator pastes a so
 Wikipedia URL), optionally states intent → recommended activities are pre-checked → generates →
 sees a proposed-content list with a **live playable H5P preview per item** rendered in the real
 player, plus grounding / answer-key trust signals → edits / refines / remixes / discards →
-"Create N" → lands in the content library filtered to the import, each item tagged `from:` it,
-with the import-details receipt one click away.
+"Create N" → lands in the content library, each item tagged `from:` its import, with the
+import-details receipt (a persisted `ImportRecord`) one click away — still reachable after
+starting another import or reloading.
 
 All previewed content is generated from that source in the session. Feedback question for
 mentors: *"Would you trust this enough to put it in front of learners with only light review?"*
