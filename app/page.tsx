@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CONTENT_TYPES, CATEGORIES, contentType } from "@/lib/h5p/contentTypes";
-import { INTENT_PRESETS, preset as findPreset } from "@/lib/intent-presets";
+import {
+  INTENT_PRESETS,
+  preset as findPreset,
+  type IntentPreset,
+} from "@/lib/intent-presets";
 import { useTemplates, type SavedTemplate } from "@/lib/templates";
 import type { ImportIntent, TwinResult, SourceAnalysis } from "@/lib/types";
 import H5PRender from "@/components/H5PRender";
@@ -448,9 +452,27 @@ function Configure(p: {
       </div>
 
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-medium">Intent</p>
-          <span className="text-xs text-zinc-400">— choose one way to say what you want</span>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium">Intent</p>
+            <span className="text-xs text-zinc-400">
+              — choose one way to say what you want
+            </span>
+          </div>
+          <LibraryPicker
+            templates={lib.templates}
+            loadedId={loadedId}
+            lastId={lastId}
+            onLoadTemplate={loadTemplate}
+            onLoadPreset={(preset) =>
+              set({
+                authoringMode: "prompt",
+                promptPresetId: preset.id,
+                prompt: preset.prompt,
+                mode: preset.mode,
+              })
+            }
+          />
         </div>
 
         {/* mutually exclusive mode toggle */}
@@ -797,6 +819,82 @@ function SaveRow(p: {
         cancel
       </button>
     </span>
+  );
+}
+
+function LibraryPicker(p: {
+  templates: SavedTemplate[];
+  loadedId: string | null;
+  lastId: string | null;
+  onLoadTemplate: (t: SavedTemplate) => void;
+  onLoadPreset: (preset: IntentPreset) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const mine = [...p.templates].sort(
+    (a, b) => (b.usedAt ?? b.createdAt) - (a.usedAt ?? a.createdAt),
+  );
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium dark:border-zinc-700 dark:bg-zinc-900"
+      >
+        📚 Template library{p.templates.length ? ` (${p.templates.length})` : ""} ▾
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 z-20 mt-1 max-h-80 w-80 overflow-auto rounded-md border border-zinc-200 bg-white p-2 text-xs shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+            <p className="px-1 py-1 font-semibold text-zinc-400">Your templates</p>
+            {mine.length === 0 && (
+              <p className="px-1 pb-2 text-zinc-400">
+                None yet. Save a prompt or brief below to reuse it next time.
+              </p>
+            )}
+            {mine.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => {
+                  p.onLoadTemplate(t);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
+                  p.loadedId === t.id ? "bg-zinc-100 dark:bg-zinc-800" : ""
+                }`}
+              >
+                <span className="rounded bg-zinc-100 px-1 text-[10px] text-zinc-500 dark:bg-zinc-800">
+                  {t.kind}
+                </span>
+                <span className="flex-1 truncate">★ {t.name}</span>
+                {t.id === p.lastId && (
+                  <span className="text-[10px] text-zinc-400">recent</span>
+                )}
+                {t.contentTypes?.length ? (
+                  <span className="text-[10px] text-zinc-400">
+                    +{t.contentTypes.length}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+            <p className="mt-2 px-1 py-1 font-semibold text-zinc-400">
+              Starter templates
+            </p>
+            {INTENT_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                onClick={() => {
+                  p.onLoadPreset(preset);
+                  setOpen(false);
+                }}
+                className="block w-full rounded px-2 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
