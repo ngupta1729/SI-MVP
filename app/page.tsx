@@ -478,14 +478,15 @@ function Configure(p: {
             loadedId={loadedId}
             lastId={lastId}
             onLoadTemplate={loadTemplate}
-            onLoadPreset={(preset) =>
+            onLoadPreset={(preset) => {
+              setLoadedId(null);
               set({
                 authoringMode: "prompt",
                 promptPresetId: preset.id,
                 prompt: preset.prompt,
                 mode: preset.mode,
-              })
-            }
+              });
+            }}
           />
         </div>
 
@@ -516,9 +517,12 @@ function Configure(p: {
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="text-zinc-400">Start from:</span>
               <button
-                onClick={() => set({ promptPresetId: null, prompt: "", mode: "generate" })}
+                onClick={() => {
+                  setLoadedId(null);
+                  set({ promptPresetId: null, prompt: "", mode: "generate" });
+                }}
                 className={`rounded-md border px-2 py-1 ${
-                  isScratch
+                  isScratch && !loaded
                     ? "border-blue-600 font-medium"
                     : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
                 }`}
@@ -528,13 +532,14 @@ function Configure(p: {
               {INTENT_PRESETS.map((preset) => (
                 <button
                   key={preset.id}
-                  onClick={() =>
+                  onClick={() => {
+                    setLoadedId(null);
                     set({
                       promptPresetId: preset.id,
                       prompt: preset.prompt,
                       mode: preset.mode,
-                    })
-                  }
+                    });
+                  }}
                   className={`rounded-md border px-2 py-1 ${
                     p.intent.promptPresetId === preset.id
                       ? "border-blue-600 font-medium"
