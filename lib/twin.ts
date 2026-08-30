@@ -76,6 +76,23 @@ const VOLUME_ITEMS: Record<ImportIntent["volume"], number> = {
   thorough: 10,
 };
 
+/** How many activity types to pre-check: 1 (thin/narrow) / 2 (default) / 3 (long+broad). */
+export function maxRecommended(
+  analysis: SourceAnalysis,
+  intent: ImportIntent,
+): number {
+  const promptText = (
+    intent.authoringMode === "prompt" ? intent.prompt : intent.learningGoal
+  ).toLowerCase();
+  const narrow = /\b(quick|short|warm.?up|diagnostic)\b/.test(promptText);
+  const broad = /\b(comprehensive|full|thorough|cover (the |everything)|unit|revision set)\b/.test(
+    promptText,
+  );
+  if (analysis.wordCount < 150 || narrow) return 1;
+  if (analysis.wordCount > 1500 && analysis.themes.length >= 4 && broad) return 3;
+  return 2;
+}
+
 /**
  * Deterministic recommendation — the no-model fallback and the desirability
  * refinement. Guarantees a non-empty set. See spec "Activity recommendation
@@ -106,20 +123,20 @@ export function recommendActivities(
   const assess =
     intent.emphasis === "assessment" || /\b(exam|quiz|assess|test|graded)\b/.test(promptText);
 
-  // feasibility per type (heuristic)
+  // feasibility per type (heuristic, from the source read-back)
   const feasible = (name: string): boolean => {
-    switch (name) {
-      case "H5P.Crossword":
-      case "H5P.DragText":
-      case "H5P.DialogCards":
-        return analysis.concepts.length >= 4 && analysis.wordCount >= 150;
-      case "H5P.InteractiveBook":
-        return analysis.wordCount >= 900 && analysis.themes.length >= 3;
-      case "H5P.QuestionSet":
-        return analysis.wordCount >= 250;
-      default: // SingleChoiceSet, Summary
-        return analysis.wordCount >= 80;
-    }
+    const def = CONTENT_TYPES.find((c) => c.name === name);
+    if (!def) return false;
+    if (def.goodFor.includes("video")) return false; // no video source in this build
+    const vocabHeavy = def.goodFor.some((g) =>
+      ["vocabulary", "terminology", "definitions", "memorization"].includes(g),
+    );
+    if (vocabHeavy) return analysis.concepts.length >= 4 && analysis.wordCount >= 150;
+    if (def.name === "H5P.InteractiveBook")
+      return analysis.wordCount >= 900 && analysis.themes.length >= 3;
+    if (def.name === "H5P.QuestionSet") return analysis.wordCount >= 250;
+    if (def.name === "H5P.TheChase") return analysis.wordCount >= 200;
+    return analysis.wordCount >= 80; // SingleChoiceSet, Summary, glossaries, essay
   };
 
   // pick order: SCS first, then intent tilt, then the safe understanding pick
@@ -131,8 +148,10 @@ export function recommendActivities(
   if (wantsVocab) {
     add("H5P.Crossword");
     add("H5P.DragText");
+    add("H5P.Dialogcards:conceptual");
   }
   if (wantsTeach) {
+    add("H5P.Accordion:key-concepts");
     add("H5P.InteractiveBook");
     add("H5P.Summary");
   }
@@ -223,15 +242,21 @@ ${text.slice(0, 12000)}
 
 ${intentLine}
 
-Also recommend which H5P activity types to pre-check. Available types and what each needs:
-- H5P.SingleChoiceSet — assertable facts with clear answers (works on almost anything). Recall.
-- H5P.QuestionSet — a fuller scored quiz; needs enough distinct facts. Understanding/mixed.
-- H5P.Summary — pick the correct statement; needs paraphrasable explanatory claims. Understanding.
-- H5P.Crossword — needs MANY single-word / short named terms. Recall/vocabulary.
-- H5P.DragText — needs definitional sentences with a clear removable key word. Vocabulary.
-- H5P.DialogCards — needs term↔definition or Q↔A pairs. Practice/recall.
-- H5P.InteractiveBook — needs length AND multiple sub-topics. Teaching.
-Rules: recommend 2 by default (one recall + one understanding, usually SingleChoiceSet + Summary or + QuestionSet); 1 if the source is short (<400 words) or the teacher wants something quick; 3 only if the source is long AND multi-section AND the teacher wants breadth. Never recommend a type the source can't support well — mark it recommended:false with the reason. itemCount from volume (light 4 / standard 6 / thorough 10), capped by what the source can support without repeating; Crossword ~8.
+Also recommend which Smart Import activity types to pre-check. The full catalogue (use these exact "name" values):
+- "H5P.Crossword" — Crosswords: needs MANY single-word / short named terms. Recall / vocabulary.
+- "H5P.QuestionSet" — Question Set: a fuller scored quiz; needs enough distinct facts. Understanding / mixed.
+- "H5P.SingleChoiceSet" — Single Choice Set: assertable facts with clear answers (works on almost anything). Recall.
+- "H5P.Summary" — Summary: pick the correct statement; needs paraphrasable explanatory claims. Understanding.
+- "H5P.Accordion:difficult-words" — Glossary of difficult vocabulary; needs technical terms to define.
+- "H5P.Accordion:key-concepts" — Glossary of key concepts; needs clear concepts to explain. Teaching.
+- "H5P.Essay:higher-order" — Higher-Order Questions: open-ended prompts for deeper thinking. Application.
+- "H5P.InteractiveBook" — Interactive Book: needs length AND multiple sub-topics. Teaching.
+- "H5P.Dialogcards:conceptual" — Dialog Cards reviewing key concepts; needs term↔definition pairs.
+- "H5P.Dialogcards:contextual" — Dialog Cards tied to a specific example/case/scenario.
+- "H5P.DragText" — Drag the Words: fill-the-gap; needs definitional sentences with a removable key word.
+- "H5P.TheChase" — fast multiplayer quiz; needs enough recall questions.
+- "H5P.InteractiveVideo" — needs a video source (NOT available here — always recommended:false).
+Rules: recommend 2 by default (one recall + one understanding, usually Single Choice Set + Summary or + Question Set); 1 if the source is short (<400 words) or the teacher wants something quick; 3 only if the source is long AND multi-section AND the teacher wants breadth. Never recommend a type the source can't support well — mark it recommended:false with the reason. itemCount from volume (light 4 / standard 6 / thorough 10), capped by what the source can support without repeating; Crossword ~8.
 
 Return ONLY JSON:
 {
@@ -242,10 +267,10 @@ Return ONLY JSON:
   "strengths": ["<2-3 short phrases>"],
   "watchOuts": ["<2-3 short neutral phrases; NOT 'don't use this'>"],
   "recommendations": [
-    { "name": "<one of the 7 H5P names above>", "recommended": true|false, "reason": "<one line>", "itemCount": <int> }
+    { "name": "<one of the catalogue names above>", "recommended": true|false, "reason": "<one line>", "itemCount": <int> }
   ]
 }
-Include an entry for every one of the 7 types.`;
+Include an entry for every catalogue type listed above.`;
     const { text: out } = await generateText({
       model: openai(process.env.TWIN_ANALYZE_MODEL || "gpt-4o-mini"),
       prompt,
@@ -268,6 +293,18 @@ Include an entry for every one of the 7 types.`;
     if (!analysis.recommendations.some((r) => r.recommended)) {
       analysis.recommendations = recommendActivities(analysis, intent);
     }
+    // enforce the count rule — the model tends to over-recommend
+    const cap = maxRecommended(analysis, intent);
+    let kept = 0;
+    analysis.recommendations = analysis.recommendations.map((r) => {
+      if (r.recommended && kept < cap) {
+        kept++;
+        return r;
+      }
+      return r.recommended
+        ? { ...r, recommended: false, reason: `also a fit — add it if you want it` }
+        : r;
+    });
     return analysis;
   } catch (err) {
     console.error("analyze model call failed, using heuristic:", err);
