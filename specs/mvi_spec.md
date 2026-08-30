@@ -38,8 +38,10 @@ Smart Import's W1→W2 retention is ~20%.
 
 - Screens 4–5 (Refine workspace, Place & Finish with destination + provenance).
 - `.pptx` and other source types.
-- Content types beyond Single Choice Set / Question Set for live preview (others show in the plan
-  without a preview until their H5P library bundle is added).
+- Content types beyond the 9 wired for live preview — Single Choice Set, Summary, Question Set,
+  Dialog Cards (conceptual / contextual), Drag the Words, Crossword, Glossary: Difficult words,
+  Glossary: Key concepts. Still catalogue-only: Higher-Order Questions (Essay), Interactive Book,
+  The Chase (proprietary), Interactive Video (no video source).
 - Auth, multi-user, persistence, credits accounting.
 
 ## Architecture
@@ -49,7 +51,7 @@ Smart Import's W1→W2 retention is ~20%.
 | UI | Next.js 16 App Router, one page, H5P-modal-style 3-screen flow |
 | Source read-back | `POST /api/analyze` — source → `{ analysis, recommendations }` |
 | Twin engine | `POST /api/twin` — model engine uses a **format-only** structure reference (no topic content); output is grounded strictly in the provided source |
-| Renderer | `h5p-standalone` in the browser. `data/*.h5p` files are **library bundles only** — `scripts/prepare-h5p.mjs` extracts them to `public/h5p/<host>/`; the twin's `content.json` is written to `public/h5p/_render/<id>/` at request time and rendered against those libraries |
+| Renderer | `h5p-standalone` in the browser. `scripts/prepare-h5p.mjs` fetches library bundles from the **H5P content-type hub API** (`api.h5p.org/v1/content-types/<name>`) — one GET per type, returns the library + all deps + a real example `content.json` — and extracts them to `public/h5p/<host>/`. The twin's generated `content.json` is written to `public/h5p/_render/<id>/` at request time and rendered against those libraries. The extracted example is also the model's structure reference. |
 
 ## Definition of done (Sprint 2)
 
