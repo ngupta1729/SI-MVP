@@ -137,7 +137,7 @@ each other, and it's ambiguous which wins. A segmented toggle switches between t
 |---|---|
 | Free-text box | The primary input. Lowest friction; default mode. |
 | **Preset prompts** | Clickable, each fills the box with a best-practice prompt: _Exam revision · Introduce a topic · Check prior knowledge · **Extract existing questions**_. |
-| **"Improve this prompt"** | Rewrites the text to best practice. **Shown only for text the educator wrote or edited** — never for a pristine preset (a preset is already best practice; offering to "improve" our own suggestion makes no sense). It reappears the moment the educator edits a preset. |
+| **"Improve this prompt"** | Model rewrites the rough text to prompt-engineering best practice — imperative, specific, and only filling in audience / focus / count / difficulty **where the rough text states or implies it** (never invents them). One-click revert. **Shown only in Scratch** (a predesigned prompt is already best practice; there's nothing to improve). |
 
 **Guided brief**
 
@@ -145,17 +145,17 @@ Structured form: learning goal, audience level, emphasis (recall ↔ understandi
 volume (light / standard / thorough), language. No free-text prompt, no presets, no "improve" —
 the brief *is* the intent; the twin serialises it into an instruction internally.
 
-**Prompt & brief library** — one library, three tiers:
+**Prompt library** — one library, three tiers:
 
 | Tier | Source | Editable |
 |---|---|---|
 | **System templates** | The predesigned prompts (Exam revision, Introduce a topic, Check prior knowledge, Extract existing questions) | Read-only, used as-is |
-| **Personal templates** | Any Scratch prompt the author wrote, or any brief they configured — named and saved | Author's own (rename / delete) |
+| **Personal templates** | Any Scratch prompt the author wrote — named and saved | Author's own (rename / delete) |
 | **Org templates** _(admin layer, later)_ | Admins publish org-wide starting points | Read-only to authors |
 
-A saved template captures whichever mode it was made in — a prompt **or** a brief. Personal
-templates appear in the "Start from:" row next to the system ones
-(`[Scratch] [system…] [★ My Grade 9 Bio]`); brief mode gets a "Load / Save brief" control.
+Personal templates appear in the "Start from:" row next to the system ones
+(`[Scratch] [system…] [★ My Grade 9 Bio]`) and in a searchable **📚 Template library** dropdown.
+_(Saving a **brief** as a template is parked for now — templates are prompt-only.)_
 
 **Reuse — how an educator picks up a saved prompt on a future import:**
 
