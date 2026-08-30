@@ -95,14 +95,19 @@ rework keeps that shell and inserts new steps.
 ### Screen 3 — Review & Approve _(NEW — the core)_
 
 - **Proposed content list**, grouped by activity; each item shows its target concept / objective.
-- **Live interactive H5P preview** of the selected item, rendered in the real player — the
-  educator *plays* it as a learner would.
-- Per item, three actions only: **Approve · Edit · Discard.** (Edit = inline question/answer
-  editing, no full editor. Regenerate lives inside Edit as "redo this item".)
-- Everything is **approved by default** — the educator scans, edits or discards the exceptions,
-  and ships. Reviewing is opt-out, not opt-in.
-- **Trust signals** per item: source-sentence grounding, answer-key justification, confidence,
-  extraction-vs-inference marker.
+- **Two views of the selected activity:**
+  - **Review** _(default)_ — every question laid out as a list, correct answer marked, so the
+    educator can **scan without answering**. Each question carries its own trust signals.
+  - **Play** — the real H5P player, the learner experience, for a feel check.
+- **Actions are two-level:**
+  - **Activity level** (in the list): **Approve · Edit · Discard.** Approve-by-default —
+    the educator acts on the exceptions.
+  - **Question level** (in the Review list): **Drop** (✕) a single question · edit its text
+    (in Edit mode) · Regenerate a single question _(planned)_. There is no per-question
+    "Approve" — questions are approved implicitly by being in an approved activity.
+- **Trust signals are per question**, not per activity: each question shows the exact source
+  sentence it was built from, a one-line answer-key note, and a confidence level. (A 6-question
+  quiz with one grounding sentence for all six is useless.)
 - **Coverage grid**: objectives × activities.
 - **Cost line**: "This will use 2 credits and create 18 items."
 - **[Approve N & create]**.
