@@ -1,0 +1,623 @@
+<title>Smart Import Build Journey</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,opsz@0,18..40;1,18..40&display=swap">
+
+<style>
+  :root {
+    --paper:      #f5f6f8;
+    --surface:    #ffffff;
+    --surface-2:  #fbfbfc;
+    --ink:        #1b1e26;
+    --ink-soft:   #565c6b;
+    --ink-faint:  #8b909e;
+    --line:       #e2e5eb;
+    --line-soft:  #edeef2;
+    --accent:     #274a7c;
+    --accent-ink: #1d3a63;
+    --accent-bg:  #e9f0f8;
+    --pick:       #1c6353;
+    --pick-bg:    #e1efe9;
+    --pick-line:  #b7dbce;
+    --arch:       #6a4a86;
+    --arch-bg:    #efe9f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #121319;
+      --surface:    #1b1d25;
+      --surface-2:  #20232c;
+      --ink:        #e8eaef;
+      --ink-soft:   #a3a9b7;
+      --ink-faint:  #7b8191;
+      --line:       #2d313c;
+      --line-soft:  #23262f;
+      --accent:     #86aede;
+      --accent-ink: #a9c6ec;
+      --accent-bg:  #1a2537;
+      --pick:       #7ecbb6;
+      --pick-bg:    #12271f;
+      --pick-line:  #274c40;
+      --arch:       #c3a7dd;
+      --arch-bg:    #241a2f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:      #121319;
+    --surface:    #1b1d25;
+    --surface-2:  #20232c;
+    --ink:        #e8eaef;
+    --ink-soft:   #a3a9b7;
+    --ink-faint:  #7b8191;
+    --line:       #2d313c;
+    --line-soft:  #23262f;
+    --accent:     #86aede;
+    --accent-ink: #a9c6ec;
+    --accent-bg:  #1a2537;
+    --pick:       #7ecbb6;
+    --pick-bg:    #12271f;
+    --pick-line:  #274c40;
+    --arch:       #c3a7dd;
+    --arch-bg:    #241a2f;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; padding: clamp(1.5rem, 4vw, 4rem) clamp(1.1rem, 4vw, 2.4rem) 6rem; }
+
+  a { color: var(--accent-ink); text-underline-offset: 2px; }
+  a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint);
+  }
+  code { font-family: "IBM Plex Mono", monospace; font-size: .86em; background: var(--surface-2); padding: .06em .35em; border-radius: 3px; border: 1px solid var(--line-soft); }
+
+  /* masthead */
+  .masthead { border-bottom: 1px solid var(--line); padding-bottom: 2.4rem; margin-bottom: 2.8rem; }
+  h1 {
+    font-weight: 700; font-size: clamp(2.1rem, 6vw, 3.3rem); line-height: 1.05;
+    letter-spacing: -0.022em; text-wrap: balance; margin: .7rem 0 .5rem;
+  }
+  h1 .accent { color: var(--accent); }
+  .lede {
+    font-family: "Newsreader", Georgia, serif; font-size: clamp(1.1rem, 2.4vw, 1.35rem);
+    line-height: 1.5; color: var(--ink-soft); max-width: 44ch; margin: 0 0 1.8rem;
+  }
+  .facts {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
+    gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+  }
+  .fact { background: var(--surface); padding: .8rem 1rem; }
+  .fact dt { font-family: "IBM Plex Mono", monospace; font-size: .66rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .28rem; }
+  .fact dd { margin: 0; font-size: .93rem; font-weight: 500; }
+
+  h2 {
+    font-weight: 700; font-size: clamp(1.3rem, 3.4vw, 1.7rem); letter-spacing: -0.015em;
+    text-wrap: balance; margin: 3.6rem 0 1.2rem; padding-top: 1.4rem; border-top: 1px solid var(--line);
+  }
+  .section-note { color: var(--ink-soft); max-width: 64ch; margin: -0.4rem 0 1.8rem; font-size: .96rem; }
+
+  /* program map */
+  .map { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0 0 .9rem; }
+  .map-step { flex: 1 1 145px; border: 1px solid var(--line); border-radius: 7px; padding: .55rem .7rem; background: var(--surface); font-size: .8rem; }
+  .map-step.here { border-color: var(--accent); background: var(--accent-bg); box-shadow: inset 0 0 0 1px var(--accent); }
+  .map-step .n { font-family: "IBM Plex Mono", monospace; font-size: .68rem; color: var(--ink-faint); }
+  .map-step .t { display: block; font-weight: 600; margin: .12rem 0 .3rem; line-height: 1.22; }
+  .map-step .r { font-family: "IBM Plex Mono", monospace; font-size: .64rem; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-faint); }
+  .map-legend { font-size: .8rem; color: var(--ink-soft); margin-top: .1rem; }
+
+  .phases { display: grid; gap: .35rem; margin: 1rem 0 0; font-size: .88rem; }
+  .phases .p { display: grid; grid-template-columns: 1.6rem 1fr; gap: .6rem; }
+  .phases .p b { font-family: "IBM Plex Mono", monospace; color: var(--accent-ink); font-weight: 500; }
+  .phases .p.done b { color: var(--pick); }
+
+  /* stages */
+  .stages { display: flex; flex-direction: column; gap: 1.3rem; }
+  .stage { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: clamp(1.15rem, 3vw, 1.8rem); }
+  .stage-head { display: flex; align-items: baseline; gap: .8rem; flex-wrap: wrap; }
+  .stage-num {
+    font-family: "IBM Plex Mono", monospace; font-weight: 500; font-size: .8rem; color: var(--accent);
+    border: 1px solid var(--line); border-radius: 5px; padding: .1rem .5rem; flex: none;
+  }
+  .stage h3 { font-weight: 700; font-size: clamp(1.12rem, 2.7vw, 1.35rem); letter-spacing: -0.012em; margin: 0; text-wrap: balance; }
+  .stage h3 .core { color: var(--accent); font-weight: 600; }
+  .stage-when { font-family: "IBM Plex Mono", monospace; font-size: .7rem; color: var(--ink-faint); margin-left: auto; flex: none; }
+
+  .context { color: var(--ink-soft); font-size: .96rem; max-width: 64ch; margin: .9rem 0 0; }
+  .frames { font-family: "IBM Plex Mono", monospace; font-size: .7rem; letter-spacing: .04em; color: var(--ink-faint); margin: .7rem 0 0; }
+  .frames span { white-space: nowrap; }
+
+  .define {
+    margin: 1rem 0 .2rem; border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0; padding: .75rem .95rem; background: var(--surface-2); font-size: .89rem;
+  }
+  .define > dt { font-family: "IBM Plex Mono", monospace; font-weight: 500; font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .5rem; }
+  .define .lvl { display: grid; grid-template-columns: max-content 1fr; gap: .3rem .8rem; }
+  .define .lvl b { font-family: "IBM Plex Mono", monospace; color: var(--accent-ink); font-weight: 500; }
+  .define .lvl .cur b, .define .lvl .cur span { color: var(--pick); }
+  .define .lvl .cur b::after { content: " ◂ chosen"; font-size: .82em; letter-spacing: .04em; }
+
+  /* exchange */
+  .exchange { margin: 1.2rem 0 .2rem; display: flex; flex-direction: column; gap: .95rem; }
+  .turn-label { font-family: "IBM Plex Mono", monospace; font-size: .64rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+  .pm {
+    font-family: "Newsreader", Georgia, serif; font-size: 1.06rem; line-height: 1.5; color: var(--ink);
+    padding-left: .95rem; border-left: 2px solid var(--accent);
+  }
+  .resp { font-size: .93rem; color: var(--ink-soft); padding-left: .95rem; max-width: 66ch; }
+  .resp::before { content: "→ "; color: var(--ink-faint); }
+
+  .ask { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+  .ask .q { padding: .65rem .9rem; font-weight: 600; font-size: .9rem; background: var(--surface-2); border-bottom: 1px solid var(--line); }
+  .ask .q .who { font-family: "IBM Plex Mono", monospace; font-size: .62rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); display: block; margin-bottom: .25rem; font-weight: 500; }
+  .ask .opts { padding: .6rem .9rem .3rem; display: flex; flex-wrap: wrap; gap: .35rem; }
+  .ask .opt { font-size: .78rem; padding: .1rem .5rem; border: 1px solid var(--line); border-radius: 4px; color: var(--ink-faint); }
+  .ask .opt.chosen { border-color: var(--pick-line); background: var(--pick-bg); color: var(--pick); font-weight: 600; }
+  .ask .verdict { padding: .5rem .9rem .6rem; font-size: .82rem; color: var(--ink-soft); }
+  .ask .verdict.rev { border-top: 1px dashed var(--line); margin-top: .3rem; padding-top: .55rem; }
+  .ask .verdict b { color: var(--pick); font-weight: 600; }
+  .ask .verdict .rvb { color: var(--accent-ink); }
+
+  .landed {
+    margin-top: 1.15rem; padding-top: .85rem; border-top: 1px solid var(--line-soft);
+    font-size: .93rem;
+  }
+  .landed b { font-family: "IBM Plex Mono", monospace; font-size: .64rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; display: block; margin-bottom: .2rem; }
+
+  .arch-note { margin-top: 1rem; padding: .7rem .9rem; border-radius: 7px; background: var(--arch-bg); font-size: .88rem; line-height: 1.5; }
+  .arch-note b { font-family: "IBM Plex Mono", monospace; font-size: .64rem; letter-spacing: .08em; text-transform: uppercase; color: var(--arch); display: block; margin-bottom: .2rem; }
+
+  .subgroup { font-family: "IBM Plex Mono", monospace; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); margin: 1rem 0 -.2rem; padding-left: .2rem; }
+
+  .next { display: grid; gap: .6rem; margin-top: 1rem; }
+  .next-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .6rem 1rem; align-items: baseline; padding: .7rem .9rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+  .next-row .risk { font-family: "IBM Plex Mono", monospace; font-size: .66rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); white-space: nowrap; }
+  .next-row span.d { display: block; font-size: .87rem; color: var(--ink-soft); margin-top: .12rem; }
+
+  footer {
+    margin-top: 3.6rem; padding-top: 1.5rem; border-top: 1px solid var(--line);
+    font-size: .82rem; color: var(--ink-faint); font-family: "IBM Plex Mono", monospace; line-height: 1.75;
+  }
+  .disclaim { font-size: .8rem; color: var(--ink-faint); font-style: italic; font-family: "Newsreader", Georgia, serif; margin: 2.2rem 0 0; max-width: 62ch; }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Build journey &nbsp;·&nbsp; Agentic Buildcamp, cohort 2608</p>
+    <h1>Reworking <span class="accent">H5P Smart Import</span></h1>
+    <p class="lede">A product manager rebuilds one AI feature&rsquo;s workflow &mdash; told through the questions asked, the answers given, and why each choice was made.</p>
+    <dl class="facts">
+      <div class="fact"><dt>The bet</dt><dd>Fix Smart Import&rsquo;s ~20% week-1&nbsp;&rarr;&nbsp;week-2 retention</dd></div>
+      <div class="fact"><dt>The lever</dt><dd>Cut time-to-value; make the first output trustworthy</dd></div>
+      <div class="fact"><dt>Shape</dt><dd>Working prototype + product / UX spec</dd></div>
+      <div class="fact"><dt>Cadence</dt><dd>Weekends only &nbsp;·&nbsp; Sprint&nbsp;2 demo Sep&nbsp;13</dd></div>
+      <div class="fact"><dt>Autonomy</dt><dd>L2 &mdash; AI drafts, PM reviews each pass</dd></div>
+      <div class="fact"><dt>Stack</dt><dd>Next.js &nbsp;·&nbsp; real H5P player &nbsp;·&nbsp; model-or-mock engine</dd></div>
+    </dl>
+  </header>
+
+  <h2>Where this sits in the program</h2>
+  <p class="section-note">
+    Agentic Buildcamp runs on <b>KnowledgeOps</b>: seven phases from problem framing to go-to-market,
+    each producing one concrete artifact that carries into the next. Day to day the work is organised into
+    <b>Blocks</b> &mdash; each grouped in a <b>Zone</b> (Build or Reach) and each carrying one <b>risk</b>
+    it exists to retire. Everything in this journey happens inside the first Block.
+  </p>
+
+  <div class="map">
+    <div class="map-step here"><span class="n">01</span><span class="t">Get Started Building</span><span class="r">risk · trajectory</span></div>
+    <div class="map-step"><span class="n">02</span><span class="t">Validate Your Idea With Real Users</span><span class="r">risk · value</span></div>
+    <div class="map-step"><span class="n">03</span><span class="t">Improve Your Build Form</span><span class="r">risk · engineering</span></div>
+    <div class="map-step"><span class="n">04</span><span class="t">Build Your Evaluation Dataset</span><span class="r">risk · trust</span></div>
+    <div class="map-step"><span class="n">05</span><span class="t">Positioning Workshop</span><span class="r">risk · trust</span></div>
+    <div class="map-step"><span class="n">06</span><span class="t">ICP Hypothesis Canvas</span><span class="r">risk · value</span></div>
+    <div class="map-step"><span class="n">07</span><span class="t">Formalize Delivery &amp; Backend</span><span class="r">risk · engineering</span></div>
+    <div class="map-step"><span class="n">08</span><span class="t">Optimize Context &amp; Memory</span><span class="r">risk · trust</span></div>
+    <div class="map-step"><span class="n">09</span><span class="t">Design the Experience Real Users Will Use</span><span class="r">risk · trust</span></div>
+    <div class="map-step"><span class="n">10</span><span class="t">Demo Your Agent to a Real Audience</span><span class="r">risk · distribution</span></div>
+  </div>
+  <p class="map-legend">Blocks 1&ndash;10 unlock as prerequisites are met; the order shown is the dashboard&rsquo;s.</p>
+
+  <div class="phases">
+    <div class="p done"><b>1</b><span><b>Ideation &amp; Problem Framing</b> &rarr; a problem worth solving. &nbsp;<i>&mdash; done (Orientation)</i></span></div>
+    <div class="p"><b>2</b><span>Evaluation Design &rarr; success metrics before building. &nbsp;<i>&mdash; pipe laid; block ahead</i></span></div>
+    <div class="p"><b>3</b><span>Architecture &amp; Context Management &rarr; a decision + information-flow spec.</span></div>
+    <div class="p"><b>4</b><span>UX &amp; Interaction Design &rarr; the human-system interaction patterns.</span></div>
+    <div class="p"><b>5</b><span>Implementation &rarr; build with guidance from the prior decisions.</span></div>
+    <div class="p"><b>6</b><span>Deployment &rarr; prototype to production, with a plan.</span></div>
+    <div class="p"><b>7</b><span>Go-to-Market &rarr; launch strategy and positioning.</span></div>
+  </div>
+
+  <h2>The journey so far</h2>
+  <p class="section-note">
+    Sherpa-B has one task at this point &mdash; <i>&ldquo;Build the first version of your app.&rdquo;</i>
+    The stages below are the participant&rsquo;s own decomposition of it. Each carries the exact decision
+    prompts and the reasoning behind them &mdash; the reversals included.
+  </p>
+
+  <div class="stages">
+
+    <!-- 00 -->
+    <article class="stage">
+      <div class="stage-head">
+        <span class="stage-num">00</span>
+        <h3>Orientation &mdash; set the target, not the vision</h3>
+        <span class="stage-when">weekend 1</span>
+      </div>
+      <p class="context">
+        KnowledgeOps Phase 1: define a problem worth solving. Orientation also fixes the
+        <b>autonomy level</b> &mdash; how much of each loop the AI runs vs. the human &mdash; as a
+        deliberate choice, not a default. The Block&rsquo;s risk is <i>trajectory</i>: am I pointed at
+        something real and buildable?
+      </p>
+      <dl class="define">
+        <dt>Autonomy ladder — how much the human is in the loop</dt>
+        <div class="lvl">
+          <b>L1</b><span>Assistant &mdash; the human directs each step; the AI does single, specified tasks.</span>
+          <div class="cur" style="display:contents"><b>L2</b><span>Collaborator &mdash; the AI drafts a whole pass (a plan, a design, an implementation); the human reviews and approves or redirects <i>each pass</i>.</span></div>
+          <b>L3</b><span>Agent &mdash; the AI takes an objective and runs multi-step work, checking in at milestones; the human reviews outcomes, not every step.</span>
+          <b>L4</b><span>Operator &mdash; the AI runs continuously; the human sets policy and audits.</span>
+        </div>
+      </dl>
+      <div class="exchange">
+        <div class="ask">
+          <div class="q"><span class="who">Claude asked · Orientation</span>Which autonomy level do you want to start at?</div>
+          <div class="opts"><span class="opt">L1 — Assistant</span><span class="opt chosen">L2 — Collaborator</span><span class="opt">L3 — Agent</span></div>
+          <div class="verdict"><b>Chose L2</b> &mdash; explicitly a starting point, to level up from as trust in the agent grows.</div>
+        </div>
+        <div class="ask">
+          <div class="q"><span class="who">Claude asked · Orientation</span>What milestone shape are you going for?</div>
+          <div class="opts"><span class="opt">A polished product twin first</span><span class="opt chosen">One feature end-to-end</span></div>
+          <div class="verdict"><b>Chose &ldquo;one feature end-to-end&rdquo;</b> &mdash; a single real H5P feature change, demoed as if live, building only the context that feature needs.</div>
+        </div>
+        <div>
+          <p class="turn-label">PM · orientation reflection, in their words</p>
+          <p class="pm">&ldquo;I started thinking in terms of &lsquo;build a digital twin of the product&rsquo; and narrowed it to &lsquo;produce one real H5P feature change and demo it as if live.&rsquo; Autonomy also became a conscious choice rather than a default &mdash; starting at L2, with the intent to level up as I learn what the agent can be trusted with.&rdquo;</p>
+        </div>
+      </div>
+      <p class="landed"><b>Where it landed</b> Project defined; autonomy L2; milestone = one feature, end-to-end. Cadence: weekends only.</p>
+    </article>
+
+    <!-- 01 -->
+    <article class="stage">
+      <div class="stage-head">
+        <span class="stage-num">01</span>
+        <h3>Reframe: from &ldquo;digital twin&rdquo; to a real feature</h3>
+        <span class="stage-when">weekend 1 &amp; 3</span>
+      </div>
+      <p class="context">
+        The original idea was an agent that builds a &ldquo;digital twin&rdquo; of any SaaS product so PMs
+        can prototype changes without engineering. That narrowed twice: first to H5P during orientation,
+        then &mdash; weeks in &mdash; to a single feature, with the twin idea dropped entirely.
+      </p>
+      <p class="frames"><span>KnowledgeOps · Phase 1</span> &nbsp;·&nbsp; <span>Block risk · trajectory</span></p>
+      <div class="exchange">
+        <div>
+          <p class="turn-label">PM · weeks in</p>
+          <p class="pm">&ldquo;Make this project about H5P Smart Import, and not the H5P Twin we were thinking about. Let&rsquo;s dedicate this to Smart Import. The initial walkthrough was just to make you understand the existing flow.&rdquo;</p>
+          <p class="resp">Spec, profile and prototype re-titled. Goal stated plainly: <b>reduce time-to-value, lift W1&rarr;W2 retention</b>. The prototype is re-framed as a means to test and demo the workflow &mdash; not a deliverable in itself.</p>
+        </div>
+        <div>
+          <p class="turn-label">Why the pivot mattered</p>
+          <p class="resp">&ldquo;Build a twin of any product&rdquo; is unfalsifiable and can&rsquo;t be demoed in three weekends. &ldquo;Fix Smart Import&rsquo;s ~20% retention&rdquo; is a testable bet with a number attached. A vision you can&rsquo;t demo by the sprint is the backdrop, not the milestone.</p>
+        </div>
+      </div>
+      <p class="landed"><b>Where it landed</b> Project = rework H5P Smart Import&rsquo;s educator workflow. North star = time-to-value and W1&rarr;W2 retention.</p>
+    </article>
+
+    <!-- 02 -->
+    <article class="stage">
+      <div class="stage-head">
+        <span class="stage-num">02</span>
+        <h3>Learn the existing product</h3>
+        <span class="stage-when">weekend 1</span>
+      </div>
+      <p class="context">
+        Not a KnowledgeOps phase &mdash; the PM&rsquo;s own reconnaissance. Establish what Smart Import
+        actually does today, step by step, and where it loses people, before proposing anything.
+      </p>
+      <div class="exchange">
+        <div class="ask">
+          <div class="q"><span class="who">Claude asked</span>How should I get access to Smart Import to learn it?</div>
+          <div class="opts"><span class="opt">You paste me the help docs</span><span class="opt chosen">I drive — browser automation on your logged-in session</span></div>
+          <div class="verdict"><b>Chose &ldquo;I drive&rdquo;</b> &mdash; Claude clicked through Smart Import in the PM&rsquo;s own browser session. No engineering access, no sandbox.</div>
+        </div>
+        <div>
+          <p class="turn-label">PM · during the run</p>
+          <p class="pm">&ldquo;Run it yourself &mdash; in upload, use paste text and paste some 500-word text on the topic there.&rdquo; &hellip; &ldquo;Have you now understood the workflow happy path?&rdquo; &ldquo;No, this was just to teach you about the workflow. Now suggest UX improvements on the workflow.&rdquo;</p>
+          <p class="resp">Mapped the real path: Configure &rarr; Select &rarr; Generate &rarr; each activity dumped into one folder &rarr; open every item in the full editor to fix it. Catalogued the friction at each step.</p>
+        </div>
+        <div>
+          <p class="turn-label">The read</p>
+          <p class="resp">The cliff isn&rsquo;t generation <i>quality</i> &mdash; it&rsquo;s <b>no preview before spend</b>, <b>N separate editors to clean up</b>, and a <b>flat folder dump</b>. That&rsquo;s a trust-and-cleanup-cost problem, not an activation one &mdash; and compounding features (memory, discoverability) can&rsquo;t fix an 80% drop, only serve the people who already came back.</p>
+        </div>
+      </div>
+      <div class="arch-note">
+        <b>Architect note</b>
+        To demo workflow changes credibly you have to reproduce the product&rsquo;s real I/O &mdash; a source
+        in, valid H5P <code>content.json</code> rendered in the actual player &mdash; not a mockup. That
+        one decision shaped the whole build.
+      </div>
+      <p class="landed"><b>Where it landed</b> A shared understanding of the current flow and its friction, written into the spec as the thing the rework has to beat.</p>
+    </article>
+
+    <p class="subgroup">Designing the four parts of the workflow</p>
+
+    <!-- 03 -->
+    <article class="stage">
+      <div class="stage-head">
+        <span class="stage-num">03</span>
+        <h3>Part 1 &mdash; Express intent</h3>
+        <span class="stage-when">weekend 1&ndash;2</span>
+      </div>
+      <p class="context">
+        How the educator says what they want, from what source. Today: one collapsed, optional
+        &ldquo;Customization&rdquo; box, usually skipped.
+      </p>
+      <div class="exchange">
+        <div>
+          <p class="turn-label">PM</p>
+          <p class="pm">&ldquo;Think of custom prompt &mdash; it could be a generic prompt, or a design brief (a guided form with questions on learning goal, audience, difficulty&hellip;), or predesigned prompt options they can click, or a button to make their typed prompt better based on prompt-engineering best practice.&rdquo;</p>
+          <p class="resp">Became: a <b>prompt XOR a guided brief</b> (mutually exclusive &mdash; a free prompt and structured fields can contradict, and it&rsquo;s ambiguous which wins), plus preset prompts, an &ldquo;improve&rdquo; action, and a save-and-reuse library.</p>
+        </div>
+        <div>
+          <p class="turn-label">PM · on the source read-back</p>
+          <p class="pm">&ldquo;Make it in a way that doesn&rsquo;t reduce TTV for creation of content. It should just tell authors the strengths and drawbacks of the source material, not discourage them from using it &mdash; that&rsquo;s their choice.&rdquo;</p>
+          <p class="resp">The read-back became strictly <b>advisory and non-blocking</b>: it describes the material, it never gates or nudges away from generating. It fills in behind the &ldquo;Choose activities&rdquo; button, which is live the moment a source exists.</p>
+        </div>
+        <div>
+          <p class="turn-label">PM · on &ldquo;improve this prompt&rdquo;</p>
+          <p class="pm">&ldquo;It adds a guideline to the user &mdash; I want it to <i>create</i> an improved prompt based on what the user typed, following better prompt-engineering guidelines from whatever info is in the rough prompt.&rdquo;</p>
+          <p class="resp">&ldquo;Improve&rdquo; became a rewrite of the user&rsquo;s text &mdash; imperative, specific &mdash; that only fills in audience / focus / count / difficulty <i>where the rough text already implies them</i>. It never invents intent.</p>
+        </div>
+        <div>
+          <p class="turn-label">PM · a question that closed a door</p>
+          <p class="pm">&ldquo;Do the learning objectives in the source read-back align well with the predesigned prompts, or should we allow one or the other, not both?&rdquo;</p>
+          <p class="resp">They&rsquo;re different things &mdash; objectives are content <i>targets</i> read off the source; a preset prompt is <i>framing</i>. Rather than risk them fighting, source-derived draft objectives were parked. Also rejected outright: &ldquo;suggest a full prompt from the source&rdquo; &mdash; the prompt exists to carry <i>intent</i> (audience, formative vs. summative, the sub-topic students struggle with), none of which is in the learning material.</p>
+        </div>
+      </div>
+      <p class="landed"><b>Where it landed</b> Prompt-or-brief authoring · presets · &ldquo;improve&rdquo; · a reusable template library · an advisory source read-back · verbatim question extraction. The blank box is the problem, not the freedom.</p>
+    </article>
+
+    <!-- 04 -->
+    <article class="stage">
+      <div class="stage-head">
+        <span class="stage-num">04</span>
+        <h3>Part 2 &mdash; Activity fit</h3>
+        <span class="stage-when">weekend 2</span>
+      </div>
+      <p class="context">
+        Which H5P activity types get generated, and how many. Today: a wall of blind checkboxes with no
+        fit-to-source signal, no counts, no coverage view.
+      </p>
+      <div class="exchange">
+        <div>
+          <p class="turn-label">PM</p>
+          <p class="pm">&ldquo;Recommended activities are pre-checked from your source and intent. Is there a rule or logic here &mdash; how do you determine? Think more about what the right way of recommending content is, and how inputs like source material and prompt impact it.&rdquo;</p>
+          <p class="resp">Two inputs doing <b>two different jobs</b>. The <i>source</i> answers &ldquo;can a good activity of this type even be built from this raw material?&rdquo; &mdash; feasibility, which requires reading the text, so it&rsquo;s an LLM call folded into the read-back. The <i>intent</i> answers &ldquo;which feasible types serve the teacher&rsquo;s goal?&rdquo; &mdash; desirability, which is pure rules and re-ranks instantly when emphasis or volume changes. Source is never overridden by an intent that wants something infeasible.</p>
+        </div>
+        <div>
+          <p class="turn-label">PM</p>
+          <p class="pm">&ldquo;How will you decide the number of activities, and what if the user mentions a specific number in the prompt?&rdquo;</p>
+          <p class="resp">Default 2 (one recall + one understanding); 1 for a short or single-topic source; 3 only when the source is long <i>and</i> multi-section <i>and</i> the intent signals breadth. If the prompt names a number, that wins &mdash; but it&rsquo;s still bounded by what the source supports: ask for 10, get 7 good ones, and say so at the gate. Never silently pad, never silently ignore.</p>
+        </div>
+        <div>
+          <p class="turn-label">PM · scoping the output</p>
+          <p class="pm">&ldquo;Make sure this logic results in just recommended content types. The rule engine should be documented in the spec, and we will refine it over time.&rdquo;</p>
+          <p class="resp">The engine&rsquo;s only output is the pre-checked set + a count + a one-line reason per type. It doesn&rsquo;t generate, gate, or pick destinations. Every threshold is written down as a <i>dial</i> &mdash; v1 to be tuned from usage.</p>
+        </div>
+      </div>
+      <p class="landed"><b>Where it landed</b> A recommendation engine v1: feasibility gate (LLM, from source) + desirability rank (rules, from intent) + count logic + item counts + reasons, all overridable.</p>
+    </article>
+
+    <!-- 05 -->
+    <article class="stage">
+      <div class="stage-head">
+        <span class="stage-num">05</span>
+        <h3>Part 3 &mdash; Review &amp; refine <span class="core">(the core)</span></h3>
+        <span class="stage-when">weekend 2</span>
+      </div>
+      <p class="context">
+        Seeing what the AI produced and deciding whether to trust it &mdash; today a black-box wait, then
+        N content items and the full editor. This is the stage that retires the <i>trust</i> risk and is
+        the retention fix.
+      </p>
+      <div class="exchange">
+        <div>
+          <p class="turn-label">PM · after seeing the first review UI</p>
+          <p class="pm">&ldquo;The 3 options are regenerate, edit, approve. In complex types like a quiz, I&rsquo;m not sure we should allow it at sub-content level. It wasn&rsquo;t possible to navigate the content within a single quiz without answering it &mdash; that seemed odd. And the truth signal was the same for all questions in the quiz?&rdquo;</p>
+          <p class="resp">Three fixes: a <b>Review view</b> that lays every question out to scan without answering; <b>per-question</b> trust signals (the source sentence, an answer-key note, a confidence level &mdash; not one signal for the whole activity); and a clear split &mdash; item level is edit-text-only, AI refinement is activity level (regenerating one question in isolation breaks coherence with the rest).</p>
+        </div>
+        <div>
+          <p class="turn-label">PM · reframing the job</p>
+          <p class="pm">&ldquo;Think about the approve / discard / edit workflow better &mdash; what will an educator want to do here as a job if they&rsquo;re not happy with the content? Even for discard, we must find out why, just like for regenerate.&rdquo; &nbsp;&hellip;&nbsp; &ldquo;Make it simple for MVP.&rdquo;</p>
+          <p class="resp">Landed on three bounded actions, each logged: <b>Refine</b> (same type, one steer from a closed list) · <b>Remix</b> (rebuild as a different type, keeping the concepts) · <b>Discard</b> (with a reason). Approve is the <i>default</i>, not a click. A soft cap of 3 refines, then the tool points at Remix or Discard &mdash; because by then the source&times;type pairing is the likely problem.</p>
+        </div>
+        <div>
+          <p class="turn-label">PM · &ldquo;what about language / tone / difficulty?&rdquo;</p>
+          <p class="pm">&ldquo;What about refinement like &mdash; make this content in this language, adjust tone, change difficulty?&rdquo;</p>
+          <p class="resp">Those <i>are</i> the Refine steers &mdash; not a separate mechanism. One vocabulary of bounded steers, used the same way here and in any later post-creation refinement.</p>
+        </div>
+        <div class="ask">
+          <div class="q"><span class="who">Claude asked</span>What should &ldquo;Remix&rdquo; do at the review stage?</div>
+          <div class="opts"><span class="opt chosen">Change activity type — reuse the concepts, rebuild in a new format</span><span class="opt">Alternative take — branch, keep both</span><span class="opt">Recombine items across activities</span></div>
+          <div class="verdict"><b>Chose &ldquo;change activity type&rdquo;</b> &mdash; the positive path for &ldquo;wrong format&rdquo;, replacing a discard-and-re-pick detour.</div>
+        </div>
+        <div>
+          <p class="turn-label">PM · the CPO&rsquo;s challenge</p>
+          <p class="pm">&ldquo;The CPO says evals aren&rsquo;t important &mdash; the quality of content produced from source is good enough, in his eyes.&rdquo;</p>
+          <p class="resp">The approval gate exists anyway; make it a measurement stream. Every Refine / Remix / Discard / edit writes a <code>review_event</code> with full context, and the whole import is persisted as an <code>ImportRecord</code>. &ldquo;Quality is good enough&rdquo; then becomes a number &mdash; <b>approve-without-edit rate</b> &mdash; not an opinion.</p>
+        </div>
+      </div>
+      <div class="arch-note">
+        <b>Architect note</b>
+        A &ldquo;chat agent inside each activity&rdquo; for later editing sounds like a new system. It&rsquo;s the
+        same regenerate engine and the same steer library behind a different shell. Naming that boundary
+        stopped a small feature from turning into a big one.
+      </div>
+      <p class="landed"><b>Where it landed</b> A Review &amp; Approve step behind a &ldquo;Create N&rdquo; gate · live H5P preview per item · per-question trust signals · bounded Refine / Remix / Discard · approve-by-default · a labelled <code>review_event</code> stream.</p>
+    </article>
+
+    <!-- 06 -->
+    <article class="stage">
+      <div class="stage-head">
+        <span class="stage-num">06</span>
+        <h3>Part 4 &mdash; Find &amp; reuse it later</h3>
+        <span class="stage-when">weekend 2&ndash;3</span>
+      </div>
+      <p class="context">
+        Where the created content lives and how it&rsquo;s traced back. Today: a flat dump into a
+        &ldquo;Smart Import&rdquo; folder, with a title prefix as the only clue to which import made what.
+      </p>
+      <div class="exchange">
+        <div>
+          <p class="turn-label">PM · raising the fourth part</p>
+          <p class="pm">&ldquo;Add a fourth stage about discoverability. The content, once created, goes into one folder called &lsquo;smart imports&rsquo;, and there&rsquo;s no easy way to figure out which content was created from a given Smart Import session.&rdquo; &nbsp;&hellip;&nbsp; &ldquo;There&rsquo;s one Smart Import with all content across all imports. Do we need both those views, or can it be merged?&rdquo;</p>
+          <p class="resp">The import is an <i>event</i> &mdash; an immutable receipt (source, intent, decisions). The content items are <i>living objects</i> that belong in the library. Keep two indexes &mdash; &ldquo;what did I import?&rdquo; and &ldquo;what content do I have?&rdquo; &mdash; joined by a two-way link, not a folder. Merge the <i>folders</i> (both of them), not the <i>views</i>. Don&rsquo;t file the goods in a drawer named after the receipt.</p>
+        </div>
+        <div>
+          <p class="turn-label">PM</p>
+          <p class="pm">&ldquo;How do we store info related to an import though &mdash; the occasional lookup?&rdquo;</p>
+          <p class="resp">A persisted <code>ImportRecord</code>: source snapshot, intent, engine/model, outcome counts, the per-item decision trail, and the kept items. Reached from any content item&rsquo;s <code>from:</code> tag; survives a reload and &ldquo;start another import&rdquo;.</p>
+        </div>
+        <div class="ask">
+          <div class="q"><span class="who">Claude asked</span>How should a new import be named by default?</div>
+          <div class="opts"><span class="opt">Timestamp, editable</span><span class="opt">Sequence + timestamp</span><span class="opt">Timestamp only, fixed</span></div>
+          <div class="verdict"><b>Chose &ldquo;timestamp, editable&rdquo;</b> &mdash; identity shouldn&rsquo;t be tied to what the import happened to be about.</div>
+          <div class="verdict rev"><span class="rvb">Reversed a turn later:</span> &ldquo;I disagree on naming, keep it same as the topic.&rdquo; &mdash; topic + date it stayed. A small reminder that the person testing it has the last word on what feels right.</div>
+        </div>
+        <div class="ask">
+          <div class="q"><span class="who">Claude asked</span>How much of the lookup surface to build now?</div>
+          <div class="opts"><span class="opt">Record + a browsable Smart Imports list</span><span class="opt chosen">Record + details only</span></div>
+          <div class="verdict"><b>Chose &ldquo;record + details only&rdquo;</b> &mdash; persist the receipt, reach it from the <code>from:</code> tag; the standalone list is a later phase.</div>
+        </div>
+      </div>
+      <p class="landed"><b>Where it landed</b> Content lands in the library (no dedicated folder) · a <code>from:</code> provenance tag + filter · a persisted <code>ImportRecord</code> receipt. Naming: topic + date.</p>
+    </article>
+
+    <p class="subgroup">Building &amp; instrumenting the prototype</p>
+
+    <!-- 07 -->
+    <article class="stage">
+      <div class="stage-head">
+        <span class="stage-num">07</span>
+        <h3>Build the prototype</h3>
+        <span class="stage-when">weekend 1&ndash;2</span>
+      </div>
+      <p class="context">
+        A first working version &mdash; enough to run the reworked flow on a real source and see real
+        output. Mostly execution rather than decision points; the calls that mattered were architectural.
+      </p>
+      <p class="frames"><span>Block risk · engineering</span> &nbsp;·&nbsp; <span>KnowledgeOps · Phase 5 (early)</span></p>
+      <dl class="define">
+        <dt>The three calls that shaped the build</dt>
+        <div class="lvl">
+          <b>Real player</b><span>Render generated <code>content.json</code> in the actual H5P standalone player, with libraries pulled from H5P&rsquo;s content-type hub &mdash; so the demo survives &ldquo;would you actually use this?&rdquo;</span>
+          <b>Model-or-mock</b><span>Use an LLM when an API key is present; a deterministic mock otherwise. The workflow is the product; the model is a swappable dependency.</span>
+          <b>Per-type calls</b><span>One LLM call <i>per content type</i>, each with a format-only structure reference (a real example <code>content.json</code>, no topic content). A single combined call had been returning the wrong type for some activities.</span>
+        </div>
+      </dl>
+      <p class="landed"><b>Where it landed</b> A Next.js app: generate-from-source engine, the 13-activity catalogue, the wizard flow, and real H5P rendering. Content grounded strictly in the provided source.</p>
+    </article>
+
+    <!-- 08 -->
+    <article class="stage">
+      <div class="stage-head">
+        <span class="stage-num">08</span>
+        <h3>Instrument it &mdash; the eval stream &amp; measurement</h3>
+        <span class="stage-when">weekend 3</span>
+      </div>
+      <p class="context">
+        The Block that retires the <i>trust</i> risk (Phase 2: Evaluation Design) asks for an evaluation
+        dataset. This stage lays the pipe while building the feature.
+      </p>
+      <div class="exchange">
+        <div>
+          <p class="turn-label">PM</p>
+          <p class="pm">&ldquo;How do we measure adoption, usage and retention now? How do we measure time-to-value and the success of this workflow?&rdquo;</p>
+          <p class="resp">A funnel with one event per stage: <code>import_started</code> &rarr; <code>generate_completed</code> &rarr; <code>item_previewed</code> &rarr; <code>create_completed</code> &rarr; returned-within-7-days. <b>Activation</b> = starts that create &ge; 1. TTV measured <i>two</i> ways: in-flow (start &rarr; create), and time-to-usable (start &rarr; published, plus edit-minutes in the following week) &mdash; because the rework should win on the second even if the review step costs a little on the first. Tag every event with the workflow variant + an anonymous session id so the two UI shapes can be compared as an A/B.</p>
+        </div>
+        <div>
+          <p class="turn-label">The insight</p>
+          <p class="resp">The telemetry the product roadmap needs and the telemetry the demo needs are the <i>same stream</i> &mdash; collected for free at the approval gate.</p>
+        </div>
+      </div>
+      <p class="landed"><b>Where it landed</b> A <code>review_event</code> log, an <code>ImportRecord</code> with a per-item decision trail, and a measurement section in the spec: funnel, two TTV definitions, A/B by variant.</p>
+    </article>
+
+    <!-- 09 -->
+    <article class="stage">
+      <div class="stage-head">
+        <span class="stage-num">09</span>
+        <h3>Two workflow shapes to demo (A / B)</h3>
+        <span class="stage-when">weekend 3</span>
+      </div>
+      <p class="context">
+        Refinement in the review step and refinement <i>after</i> content exists are the same job. That
+        raised a bigger question: is the whole step-by-step wizard even the right shape?
+      </p>
+      <div class="exchange">
+        <div>
+          <p class="turn-label">PM · the thread that opened it</p>
+          <p class="pm">&ldquo;Can&rsquo;t we have a chat interface in the review step as well? The only difference in the review stage would be a card for each content created; when someone edits one content later, it&rsquo;s just one content.&rdquo; &nbsp;&hellip;&nbsp; &ldquo;Or think of this being a full-page modal so we have more space.&rdquo;</p>
+          <p class="resp">Align the <i>primitives</i> &mdash; one shared vocabulary of bounded steers and one event schema for both surfaces &mdash; but don&rsquo;t force one layout. The content preview is what needs room; a chat sidebar wants ~350px; the activity cards ~260px. That doesn&rsquo;t fit the current centred card.</p>
+        </div>
+        <div>
+          <p class="turn-label">PM · clarifying (after a question that missed)</p>
+          <p class="pm">&ldquo;Not side by side &mdash; they&rsquo;re two different ways. One is the current step 1&ndash;3 modal; I want to preserve it and demo it. Another is a 3-panel structure on a full-screen overlay.&rdquo; &nbsp;&hellip;&nbsp; &ldquo;Option 1, but with the 2nd and 3rd panels collapsed &mdash; they&rsquo;re not needed in steps 1 and 2.&rdquo; &nbsp;&hellip;&nbsp; &ldquo;If I start with variant A, I&rsquo;m OK finishing the whole process on it &mdash; don&rsquo;t need to switch to B midway.&rdquo;</p>
+          <p class="resp">Variant B: a full-screen overlay. Panel 1 (setup) is always there; panels 2 (output) and 3 (a chip-based refinement chat) stay collapsed until content exists. An A/B toggle in the app; both variants share all state underneath so the comparison stays honest. Skeleton first &mdash; layout and flow working, polish per panel afterward.</p>
+        </div>
+        <div class="ask">
+          <div class="q"><span class="who">Claude asked</span>Does Variant B change only the review step, or more of the flow?</div>
+          <div class="opts"><span class="opt">Review step only</span><span class="opt chosen">Whole flow reimagined</span></div>
+          <div class="verdict"><b>Chose &ldquo;whole flow&rdquo;</b> &mdash; setup, output and refine on one canvas instead of three screens.</div>
+        </div>
+        <div class="ask">
+          <div class="q"><span class="who">Claude asked</span>The refinement chat composer &mdash; chips only, or chips plus a free-text box?</div>
+          <div class="opts"><span class="opt chosen">Chips only</span><span class="opt">Chips + free text</span></div>
+          <div class="verdict"><b>Chose &ldquo;chips only&rdquo;</b> &mdash; truest to &ldquo;specific ways of refinement, not loose chat.&rdquo;</div>
+        </div>
+      </div>
+      <p class="landed"><b>Where it landed</b> An A/B toggle. A = the step-by-step wizard (preserved). B = a full-screen 3-panel workspace &mdash; setup, output, chip-based refinement chat &mdash; panels revealing as the flow progresses.</p>
+    </article>
+
+  </div>
+
+  <h2>What&rsquo;s next</h2>
+  <p class="section-note">The upcoming Blocks, and the risk each is there to retire against this project.</p>
+  <div class="next">
+    <div class="next-row"><div><strong>Sprint 1 demo &rarr; capture feedback</strong><span class="d">Show the first build; turn reactions into concrete plan changes.</span></div><span class="risk">trajectory</span></div>
+    <div class="next-row"><div><strong>Validate the idea with real users</strong><span class="d">Interview educators &mdash; does the approval gate actually change whether they&rsquo;d trust and reuse the output?</span></div><span class="risk">value</span></div>
+    <div class="next-row"><div><strong>Build the evaluation dataset</strong><span class="d">Turn the <code>review_event</code> stream into labelled test cases; iterate the generation prompts against them.</span></div><span class="risk">trust</span></div>
+    <div class="next-row"><div><strong>Positioning &amp; ICP</strong><span class="d">Who is this for first &mdash; individual educators, instructional designers, or the H5P.com team as an internal case?</span></div><span class="risk">value</span></div>
+    <div class="next-row"><div><strong>Formalize delivery &amp; the experience</strong><span class="d">Decide which workflow shape ships, harden the backend, design the real user-facing experience.</span></div><span class="risk">engineering</span></div>
+    <div class="next-row"><div><strong>Demo to a real audience</strong><span class="d">Sprint 2 (Sep 13) and the final demo (Sep 18): the reworked flow on a source chosen live.</span></div><span class="risk">distribution</span></div>
+  </div>
+
+  <p class="disclaim">
+    Decision prompts and quotes are drawn from the working sessions. Exchanges from before a context
+    reset are reconstructed from the session summary and the participant&rsquo;s own reflection; those
+    within the working window are verbatim. Claude&rsquo;s side is curated to the reasoning, not
+    transcribed in full.
+  </p>
+
+  <footer>
+    H5P Smart Import &mdash; reworked educator workflow &nbsp;·&nbsp; Agentic Buildcamp cohort 2608<br>
+    Companion docs: <code>specs/smart-import-ux.md</code> (full UX + roadmap + measurement) &nbsp;·&nbsp; <code>specs/mvi_spec.md</code> (Sprint&nbsp;2 scope)<br>
+    Build-process record &mdash; last updated 2026-08-31.
+  </footer>
+
+</div>

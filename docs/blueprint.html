@@ -1,0 +1,478 @@
+<title>Reworked Smart Import</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --paper:      #f4f5f7;
+    --surface:    #ffffff;
+    --surface-2:  #fafbfc;
+    --ink:        #1a1d24;
+    --ink-soft:   #545a68;
+    --ink-faint:  #8a8f9c;
+    --line:       #e0e3e9;
+    --line-soft:  #ececf0;
+
+    --accent:     #274a7c;
+    --accent-ink: #1d3a63;
+    --accent-bg:  #e8eff7;
+
+    --today:      #9a4736;
+    --today-bg:   #f6ebe8;
+    --today-line: #e6cdc6;
+
+    --new:        #1c6353;
+    --new-bg:     #e0efe9;
+    --new-line:   #b4dacd;
+
+    --p1: #274a7c;  --p1-bg: #e8eff7;
+    --p2: #1c6353;  --p2-bg: #e0efe9;
+    --p3: #6a4a86;  --p3-bg: #ede7f3;
+
+    --pri0-bg: #1a1d24;  --pri0-fg: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #111218;
+      --surface:    #1a1c24;
+      --surface-2:  #1f222b;
+      --ink:        #e7e9ef;
+      --ink-soft:   #a2a8b6;
+      --ink-faint:  #797f8e;
+      --line:       #2c303a;
+      --line-soft:  #23262f;
+
+      --accent:     #86aede;
+      --accent-ink: #a9c6ec;
+      --accent-bg:  #1a2536;
+
+      --today:      #e0917f;
+      --today-bg:   #2c1c17;
+      --today-line: #4a2f27;
+
+      --new:        #7ecbb6;
+      --new-bg:     #12271f;
+      --new-line:   #274c40;
+
+      --p1: #86aede;  --p1-bg: #1a2536;
+      --p2: #7ecbb6;  --p2-bg: #12271f;
+      --p3: #c3a7dd;  --p3-bg: #241a2f;
+
+      --pri0-bg: #e7e9ef;  --pri0-fg: #111218;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#111218; --surface:#1a1c24; --surface-2:#1f222b;
+    --ink:#e7e9ef; --ink-soft:#a2a8b6; --ink-faint:#797f8e;
+    --line:#2c303a; --line-soft:#23262f;
+    --accent:#86aede; --accent-ink:#a9c6ec; --accent-bg:#1a2536;
+    --today:#e0917f; --today-bg:#2c1c17; --today-line:#4a2f27;
+    --new:#7ecbb6; --new-bg:#12271f; --new-line:#274c40;
+    --p1:#86aede; --p1-bg:#1a2536; --p2:#7ecbb6; --p2-bg:#12271f; --p3:#c3a7dd; --p3-bg:#241a2f;
+    --pri0-bg:#e7e9ef; --pri0-fg:#111218;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: clamp(1.4rem, 4vw, 3.5rem) clamp(1rem, 4vw, 2.4rem) 6rem; }
+  a { color: var(--accent-ink); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+  code { font-family: "IBM Plex Mono", monospace; font-size: .85em; background: var(--surface-2); border: 1px solid var(--line-soft); padding: .05em .32em; border-radius: 3px; }
+
+  .eyebrow { font-family: "IBM Plex Mono", monospace; font-size: .7rem; letter-spacing: .15em; text-transform: uppercase; color: var(--ink-faint); }
+  h1 { font-weight: 700; font-size: clamp(1.9rem, 5vw, 2.9rem); letter-spacing: -0.02em; line-height: 1.05; margin: .5rem 0 .4rem; text-wrap: balance; }
+  h1 .a { color: var(--accent); }
+  .sub { color: var(--ink-soft); max-width: 56ch; margin: 0; font-size: 1.02rem; }
+
+  h2 { font-weight: 700; font-size: clamp(1.25rem, 3vw, 1.6rem); letter-spacing: -0.015em; margin: 3.6rem 0 .4rem; }
+  h2 .n { font-family: "IBM Plex Mono", monospace; font-size: .8rem; color: var(--accent); border: 1px solid var(--line); border-radius: 5px; padding: .1rem .45rem; margin-right: .6rem; vertical-align: .12em; }
+  .lead { color: var(--ink-soft); max-width: 66ch; margin: .5rem 0 1.6rem; font-size: .95rem; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 1rem; font-size: .78rem; color: var(--ink-soft); margin: -0.8rem 0 1.6rem; }
+  .swatch { display: inline-block; width: .8rem; height: .8rem; border-radius: 3px; margin-right: .35rem; vertical-align: -1px; border: 1px solid rgba(0,0,0,.08); }
+  .sw-today { background: var(--today-bg); border-color: var(--today-line); }
+  .sw-new { background: var(--new-bg); border-color: var(--new-line); }
+
+  /* ---------- 1 · four parts ---------- */
+  .parts { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { .parts { grid-template-columns: repeat(4, 1fr); } }
+  .part {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    padding: 1.1rem 1.05rem 1.2rem; display: flex; flex-direction: column;
+    position: relative;
+  }
+  .part-step {
+    font-family: "IBM Plex Mono", monospace; font-size: .68rem; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--accent); font-weight: 600;
+  }
+  .part h3 { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; margin: .2rem 0 .15rem; text-wrap: balance; }
+  .part .what { font-size: .84rem; color: var(--ink-soft); margin: 0 0 .9rem; }
+  .part.core { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .part.core h3::after { content: " · the core"; color: var(--accent); font-weight: 600; font-size: .78rem; }
+
+  .col-label { font-family: "IBM Plex Mono", monospace; font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; margin: .2rem 0 .35rem; }
+  .col-today { color: var(--today); }
+  .col-new { color: var(--new); }
+  .part ul { list-style: none; margin: 0 0 .7rem; padding: 0; display: flex; flex-direction: column; gap: .3rem; }
+  .part li { font-size: .8rem; line-height: 1.4; padding-left: .9rem; position: relative; }
+  .part li::before { position: absolute; left: 0; top: .04em; }
+  .part .today li::before { content: "\2212"; color: var(--today); }
+  .part .new li::before { content: "+"; color: var(--new); font-weight: 600; }
+  .part .new li { color: var(--ink); }
+  .part .today li { color: var(--ink-soft); }
+  .tag { font-family: "IBM Plex Mono", monospace; font-size: .62rem; color: var(--ink-faint); }
+
+  .flow-line { display: none; }
+  @media (min-width: 900px) {
+    .parts { position: relative; }
+    .part:not(:last-child)::after {
+      content: "\2192"; position: absolute; right: -0.78rem; top: 1.15rem;
+      color: var(--ink-faint); font-size: 1rem; z-index: 2;
+    }
+  }
+
+  /* ---------- 2 · OST ---------- */
+  .ost-outcome {
+    background: var(--accent); color: #fff; border-radius: 10px;
+    padding: .9rem 1.2rem; font-weight: 600; font-size: 1.02rem; text-align: center;
+    max-width: 640px; margin: 0 auto 0;
+  }
+  .ost-outcome .k { display: block; font-family: "IBM Plex Mono", monospace; font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; opacity: .8; font-weight: 500; margin-bottom: .15rem; }
+  .ost-stem { width: 2px; height: 1.4rem; background: var(--line); margin: 0 auto; }
+  .ost-cols { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+  @media (min-width: 860px) { .ost-cols { grid-template-columns: repeat(4, 1fr); } }
+  .ost-col { display: flex; flex-direction: column; gap: .55rem; }
+  .ost-opp {
+    background: var(--today-bg); border: 1px solid var(--today-line); border-radius: 9px;
+    padding: .7rem .8rem; font-size: .83rem; line-height: 1.35;
+  }
+  .ost-opp b { display: block; font-family: "IBM Plex Mono", monospace; font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; color: var(--today); margin-bottom: .25rem; }
+  .ost-sol {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: .55rem .7rem; font-size: .82rem; line-height: 1.35;
+    display: flex; flex-direction: column; gap: .3rem;
+  }
+  .ost-sol .p { align-self: flex-start; }
+
+  .pill {
+    font-family: "IBM Plex Mono", monospace; font-size: .6rem; font-weight: 600;
+    letter-spacing: .06em; text-transform: uppercase; padding: .12rem .42rem; border-radius: 4px;
+    white-space: nowrap;
+  }
+  .p-1 { background: var(--p1-bg); color: var(--p1); }
+  .p-2 { background: var(--p2-bg); color: var(--p2); }
+  .p-3 { background: var(--p3-bg); color: var(--p3); }
+  .p-done { background: var(--new-bg); color: var(--new); }
+
+  /* ---------- 3 · roadmap ---------- */
+  .phase { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-bottom: 1.1rem; background: var(--surface); }
+  .phase-head { padding: .85rem 1.1rem; display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem 1rem; border-bottom: 1px solid var(--line); }
+  .phase-head .ph { font-family: "IBM Plex Mono", monospace; font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
+  .phase-1 .phase-head { background: var(--p1-bg); } .phase-1 .phase-head .ph { color: var(--p1); }
+  .phase-2 .phase-head { background: var(--p2-bg); } .phase-2 .phase-head .ph { color: var(--p2); }
+  .phase-3 .phase-head { background: var(--p3-bg); } .phase-3 .phase-head .ph { color: var(--p3); }
+  .phase-head h3 { font-size: 1rem; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  .phase-gate { margin-left: auto; font-size: .78rem; color: var(--ink-soft); }
+  .phase-gate b { color: var(--ink); font-family: "IBM Plex Mono", monospace; font-size: .8rem; }
+
+  .items { display: flex; flex-direction: column; }
+  .item {
+    display: grid; grid-template-columns: 2.2rem auto 1fr; gap: .7rem 1rem; align-items: start;
+    padding: .7rem 1.1rem; border-top: 1px solid var(--line-soft); font-size: .88rem;
+  }
+  .item:first-child { border-top: none; }
+  .item .seq { font-family: "IBM Plex Mono", monospace; font-size: .8rem; color: var(--ink-faint); font-variant-numeric: tabular-nums; padding-top: .05rem; }
+  .item .body strong { font-weight: 600; }
+  .item .body .m { display: block; font-size: .8rem; color: var(--ink-soft); margin-top: .12rem; }
+  .item .pris { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; padding-top: .05rem; }
+  .pri0 { background: var(--pri0-bg); color: var(--pri0-fg); }
+  .pri1 { border: 1px solid var(--ink-soft); color: var(--ink-soft); }
+  .pri2 { border: 1px dashed var(--ink-faint); color: var(--ink-faint); }
+  @media (max-width: 620px) {
+    .item { grid-template-columns: 2rem 1fr; }
+    .item .pris { grid-column: 2; }
+  }
+
+  footer { margin-top: 3.4rem; padding-top: 1.4rem; border-top: 1px solid var(--line); font-family: "IBM Plex Mono", monospace; font-size: .78rem; color: var(--ink-faint); line-height: 1.7; }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Product / UX blueprint &nbsp;·&nbsp; companion to <code>specs/smart-import-ux.md</code></p>
+    <h1>Reworked <span class="a">H5P Smart Import</span></h1>
+    <p class="sub">The educator workflow in four parts, the opportunity tree behind it, and the roadmap &mdash; all pointed at one outcome: <b>cut time-to-value, lift week-1&nbsp;&rarr;&nbsp;week-2 retention</b> from ~20%.</p>
+  </header>
+
+  <h2><span class="n">1</span>The workflow, in four parts</h2>
+  <p class="lead">Each part is a thing the educator does. Below each: what breaks today in the shipped product, and what the rework adds.</p>
+  <div class="legend">
+    <span><span class="swatch sw-today"></span>&minus; &nbsp;problem today</span>
+    <span><span class="swatch sw-new"></span>+ &nbsp;new in the rework</span>
+    <span class="tag">Ph2 / Ph3 = lands in a later roadmap phase</span>
+  </div>
+
+  <div class="parts">
+    <div class="part">
+      <span class="part-step">Part 1</span>
+      <h3>Express intent</h3>
+      <p class="what">What do I want, from what source?</p>
+      <p class="col-label col-today">Today</p>
+      <ul class="today">
+        <li>One optional, collapsed box &mdash; blank-page problem</li>
+        <li>No guidance on a good prompt</li>
+        <li>Re-typed every import</li>
+        <li>Source goes in as a black box</li>
+        <li>Always generates new questions</li>
+      </ul>
+      <p class="col-label col-new">Reworked</p>
+      <ul class="new">
+        <li>Prompt <b>or</b> guided brief (mutually exclusive)</li>
+        <li>Preset prompts + &ldquo;improve this prompt&rdquo;</li>
+        <li>Save-and-reuse prompt / brief library</li>
+        <li>Automatic source read-back &mdash; advisory, non-blocking</li>
+        <li>Verbatim question extraction</li>
+        <li><code>.pptx</code> as a first-class source <span class="tag">Ph2</span></li>
+      </ul>
+    </div>
+
+    <div class="part">
+      <span class="part-step">Part 2</span>
+      <h3>Choose what gets made</h3>
+      <p class="what">Activity fit &mdash; which types, how many.</p>
+      <p class="col-label col-today">Today</p>
+      <ul class="today">
+        <li>Blind checkboxes, no fit-to-source signal</li>
+        <li>No item counts, no per-activity config</li>
+        <li>Easy to over-select &rarr; overlapping activities</li>
+        <li>No coverage view</li>
+      </ul>
+      <p class="col-label col-new">Reworked</p>
+      <ul class="new">
+        <li>Recommendation engine: feasibility (source) + desirability (intent) + count logic</li>
+        <li>Pre-checked set with item counts + a one-line reason</li>
+        <li>Per-activity mini-controls (count, difficulty)</li>
+        <li>Explicit prompt instructions override the engine</li>
+        <li>Coverage grid: objectives &times; activities <span class="tag">planned</span></li>
+      </ul>
+    </div>
+
+    <div class="part core">
+      <span class="part-step">Part 3</span>
+      <h3>Review &amp; refine</h3>
+      <p class="what">Trust it, or fix it &mdash; before spend.</p>
+      <p class="col-label col-today">Today</p>
+      <ul class="today">
+        <li>Credits spent, <b>no preview</b> &mdash; black-box wait</li>
+        <li>N separate items; the full editor to fix each</li>
+        <li>No way to tell if a question is correct</li>
+        <li>No targeted regeneration, no natural-language edit</li>
+        <li>No feedback loop</li>
+      </ul>
+      <p class="col-label col-new">Reworked</p>
+      <ul class="new">
+        <li>Review &amp; Approve step + a &ldquo;Create N&rdquo; gate</li>
+        <li>Live H5P preview per item (Review + Play)</li>
+        <li>Per-<i>question</i> trust signals: source span, key note, confidence</li>
+        <li>Bounded <b>Refine</b> / <b>Remix</b> / <b>Discard</b>; approve-by-default</li>
+        <li>Inline text edit; refine soft-cap of 3</li>
+        <li><code>review_event</code> + <code>ImportRecord</code> eval stream</li>
+        <li>Two UI shapes to demo: wizard &amp; 3-panel workspace</li>
+      </ul>
+    </div>
+
+    <div class="part">
+      <span class="part-step">Part 4</span>
+      <h3>Find &amp; reuse it later</h3>
+      <p class="what">Where content lives; how it&rsquo;s traced back.</p>
+      <p class="col-label col-today">Today</p>
+      <ul class="today">
+        <li>Flat dump into a &ldquo;Smart Import&rdquo; folder &mdash; in fact two</li>
+        <li>No mapping of which content came from which import</li>
+        <li>No record of what the import was</li>
+      </ul>
+      <p class="col-label col-new">Reworked</p>
+      <ul class="new">
+        <li>Content lands in the library &mdash; no dedicated folder</li>
+        <li><code>from: &lt;import&gt;</code> tag; provenance as a library filter</li>
+        <li>Persisted <code>ImportRecord</code> receipt &mdash; survives reload</li>
+        <li>Library lists items across every persisted import</li>
+        <li>Standalone Smart Imports list; lifecycle <span class="tag">Ph3</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <h2><span class="n">2</span>Opportunity solution tree</h2>
+  <p class="lead">One outcome, four opportunities (the problems), and the solutions under each &mdash; tagged with the roadmap phase they land in.</p>
+
+  <div class="ost-outcome">
+    <span class="k">Outcome</span>
+    Cut time-to-value &nbsp;·&nbsp; lift W1&rarr;W2 retention (~20% &rarr; 35%+ &rarr; 40%+)
+  </div>
+  <div class="ost-stem"></div>
+
+  <div class="ost-cols">
+    <div class="ost-col">
+      <div class="ost-opp"><b>Opportunity 1</b>Intent is a blank box, not reusable; the source is opaque.</div>
+      <div class="ost-sol"><span class="pill p-1">Phase 1</span>Automatic source read-back</div>
+      <div class="ost-sol"><span class="pill p-1">Phase 1</span>Verbatim question extraction (Pasted Text)</div>
+      <div class="ost-sol"><span class="pill p-2">Phase 2</span>Prompt XOR brief · presets · &ldquo;improve&rdquo;</div>
+      <div class="ost-sol"><span class="pill p-2">Phase 2</span>Prompt / brief library &mdash; save &amp; reuse</div>
+    </div>
+
+    <div class="ost-col">
+      <div class="ost-opp"><b>Opportunity 2</b>Activity choice is blind; easy to over-pick.</div>
+      <div class="ost-sol"><span class="pill p-1">Phase 1</span>Recommendation engine v1 &mdash; feasibility + desirability + count</div>
+      <div class="ost-sol"><span class="pill p-1">Phase 1</span>Pre-checked set with counts + reasons</div>
+      <div class="ost-sol"><span class="pill p-2">Phase 2</span>Per-activity controls + coverage grid</div>
+    </div>
+
+    <div class="ost-col">
+      <div class="ost-opp"><b>Opportunity 3</b>No preview before spend; can&rsquo;t verify; fixing means N editors.</div>
+      <div class="ost-sol"><span class="pill p-1">P0 · Phase 1</span>Review &amp; Approve step + &ldquo;Create N&rdquo; gate</div>
+      <div class="ost-sol"><span class="pill p-1">P0 · Phase 1</span>Live H5P preview per item</div>
+      <div class="ost-sol"><span class="pill p-1">P0 · Phase 1</span>Per-question trust signals</div>
+      <div class="ost-sol"><span class="pill p-2">Phase 1&ndash;2</span>Refine / Remix / Discard &mdash; bounded</div>
+      <div class="ost-sol"><span class="pill p-1">Phase 1</span><code>review_event</code> + <code>ImportRecord</code> stream</div>
+    </div>
+
+    <div class="ost-col">
+      <div class="ost-opp"><b>Opportunity 4</b>Output dumped in a folder; no link back to its import.</div>
+      <div class="ost-sol"><span class="pill p-done">Done</span>Persisted <code>ImportRecord</code> receipt</div>
+      <div class="ost-sol"><span class="pill p-3">Phase 3</span>Content in the library (no folder)</div>
+      <div class="ost-sol"><span class="pill p-3">Phase 3</span><code>from:</code> tag + provenance filter</div>
+    </div>
+  </div>
+
+  <h2><span class="n">3</span>Roadmap &mdash; priority &amp; sequencing</h2>
+  <p class="lead">
+    Trust and cleanup first &mdash; compounding features only help people who already came back.
+    <span class="pill pri0" style="margin: 0 .1rem;">P0</span> ship-or-die &nbsp;
+    <span class="pill pri1" style="margin: 0 .1rem;">P1</span> core &nbsp;
+    <span class="pill pri2" style="margin: 0 .1rem;">P2</span> follow-on. &nbsp; Seq = build order within the phase.
+  </p>
+
+  <div class="phase phase-1">
+    <div class="phase-head">
+      <span class="ph">Phase 1</span>
+      <h3>Fix the cliff &mdash; first-run trust + the gate</h3>
+      <span class="phase-gate">Gate: W1&rarr;W2 retention <b>20% &rarr; 35%+</b></span>
+    </div>
+    <div class="items">
+      <div class="item">
+        <span class="seq">1</span>
+        <span class="pris"><span class="pill pri0">P0</span></span>
+        <span class="body"><strong>Approval gate: proposed-content list + live H5P preview per item + approve / drop / refine</strong><span class="m">&ge; 60% of imports reach an approved set; median generate&rarr;approved &lt; 5 min</span></span>
+      </div>
+      <div class="item">
+        <span class="seq">2</span>
+        <span class="pris"><span class="pill pri0">P0</span></span>
+        <span class="body"><strong>Source grounding per item</strong> &mdash; show the source sentence<span class="m">Educator &ldquo;I could tell if each item was right&rdquo; &ge; 4 / 5</span></span>
+      </div>
+      <div class="item">
+        <span class="seq">2</span>
+        <span class="pris"><span class="pill pri1">P1</span></span>
+        <span class="body"><strong>Answer-key justification per item</strong><span class="m">Contributes to approve-without-edit rate &ge; 55%</span></span>
+      </div>
+      <div class="item">
+        <span class="seq">3</span>
+        <span class="pris"><span class="pill pri1">P1</span></span>
+        <span class="body"><strong>Activity recommendation engine v1</strong> + source read-back panel<span class="m">&ge; 50% of imports keep the recommended set; poor-fit selections &darr;</span></span>
+      </div>
+      <div class="item">
+        <span class="seq">3</span>
+        <span class="pris"><span class="pill pri1">P1</span></span>
+        <span class="body"><strong>Verbatim question extraction</strong> &mdash; Pasted Text, prompt + approval-gate verification<span class="m">For question-bearing sources, &ge; 50% choose Extract; edit rate &lt; 10%</span></span>
+      </div>
+      <div class="item">
+        <span class="seq">4</span>
+        <span class="pris"><span class="pill pri2">P2</span></span>
+        <span class="body"><strong>Known-limitations disclosure at create time</strong><span class="m">First-run on unsupported sources (math / procedural) &darr;</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase phase-2">
+    <div class="phase-head">
+      <span class="ph">Phase 2</span>
+      <h3>Fast &amp; repeatable &mdash; returners become regulars</h3>
+      <span class="phase-gate">Gate: W2 retention <b>40%+</b>; imports / active user / week &uarr;</span>
+    </div>
+    <div class="items">
+      <div class="item">
+        <span class="seq">1</span>
+        <span class="pris"><span class="pill pri1">P1</span></span>
+        <span class="body"><strong>Document ingestion: <code>.pptx</code> + PDF / DOCX</strong> (layout-aware, OCR) &mdash; file-based extraction rides on this<span class="m"><code>.pptx</code> approve-without-edit reaches clean-article parity</span></span>
+      </div>
+      <div class="item">
+        <span class="seq">2</span>
+        <span class="pris"><span class="pill pri1">P1</span></span>
+        <span class="body"><strong>Extraction verification pass</strong> &mdash; extracted item &harr; source-span diff<span class="m">Verbatim-mismatch rate on extracted items &lt; 2%</span></span>
+      </div>
+      <div class="item">
+        <span class="seq">1</span>
+        <span class="pris"><span class="pill pri1">P1</span></span>
+        <span class="body"><strong>Full intent authoring</strong> &mdash; prompt-XOR-brief toggle, presets, &ldquo;improve&rdquo;<span class="m">Prompt or brief used in &ge; 30% of imports by repeat users</span></span>
+      </div>
+      <div class="item">
+        <span class="seq">2</span>
+        <span class="pris"><span class="pill pri1">P1</span></span>
+        <span class="body"><strong>Prompt &amp; brief library</strong> &mdash; system + saved templates, account-scoped, optionally bundling the activity selection<span class="m">Among users with &ge; 3 imports, &ge; 40% start from a saved or system template</span></span>
+      </div>
+      <div class="item">
+        <span class="seq">2</span>
+        <span class="pris"><span class="pill pri1">P1</span></span>
+        <span class="body"><strong>Inline item actions + scoped natural-language edits</strong><span class="m">Median edits per approved item trends <i>down</i> across a user&rsquo;s imports</span></span>
+      </div>
+      <div class="item">
+        <span class="seq">3</span>
+        <span class="pris"><span class="pill pri2">P2</span></span>
+        <span class="body"><strong>Per-activity controls + coverage grid</strong> &nbsp;·&nbsp; <strong>propagate-a-fix + preference memory</strong> &nbsp;·&nbsp; <strong>personal track record</strong><span class="m">Cross-activity overlap &darr;; same correction made twice &rarr; near zero</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase phase-3">
+    <div class="phase-head">
+      <span class="ph">Phase 3</span>
+      <h3>Stickiness &mdash; habit + team expansion</h3>
+      <span class="phase-gate">Gate: W4&rarr;W8 retention &uarr;; seats per org &uarr;</span>
+    </div>
+    <div class="items">
+      <div class="item">
+        <span class="seq">1</span>
+        <span class="pris"><span class="pill pri1">P1</span></span>
+        <span class="body"><strong>Per-session containers + provenance + two-way navigation</strong><span class="m">% of users who re-open a past import &uarr;; &ldquo;find last week&rsquo;s import&rdquo; task success &ge; 90%</span></span>
+      </div>
+      <div class="item">
+        <span class="seq">2</span>
+        <span class="pris"><span class="pill pri2">P2</span></span>
+        <span class="body"><strong>Session workspace</strong> (refine / add / export / publish set) &nbsp;·&nbsp; <strong>choose destination at import time</strong><span class="m">Published (not just created) rate &uarr;; &ge; 50% of imports placed outside the default folder</span></span>
+      </div>
+      <div class="item">
+        <span class="seq">3</span>
+        <span class="pris"><span class="pill pri2">P2</span></span>
+        <span class="body"><strong>Confusion-report loop</strong> &nbsp;·&nbsp; <strong>assemble into a coherent Interactive Book</strong> &nbsp;·&nbsp; <strong>org layer</strong> (generation policy + org templates)<span class="m">Regenerated-after-confusion rate &uarr;; &ge; 25% of enterprise authors start from an org template</span></span>
+      </div>
+      <div class="item">
+        <span class="seq">4</span>
+        <span class="pris"><span class="pill pri2">P2</span></span>
+        <span class="body"><strong>Lifecycle</strong> &mdash; archive / delete a session + its content together<span class="m">Per-active-user folder growth rate &darr;</span></span>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    H5P Smart Import &mdash; reworked educator workflow &nbsp;·&nbsp; Agentic Buildcamp cohort 2608<br>
+    Source of record: <code>specs/smart-import-ux.md</code> &nbsp;·&nbsp; build journey: <code>docs/journey.html</code><br>
+    Last updated 2026-08-31.
+  </footer>
+
+</div>
