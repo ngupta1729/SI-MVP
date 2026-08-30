@@ -1,0 +1,14 @@
+{
+  "enabledPlugins": {
+    "sherpa-b@sherpa-b-marketplace": true
+  },
+  "permissions": {
+    "allow": [
+      "mcp__sherpa-b",
+      "Bash(python3 -m pip install --quiet --user --upgrade --force-reinstall --no-deps \"${CLAUDE_PLUGIN_ROOT}/telemetry\")",
+      "Bash(python3 -m shb_telemetry.track_event *)",
+      "Bash(python3 -m shb_telemetry.config *)",
+      "Bash(python3 -m shb_telemetry.read_log *)"
+    ]
+  }
+}
