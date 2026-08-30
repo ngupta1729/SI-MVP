@@ -140,9 +140,25 @@ the brief *is* the intent; the twin serialises it into an instruction internally
 
 A saved template captures whichever mode it was made in — a prompt **or** a brief. Personal
 templates appear in the "Start from:" row next to the system ones
-(`[Scratch] [system…] [★ My Grade 9 Bio]`); brief mode gets a "Load / Save brief" control. This
-turns intent authoring from per-import typing into pick-a-template for regular users — a direct
-repeat-use / TTV win.
+(`[Scratch] [system…] [★ My Grade 9 Bio]`); brief mode gets a "Load / Save brief" control.
+
+**Reuse — how an educator picks up a saved prompt on a future import:**
+
+- **Bundled scope.** A template optionally carries the **activity selection** too (and, later,
+  the destination folder). Reuse then collapses to: pick template → activities already chosen →
+  add source → generate. One real step.
+- **Surface the likely one.** Templates sort most-recently-used first; the last-used one carries a
+  "recent" marker so a regular user's default is one glance away.
+- **Edit without clobbering.** Loading a template puts a prompt into editable Scratch — tweak it
+  for this import freely. If the tweak is worth keeping, an **"Update '<name>'"** action appears;
+  otherwise "Save as new".
+- **Manage.** A "Your templates" list — rename, delete.
+- **Productionisation:** in the prototype templates live in `localStorage` (per browser). In the
+  product they must be **account-scoped** so they follow the educator across devices, and become
+  the substrate for org-published templates.
+
+This turns intent authoring from per-import typing into pick-a-template for regular users — the
+core repeat-use / TTV win.
 
 _Governance (Phase 3):_ authors keep full freedom over their own briefs and templates. Org
 consistency (house style, spelling, accessibility, integrity) is enforced through an **invisible
@@ -270,7 +286,7 @@ personal track record · confusion-report loop · generation transparency.
 | 1 | Document ingestion pipeline: `.pptx` + PDF/DOCX (layout-aware, OCR) — file-based question extraction rides on this | P1 | `.pptx` approve-without-edit rate reaches clean-article parity; W2 retention for `.pptx`-first users reaches cohort average |
 | 2 | Extraction verification pass (extracted item ↔ source-span diff, flag paraphrase/drop/renumber, unresolved keys) | P1 | Verbatim-mismatch rate on extracted items < 2%; educator-reported trust in extraction ≥ 4/5 |
 | 1 | Full intent authoring: prompt-XOR-brief toggle · preset prompts · "improve" (user text only) | P1 | Prompt or brief used in ≥ 30% of imports by users with ≥ 2 imports; approve-without-edit higher for intent-driven imports |
-| 2 | **Prompt & brief library** — system templates + author-saved personal templates (prompt or brief), shown in "Start from:" | P1 | Among users with ≥ 3 imports, ≥ 40% start from a saved or system template; median time-to-generate ↓ for template starts |
+| 2 | **Prompt & brief library** — system + author-saved templates (prompt or brief), optionally bundling the activity selection; MRU-sorted, recent marker, edit-without-clobber ("Update" vs "Save as new"). Account-scoped storage. | P1 | Among users with ≥ 3 imports, ≥ 40% start from a saved or system template; median time-to-generate ↓ for template starts; ≥ 20% of template users reuse the same template 3+ times |
 | 2 | Inline item actions + scoped natural-language edits (Refine) | P1 | Median edits per approved item trends **down** across a user's successive imports |
 | 2 | Per-activity controls + coverage grid | P2 | Cross-activity concept overlap ↓ (measured); "too many/few questions" feedback ↓ |
 | 3 | Propagate-a-fix + preference memory | P2 | Same correction made twice by the same user → near zero |
