@@ -15,8 +15,13 @@ export interface TwinSource {
 export interface ImportIntent {
   authoringMode: "prompt" | "brief";
 
-  /** Live when authoringMode === "prompt". May come from a preset or be user-written. */
+  /**
+   * Live when authoringMode === "prompt". Either the exact text of a pre-designed
+   * prompt (when promptPresetId is set) or the educator's own text (scratch).
+   */
   prompt: string;
+  /** null = writing from scratch (editable, improvable); else a preset id (used as-is). */
+  promptPresetId: string | null;
 
   /** Live when authoringMode === "brief". */
   learningGoal: string;

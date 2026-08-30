@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CONTENT_TYPES, CATEGORIES, contentType } from "@/lib/h5p/contentTypes";
-import { INTENT_PRESETS, isPreset } from "@/lib/intent-presets";
+import { INTENT_PRESETS, preset as findPreset } from "@/lib/intent-presets";
 import type { ImportIntent, TwinResult, SourceAnalysis } from "@/lib/types";
 import H5PRender from "@/components/H5PRender";
 
@@ -23,6 +23,7 @@ interface Recommendation {
 const DEFAULT_INTENT: ImportIntent = {
   authoringMode: "prompt",
   prompt: "",
+  promptPresetId: null,
   learningGoal: "",
   audienceLevel: "beginner",
   emphasis: "balanced",
@@ -337,8 +338,8 @@ function Configure(p: {
   const set = (patch: Partial<ImportIntent>) =>
     p.setIntent((i) => ({ ...i, ...patch }));
   const promptMode = p.intent.authoringMode === "prompt";
-  const pristinePreset = isPreset(p.intent.prompt);
-  const canImprove = promptMode && p.intent.prompt.trim().length > 0 && !pristinePreset;
+  const isScratch = p.intent.promptPresetId === null;
+  const canImprove = promptMode && isScratch && p.intent.prompt.trim().length > 0;
   return (
     <div className="space-y-6">
       <div>
@@ -414,23 +415,30 @@ function Configure(p: {
 
         {promptMode ? (
           <>
-            <textarea
-              value={p.intent.prompt}
-              onChange={(e) => set({ prompt: e.target.value, mode: "generate" })}
-              rows={3}
-              placeholder="e.g. Assessment for first-year undergrads. Focus on the three boundary types and the evidence. Plain language."
-              className="w-full rounded-md border border-zinc-300 p-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-            />
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="text-zinc-400">Start from:</span>
+              <button
+                onClick={() => set({ promptPresetId: null, prompt: "", mode: "generate" })}
+                className={`rounded-md border px-2 py-1 ${
+                  isScratch
+                    ? "border-blue-600 font-medium"
+                    : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                }`}
+              >
+                Scratch
+              </button>
               {INTENT_PRESETS.map((preset) => (
                 <button
                   key={preset.id}
                   onClick={() =>
-                    set({ prompt: preset.prompt, mode: preset.mode })
+                    set({
+                      promptPresetId: preset.id,
+                      prompt: preset.prompt,
+                      mode: preset.mode,
+                    })
                   }
                   className={`rounded-md border px-2 py-1 ${
-                    p.intent.prompt.trim() === preset.prompt.trim()
+                    p.intent.promptPresetId === preset.id
                       ? "border-blue-600 font-medium"
                       : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
                   }`}
@@ -438,24 +446,38 @@ function Configure(p: {
                   {preset.label}
                 </button>
               ))}
-              {canImprove && (
-                <button
-                  onClick={() =>
-                    set({
-                      prompt: `${p.intent.prompt.trim()} Be specific about measurable objectives, the audience level, and which concepts from the source to prioritise. State how many questions and their difficulty.`,
-                    })
-                  }
-                  className="rounded-md border border-zinc-300 px-2 py-1 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
-                >
-                  ✨ Improve this prompt
-                </button>
-              )}
             </div>
-            {pristinePreset && (
-              <p className="text-[11px] text-zinc-400">
-                Using a pre-designed prompt — already written to best practice. Edit
-                it to make it your own.
-              </p>
+
+            {isScratch ? (
+              <>
+                <textarea
+                  value={p.intent.prompt}
+                  onChange={(e) => set({ prompt: e.target.value, mode: "generate" })}
+                  rows={3}
+                  placeholder="e.g. Assessment for first-year undergrads. Focus on the three boundary types and the evidence. Plain language."
+                  className="w-full rounded-md border border-zinc-300 p-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                />
+                {canImprove && (
+                  <button
+                    onClick={() =>
+                      set({
+                        prompt: `${p.intent.prompt.trim()} Be specific about measurable objectives, the audience level, and which concepts from the source to prioritise. State how many questions and their difficulty.`,
+                      })
+                    }
+                    className="rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                  >
+                    ✨ Improve this prompt
+                  </button>
+                )}
+              </>
+            ) : (
+              <div className="rounded-md border border-zinc-200 bg-zinc-50 p-2 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+                <p className="mb-1 font-medium text-zinc-400">
+                  {findPreset(p.intent.promptPresetId!)?.label} — pre-designed prompt,
+                  used as-is
+                </p>
+                {p.intent.prompt}
+              </div>
             )}
           </>
         ) : (
@@ -536,12 +558,14 @@ function Configure(p: {
                   This source contains existing questions.{" "}
                   <button
                     onClick={() => {
-                      const ex = INTENT_PRESETS.find(
-                        (x) => x.id === "extract-questions",
-                      )!;
+                      const ex = findPreset("extract-questions")!;
                       set(
                         promptMode
-                          ? { mode: "extract", prompt: ex.prompt }
+                          ? {
+                              mode: "extract",
+                              prompt: ex.prompt,
+                              promptPresetId: ex.id,
+                            }
                           : { mode: "extract" },
                       );
                     }}
