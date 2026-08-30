@@ -403,7 +403,7 @@ personal track record · confusion-report loop · generation transparency.
 | 1 | Approval gate: proposed-content list + **live H5P preview per item** + approve/drop/regenerate | P0 | ≥ 60% of imports reach an approved set (vs. abandon after generate); median generate→approved < 5 min |
 | 2 | Source grounding per item (show the source sentence) | P0 | Educator "I could tell if each item was right" ≥ 4/5 in usability test |
 | 2 | Answer-key justification per item | P1 | Contributes to approve-without-edit rate ≥ 55% |
-| 3 | Content-type recommendation from source + intent | P1 | ≥ 50% of imports keep the recommended activity set unchanged; "created an activity then deleted it whole" rate ↓ |
+| 3 | Activity recommendation engine v1 (feasibility gate + desirability rank + count logic; see spec) | P1 | ≥ 50% of imports keep the recommended activity set unchanged; "created an activity then deleted it whole" rate ↓ |
 | 3 | Source read-back panel | P1 | Leading indicator: poor-fit activity selections ↓ |
 | 3 | Verbatim question extraction — **Pasted Text only**, prompt + approval-gate verification | P1 | For question-bearing sources, ≥ 50% choose Extract; edit rate on extracted items < 10% |
 | 4 | Known-limitations disclosure at create time | P2 | First-run on unsupported sources (math/procedural) ↓ |
