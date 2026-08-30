@@ -114,15 +114,19 @@ rework keeps that shell and inserts new steps.
       - _Quality:_ Clearer wording · Answers look wrong
       - _Blunt:_ Just try again
       One click → the whole activity is regenerated for its type with that steer. Warns:
-      "regenerates every question, including your edits." **Changing the activity type is not
-      here** — that lives on the Discard path (see below).
+      "regenerates every question, including your edits." Refine keeps the **type** fixed.
+    - **Remix ▾** — rebuild this activity as a *different* type (Single Choice Set → Drag Text,
+      etc.), reusing the concepts it already covered. Picker lists the twin-renderable types;
+      one click regenerates in the new format from the same source. Edits are dropped (the type
+      changed) — the menu warns. This is the positive path for "wrong format" — it replaces the
+      old "discard + re-pick on Screen 2" detour.
     - **Discard ▾** — a bounded reason picker: wrong activity type · quality too low · redundant
-      with another · source doesn't support it · not useful. Drops the activity. (MVP: to
-      swap type, discard + re-pick on Screen 2. Phase 2: inline "replace with ▸ [type]".)
+      with another · source doesn't support it · not useful. Drops the activity.
   - **Refine cap:** soft limit of **3 refines per activity**. Tries 1–3 behave normally; after
     the 3rd, the button stops being a plain re-roll and surfaces "three tries haven't landed
-    this — the source may not support a strong [type] here" with Discard / Switch type / Edit
-    manually made primary. A 4th is still possible, just not the default.
+    this — the source may not support a strong [type] here" with Remix / Discard / Edit
+    manually made primary. A 4th is still possible, just not the default. Remix is not capped
+    (each remix changes type, so it is not slot-machine behaviour) but is logged.
   - **Gate button:** "Create N" — N = every activity not discarded.
   - _Deliberately out of MVP:_ item-level regenerate/drop · diagnosis→strategy branching on
     Refine · "refine instead of discard" redirects · difficulty/count/type as standalone
@@ -132,9 +136,11 @@ rework keeps that shell and inserts new steps.
 
 **Feedback → eval stream.** Every review-stage action writes a `review_event`:
 `{ importId, contentType, engine, model, sourceKind, readbackKind, sourceLength, intent{mode,
-authoringMode, preset, emphasis, volume}, action: "edit"|"refine"|"discard", reason (the
-picker value / steer), field?, charsDelta?, attempt?, timestamp }` — plus one `create_summary`
-per import (generated / created / edited / refined / discarded). This is the labelled dataset
+authoringMode, preset, emphasis, volume}, action: "edit"|"refine"|"remix"|"discard", reason (the
+picker value / steer / from-type), toType? (remix), field?, charsDelta?, attempt?, timestamp }`
+— plus one `create_summary` per import (generated / created / edited / refined / remixed /
+discarded), and a `placement` event on finish (name / destination / draft|published / items).
+This is the labelled dataset
 that gives **approve-without-edit rate**, **which steer people reach for** (→ tune defaults: lots
 of "Harder" = generate harder), **discard reasons per source kind**, **edit magnitude per
 field**, and **refine attempt-loops** (≥3 = the source can't support that type). It also answers
@@ -143,19 +149,34 @@ field**, and **refine attempt-loops** (≥3 = the source can't support that type
 - **Cost line**: "This will use 2 credits and create 18 items."
 - **[Approve N & create]**.
 
-### Screen 4 — Refine _(NEW — post-creation workspace)_
+### Screen 4 — Place & Finish _(NEW — replaces the silent auto-file, and is the import's page)_
 
-- The created set in one workspace (not scattered into a folder).
-- **Inline item actions**: Refine · Easier/Harder · Rephrase · flag distractor · Delete.
-- **Scoped natural-language edits**: "shorten all summary statements", "make Q3–5 about the
-  evidence".
-- **Propagate a fix**: a correction offers to apply across the whole set and stick for next time.
+One screen, reached by "Create N". It is both the finish step and the **import session page**
+the educator can reopen later.
 
-### Screen 5 — Place & Finish _(NEW — replaces silent auto-file)_
+- **Provenance summary**: source, the prompt/brief used, engine, and the review record —
+  N generated → kept / edited / refined / remixed / discarded (discards keep their reason).
+- **Name this import** (prefilled from the source/title + date).
+- **Choose destination**: a real course/unit folder (`Biology 101 / Unit 3`) — **not** a
+  "Smart Import" folder. Default is a lightweight **Smart Imports inbox** for content not yet
+  placed.
+- **Draft or publish** the set.
+- **The created activities as the import's workspace** — each card shows its concepts,
+  provenance, confidence, and edited / refined / remixed badges, and links into the editor.
+- On place: each item carries a **`from: <import>`** backlink in the content library and is
+  filterable by the import; the import page and the content stay linked both ways. There is no
+  duplicate "all Smart Import content" folder.
+- **Start another import** re-enters the flow.
 
-- **Choose destination**: a course folder (`Biology 101 / Unit 3`), not just "Smart Import".
-- **Name the import session**; provenance attached to every item.
-- **Publish set** or keep as draft.
+**Two objects, one home each.** The import is an event (immutable receipt: source, intent,
+decisions); the content items are living objects. Keep both indexes — "what did I import?" (the
+Smart Imports list) and "what content do I have?" (the library) — but each content item lives in
+exactly one place (the chosen folder), with a two-way link to its import. Merge the *folders*
+(per-import subfolder + global catch-all → one inbox for unplaced content), not the *views*.
+
+_Phase 2 — post-creation Refine workspace:_ scoped natural-language edits ("shorten all summary
+statements", "make Q3–5 about the evidence"), propagate-a-fix-and-remember, inline
+flag-distractor — the deeper editing surface once the content already exists.
 
 ---
 
@@ -407,24 +428,25 @@ natural-language editing:
 - **Item level: Edit only.** Inline manual text edit of one question / card / gap. No per-item
   AI refine — regenerating a single item in isolation breaks coherence with the rest of the
   activity.
-- **Activity level: Refine ▾ and Discard ▾.** Refine re-runs the whole activity for its type
-  with one *steer* picked from a closed, grouped list — Difficulty (Harder / Easier), Language &
-  tone (Simpler wording / More formal / In another language), Coverage (Different focus /
-  Less repetitive), Quality (Clearer wording / Answers look wrong), or just "Try again". Each
-  steer rewrites the generation prompt; it is not just logged. Language and tone and difficulty
-  are Refine steers — not a separate mechanism. **Activity-type changes are not a Refine steer**
-  — discard with reason "wrong activity type" and re-pick (MVP), or an inline type-swap on the
-  discard path (Phase 2). Discard takes a reason from a closed list (wrong activity type ·
-  quality too low · redundant · source doesn't support it · not useful). Refine regenerates
-  every item in the activity, edits included — the UI warns.
+- **Activity level: Refine ▾, Remix ▾ and Discard ▾.**
+  - **Refine** re-runs the whole activity *for the same type* with one *steer* from a closed,
+    grouped list — Difficulty (Harder / Easier), Language & tone (Simpler wording / More formal /
+    In another language), Coverage (Different focus / Less repetitive), Quality (Clearer wording /
+    Answers look wrong), or just "Try again". Each steer rewrites the generation prompt; it is
+    not just logged. Language, tone and difficulty are Refine steers, not a separate mechanism.
+  - **Remix** rebuilds the activity as a *different* type, reusing the concepts it covered — the
+    positive path for "wrong format", replacing the old "discard + re-pick" detour.
+  - **Discard** takes a reason from a closed list (wrong activity type · quality too low ·
+    redundant · source doesn't support it · not useful).
+  - Refine and Remix both regenerate every item, edits included — the UI warns.
 - **Refine cap: soft limit of 3 per activity.** After 3 unsuccessful refines, the control stops
-  offering a plain re-roll and points at Discard / switch type / manual edit — the source×type
-  pairing is the likely problem, and a 3-refine activity is a strong "this source can't support
-  this type" label for the recommendation engine.
+  offering a plain re-roll and points at Remix / Discard / manual edit — the source×type pairing
+  is the likely problem, and a 3-refine activity is a strong "this source can't support this
+  type" label for the recommendation engine. Remix is uncapped (each changes type) but logged.
 
 Every action writes a `review_event` (schema in the Screen 3 section); this is the labelled
-eval stream — approve-without-edit rate, which steer people reach for, discard reasons by
-source kind, refine attempt-loops.
+eval stream — approve-without-edit rate, which steer people reach for, remix from→to pairs,
+discard reasons by source kind, refine attempt-loops.
 
 **Phase 2 (not built).** Scoped natural-language edits · propagate-a-fix (and remember) ·
 diagnosis→strategy branching on Refine · "refine instead of discard" redirect ·
@@ -437,6 +459,13 @@ failing for this type — try a different type").
 Per-session container · provenance on every item · provenance as a library filter · two-way
 navigation (session ↔ content) · session page as a workspace · choose destination at import
 time · lifecycle (archive/delete session + content together).
+
+**No dedicated "Smart Import" content folder.** Today's product has two: a per-import subfolder
+*and* a global catch-all, with no clear mapping between an import and its content. Collapse both
+into a single **Smart Imports inbox** that only holds content not yet placed; placed content
+lives in its real course/unit folder. Keep two *indexes* — the Smart Imports list ("what did I
+import?") and the content library ("what content do I have?") — bound by a two-way link, not by
+a folder full of duplicates. See Screen 4.
 
 ### Stage 5 — Trust
 
@@ -532,11 +561,13 @@ retention needle before committing engineering to it.
 
 ## Sprint 2 demo
 
-**Screen 3 (Review & Approve) built end-to-end**, with a slice of Screen 1 (auto source read-back
-+ intent + recommended activities) feeding it: an educator pastes a source (or a Wikipedia URL),
-optionally states intent → recommended activities are pre-checked → generates → sees a
-proposed-content list with a **live playable H5P preview per item** rendered in the real player,
-plus grounding / answer-key trust signals → approves / edits / discards → creates the set.
+**Screens 3–4 (Review & Approve → Place & Finish) built end-to-end**, with a slice of Screen 1
+(auto source read-back + intent + recommended activities) feeding it: an educator pastes a source
+(or a Wikipedia URL), optionally states intent → recommended activities are pre-checked →
+generates → sees a proposed-content list with a **live playable H5P preview per item** rendered
+in the real player, plus grounding / answer-key trust signals → edits / refines / remixes /
+discards → "Create N" → names the import, picks a real destination folder, sees the provenance
+summary and the import's workspace.
 
 All previewed content is generated from that source in the session. Feedback question for
 mentors: *"Would you trust this enough to put it in front of learners with only light review?"*
