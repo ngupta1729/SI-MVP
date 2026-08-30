@@ -86,8 +86,6 @@ rework keeps that shell and inserts new steps.
   and ships. Reviewing is opt-out, not opt-in.
 - **Trust signals** per item: source-sentence grounding, answer-key justification, confidence,
   extraction-vs-inference marker.
-- **Real side-by-side** appears **only when a captured real Smart Import run matches this exact
-  source** — never a canned example from a different topic.
 - **Coverage grid**: objectives × activities.
 - **Cost line**: "This will use 2 credits and create 18 items."
 - **[Approve N & create]**.
@@ -243,22 +241,23 @@ answer-key justification.
 
 ### How the twin de-risks this
 
-The digital twin lets us test "approval gate + grounding fixes retention" against **real Smart
-Import output, before H5P ships anything** — run both across ~15 realistic sources (clean
-article, messy PDF, YouTube transcript, `.pptx`, short paste), measure approve-without-edit,
-defensible-distractor, and objective-alignment rates side-by-side. If quality is genuinely "good
-enough" the numbers show it and Phase 1 shrinks to the gate alone; if not, the retention leak is
-located with evidence.
+The twin is a working reproduction of Smart Import's generate-from-source behaviour, on which the
+reworked workflow (intent → approval → refine → discover → trust) is prototyped and demoed as if
+live — without waiting on H5P engineering. It runs the same input Smart Import takes (a source +
+an activity choice) and produces the same kind of output (H5P content.json rendered in the real
+player). All generated content comes strictly from the source the educator provides; nothing is
+canned. The twin is the vehicle for testing whether the approval gate + grounding move the
+retention needle before committing engineering to it.
 
 ---
 
 ## Sprint 2 demo
 
-**Screen 3 (Review & Approve) built end-to-end**, with a slice of Screen 1 (structured intent +
-source read-back) feeding it: an educator enters a source + intent → sees recommended activities
-→ sees a proposed-content list with a **live playable H5P preview per item** and grounding /
-answer-key trust signals → approves/drops/regenerates → the approved set renders in the real H5P
-player, **side-by-side with a captured real Smart Import output for the same source**.
+**Screen 3 (Review & Approve) built end-to-end**, with a slice of Screen 1 (auto source read-back
++ intent + recommended activities) feeding it: an educator pastes a source (or a Wikipedia URL),
+optionally states intent → recommended activities are pre-checked → generates → sees a
+proposed-content list with a **live playable H5P preview per item** rendered in the real player,
+plus grounding / answer-key trust signals → approves / edits / discards → creates the set.
 
-Feedback question for mentors: *"Is this twin faithful enough that you'd trust a product decision
-made on it?"*
+All previewed content is generated from that source in the session. Feedback question for
+mentors: *"Would you trust this enough to put it in front of learners with only light review?"*

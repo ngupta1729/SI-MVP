@@ -2,12 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CONTENT_TYPES, CATEGORIES, contentType } from "@/lib/h5p/contentTypes";
-import type {
-  ImportIntent,
-  TwinResult,
-  SourceAnalysis,
-  RealSampleMatch,
-} from "@/lib/types";
+import type { ImportIntent, TwinResult, SourceAnalysis } from "@/lib/types";
 import H5PRender from "@/components/H5PRender";
 
 type Screen = "configure" | "activities" | "review";
@@ -219,9 +214,7 @@ export default function Page() {
         <div className="flex items-center justify-between gap-3 border-t border-zinc-200 px-6 py-3 dark:border-zinc-800">
           <span className="text-xs text-zinc-400">
             {screen === "review" && result
-              ? `${approvedIds.length}/${result.items.length} approved · engine: ${result.engine}${
-                  result.realSample ? " · real match found" : ""
-                }`
+              ? `${approvedIds.length}/${result.items.length} approved · engine: ${result.engine}`
               : analysis
                 ? `${analysis.kind}, ${analysis.wordCount} words${
                     analysis.detectedQuestions > 3
@@ -619,24 +612,11 @@ function Review(p: {
   current: RenderedItem | null;
 }) {
   const { result, current } = p;
-  const real: RealSampleMatch | null = result.realSample;
-  const showReal = real && current && real.contentType === current.contentType;
 
   return (
     <div className="space-y-4">
       <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-800 dark:bg-zinc-900">
         <b>Plan:</b> {result.planNarrative}
-        {real ? (
-          <span className="ml-2 text-xs text-emerald-600">
-            captured real Smart Import run matched (similarity {real.similarity}) —
-            shown side-by-side
-          </span>
-        ) : (
-          <span className="ml-2 text-xs text-zinc-400">
-            no real Smart Import capture for this source — run it on H5P.com to
-            compare
-          </span>
-        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,280px)_1fr]">
@@ -710,35 +690,21 @@ function Review(p: {
                 />
               )}
 
-              <div
-                className={`grid gap-3 ${showReal ? "xl:grid-cols-2" : "grid-cols-1"}`}
-              >
-                <div>
-                  <p className="mb-1 text-[11px] font-medium text-blue-600">
-                    TWIN OUTPUT (live)
-                  </p>
-                  {current.hostPrepared && current.contentJson ? (
-                    <H5PRender
-                      h5pJsonPath={current.render.h5pJsonPath}
-                      librariesPath={current.render.librariesPath}
-                      renderKey={current.id}
-                    />
-                  ) : (
-                    <div className="rounded-lg border border-dashed border-zinc-300 p-4 text-xs text-zinc-500 dark:border-zinc-700">
-                      No render substrate for {current.contentType}. Capture a real
-                      .h5p for this type to light up the live preview.
-                    </div>
-                  )}
-                </div>
-                {showReal && real && (
-                  <div>
-                    <p className="mb-1 text-[11px] font-medium text-zinc-500">
-                      REAL SMART IMPORT ({real.sourceHint})
-                    </p>
-                    <H5PRender
-                      h5pJsonPath={real.h5pJsonPath}
-                      renderKey={`real-${real.name}`}
-                    />
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-blue-600">
+                  LIVE PREVIEW
+                </p>
+                {current.hostPrepared && current.contentJson ? (
+                  <H5PRender
+                    h5pJsonPath={current.render.h5pJsonPath}
+                    librariesPath={current.render.librariesPath}
+                    renderKey={current.id}
+                  />
+                ) : (
+                  <div className="rounded-lg border border-dashed border-zinc-300 p-4 text-xs text-zinc-500 dark:border-zinc-700">
+                    Live preview for {current.contentType} needs its H5P library
+                    bundle — drop a .h5p of this type into data/ and run
+                    scripts/prepare-h5p.mjs.
                   </div>
                 )}
               </div>

@@ -12,10 +12,9 @@ import type {
 } from "./types";
 import { contentType, CONTENT_TYPES } from "./h5p/contentTypes";
 import { buildSummary, buildSingleChoiceSet } from "./h5p/mockContent";
-import { loadCalibrationSamples, similarity } from "./calibration";
+import { STRUCTURE_REFERENCE } from "./calibration";
 
 const TWIN_MODEL = process.env.TWIN_MODEL || "anthropic/claude-sonnet-4.5";
-const MATCH_THRESHOLD = 0.18; // Jaccard token overlap to call it "the same source"
 
 function hasModel() {
   return Boolean(process.env.AI_GATEWAY_API_KEY || process.env.ANTHROPIC_API_KEY);
@@ -168,46 +167,22 @@ function mockEngine(text: string, intent: ImportIntent): TwinResult {
     sourceSummary: sentences.slice(0, 2).join(" ") || text.slice(0, 240),
     planNarrative: `Mock plan: ${items.length} artifact(s) from concepts ${concepts
       .slice(0, 4)
-      .join(", ")}. Set AI_GATEWAY_API_KEY (or ANTHROPIC_API_KEY) for calibrated model output.`,
+      .join(", ")}. Set AI_GATEWAY_API_KEY (or ANTHROPIC_API_KEY) for model-generated output.`,
     items,
     engine: "mock",
-    realSample: null,
-  };
-}
-
-// --- match a captured real Smart Import run to THIS source --------------------
-
-async function matchRealSample(text: string) {
-  const samples = await loadCalibrationSamples();
-  let best: { s: (typeof samples)[number]; sim: number } | null = null;
-  for (const s of samples) {
-    if (!s.sourceText) continue;
-    const sim = similarity(text, s.sourceText);
-    if (sim >= MATCH_THRESHOLD && (!best || sim > best.sim)) best = { s, sim };
-  }
-  if (!best) return null;
-  return {
-    name: best.s.name,
-    sourceHint: best.s.sourceHint,
-    h5pJsonPath: `/h5p/_samples/${best.s.name}`,
-    contentType: best.s.contentType,
-    similarity: Number(best.sim.toFixed(2)),
   };
 }
 
 // --- model engine -------------------------------------------------------------
 
 async function modelEngine(text: string, intent: ImportIntent): Promise<TwinResult> {
-  const samples = await loadCalibrationSamples();
-
-  const sampleBlock = samples.length
-    ? `REAL Smart Import outputs — match this structure and question quality exactly:\n\n${samples
-        .map(
-          (s) =>
-            `=== ${s.contentType} ===\n${JSON.stringify(s.contentJson).slice(0, 3500)}`,
-        )
-        .join("\n\n")}`
-    : "No real samples for calibration; follow the public H5P content specs.";
+  const wantedStructures = intent.contentTypes
+    .map((t) => STRUCTURE_REFERENCE[t] && `=== ${t} content.json shape ===\n${STRUCTURE_REFERENCE[t]}`)
+    .filter(Boolean)
+    .join("\n\n");
+  const sampleBlock =
+    wantedStructures ||
+    "Follow the public H5P content specs for each requested content type.";
 
   const mode =
     intent.mode === "extract"
@@ -228,6 +203,7 @@ ${text.slice(0, 12000)}
 INTENT:
 ${JSON.stringify(intent, null, 2)}
 
+STRUCTURE (format only — all content must come from the SOURCE above):
 ${sampleBlock}
 
 Return ONLY JSON:
@@ -256,8 +232,8 @@ Only include contentType values listed in INTENT.contentTypes.`;
     temperature: 0.4,
   });
   const json = out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1);
-  const parsed = JSON.parse(json) as Omit<TwinResult, "engine" | "realSample">;
-  return { ...parsed, engine: "model", realSample: null };
+  const parsed = JSON.parse(json) as Omit<TwinResult, "engine">;
+  return { ...parsed, engine: "model" };
 }
 
 export async function runTwin(
@@ -265,17 +241,12 @@ export async function runTwin(
   intent: ImportIntent,
 ): Promise<TwinResult> {
   const text = await resolveSourceText(source);
-  const realSample = await matchRealSample(text);
-  let result: TwinResult;
   if (hasModel()) {
     try {
-      result = await modelEngine(text, intent);
+      return await modelEngine(text, intent);
     } catch (err) {
       console.error("model engine failed, falling back to mock:", err);
-      result = mockEngine(text, intent);
     }
-  } else {
-    result = mockEngine(text, intent);
   }
-  return { ...result, realSample };
+  return mockEngine(text, intent);
 }

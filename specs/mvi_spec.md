@@ -1,65 +1,67 @@
 # MVI Spec — H5P Smart Import Twin (Sprint 2)
 
-_Created 2026-08-30._
+_Created 2026-08-30. Full UX proposal + roadmap: `specs/smart-import-ux.md`._
 
 ## What this is
 
-A **digital twin of H5P.com's Smart Import**, plus a reworked educator workflow layered on top,
-demoed as if live. Smart Import is H5P.com-only (no open-source code), so the twin is built purely
-from product-level observation — the hardest case for the whole project thesis.
+A **working twin of H5P.com's Smart Import** — same input (a source + an activity choice), same
+kind of output (H5P content.json rendered in the real player) — with the **reworked educator
+workflow** layered on top and demoed as if live. The twin is the vehicle for prototyping and
+pressure-testing the workflow changes before H5P engineering commits to them.
+
+All generated content comes strictly from the source the educator provides in the app. Nothing is
+canned or pre-seeded.
 
 ## Demo objective (Sprint 2, Sep 13, live)
 
-Put **twin fidelity on trial**. Show:
-1. A real Smart Import output from h5p.com (captured `.h5p`).
-2. The twin reproducing that output from the same source.
-3. The reworked workflow (intent → generate) running on the twin, rendered in **real H5P**.
-
-Feedback question for mentors/peers: _"Is this twin faithful enough that you'd trust a product
-decision made on it?"_
+Show the reworked flow end-to-end on a source chosen live, and ask mentors: *"Would you trust this
+enough to put it in front of learners with only light review?"* — the retention question, since
+Smart Import's W1→W2 retention is ~20%.
 
 ## Scope — IN
 
-- **Source input**: paste text, or a URL, or upload a text document (mirrors Smart Import's
-  file/URL/text inputs). Video/audio sources out of scope for the MVI.
-- **Intent step (the rework)**: educator states intent up front — learning goal, audience level,
-  emphasis (e.g. "assessment-heavy", "concept explanation"), preferred content types, language.
-  Richer than Smart Import's language + checkboxes.
-- **Twin transform**: source + intent → an H5P **content plan** + `content.json` for each chosen
-  content type, calibrated against captured real Smart Import outputs.
-- **Approval step (the rework)**: educator sees the plan (what will be created, per-item, with the
-  key concepts each is built from) and approves / drops / regenerates individual items *before*
-  they are finalized — the step Smart Import doesn't have.
-- **Render**: each generated item rendered live using the real open-source H5P player
-  (`h5p-standalone`), by injecting `content.json` into an extracted real `.h5p`.
-- **Side-by-side**: twin output next to the captured real Smart Import output for the same source.
+- **Source**: Pasted Text and Wikipedia URL (the two lowest-risk, highest-signal inputs).
+- **Screen 1 — Configure**: automatic source read-back (type, length, key concepts, existing-
+  question detection); intent authoring (free-form prompt + guided-brief toggle + presets +
+  "improve prompt"); recommended activities pre-checked from source + intent.
+- **Screen 2 — Select Activities**: real Smart Import catalog grouped by category, recommendations
+  badged. Skippable via "Quick generate".
+- **Screen 3 — Review & Approve**: proposed-content list; **live interactive H5P preview per
+  item** in the real player; per-item **Approve / Edit / Discard** (inline question/answer
+  editor); trust signals (source-sentence grounding, answer-key note, confidence, extracted-vs-
+  inferred); everything approved by default.
+- **Twin engine**: `POST /api/twin` — source + intent → `{ plan, items:[{contentType,
+  contentJson, grounding, answerKeyNote, confidence}] }`. Model engine (AI Gateway / Anthropic)
+  when a key is set; deterministic mock otherwise.
 
 ## Scope — OUT (Final Demo / roadmap)
 
-- Refinement of created content via natural language (the third workflow area).
-- Video/audio source ingestion.
-- Content types beyond the 3–4 most common Smart Import produces
-  (Summary, Single Choice Set / Question Set, True/False, Flashcards).
+- Screens 4–5 (Refine workspace, Place & Finish with destination + provenance).
+- `.pptx` and other source types.
+- Content types beyond Single Choice Set / Question Set for live preview (others show in the plan
+  without a preview until their H5P library bundle is added).
 - Auth, multi-user, persistence, credits accounting.
 
 ## Architecture
 
 | Layer | Impl |
 |---|---|
-| UI | Next.js 16 App Router, one page, three panels: Intent → Plan/Approval → Render |
-| Twin transform | `POST /api/twin` — source + intent → `{ plan, items: [{type, contentJson}] }`. Uses an LLM (Anthropic / AI Gateway) when a key is present; deterministic mock otherwise. |
-| Calibration | Captured real Smart Import `.h5p` exports in `data/`, their `content.json` used as few-shot targets |
-| Renderer | `h5p-standalone` in the browser, pointed at `/public/h5p/<type>/` (extracted real `.h5p`) with `content.json` swapped for the twin's output |
+| UI | Next.js 16 App Router, one page, H5P-modal-style 3-screen flow |
+| Source read-back | `POST /api/analyze` — source → `{ analysis, recommendations }` |
+| Twin engine | `POST /api/twin` — model engine uses a **format-only** structure reference (no topic content); output is grounded strictly in the provided source |
+| Renderer | `h5p-standalone` in the browser. `data/*.h5p` files are **library bundles only** — `scripts/prepare-h5p.mjs` extracts them to `public/h5p/<host>/`; the twin's `content.json` is written to `public/h5p/_render/<id>/` at request time and rendered against those libraries |
 
 ## Definition of done (Sprint 2)
 
-A working app where: an educator enters a source + intent → sees a generated plan → approves it →
-sees each generated H5P rendered live in the real player, side-by-side with the captured real
-Smart Import output for the same source. Runs end-to-end in one sitting, live-demoable.
+A working app where, on a source pasted live: automatic read-back → recommended activities →
+generate → a proposed-content list with a live playable H5P preview per item and trust signals →
+approve / edit / discard → create. Runs end-to-end in one sitting, and the whole path (source →
+approved set) is faster than today's Smart Import path (source → cleaned-up content).
 
-## Top quality risk
+## Top risks
 
-Twin fidelity — the LLM twin's `content.json` diverging from what real Smart Import produces in
-ways that would mislead a PM about how a workflow change would actually land. Mitigation:
-calibrate against captured real outputs; always show side-by-side; never claim more fidelity than
-the comparison supports.
+- **Twin believability** — generated `content.json` must be valid H5P and the questions must be
+  good enough that the demo lands. Mitigation: format-locked structure reference; model engine;
+  live preview so the audience judges real output.
+- **TTV regression** — the review screen must not make the job slower. Mitigation: auto read-back,
+  pre-checked recommendations, Quick-generate path, approved-by-default review.
