@@ -319,19 +319,23 @@ each other, and it's ambiguous which wins. A segmented toggle switches between t
 | **Preset prompts** | Clickable, each fills the box with a best-practice prompt: _Exam revision · Introduce a topic · Check prior knowledge · **Extract existing questions**_. |
 | **"Improve this prompt"** | Model rewrites the rough text to prompt-engineering best practice — imperative, specific, and only filling in audience / focus / count / difficulty **where the rough text states or implies it** (never invents them). One-click revert. **Shown only in Scratch** (a predesigned prompt is already best practice; there's nothing to improve). |
 
-**Guided brief**
+**Guided brief** — same three-part shape as *Write a prompt*: a **"Start from:"** row, one
+editable panel, contextual save actions.
 
-A structured form the educator can **extend**. Five standard fields — learning goal, audience
-level, emphasis (recall ↔ understanding ↔ application), volume (light / standard / thorough),
-language — drive the recommendation engine and analytics and stay fixed. Below them, **"Your
-parameters"**: the educator adds their own label + value rows (*Curriculum: AP Biology* ·
-*Tone: encouraging* · *Avoid: exam dates*). Everything is serialised into one instruction
-internally — the standard fields plus `label: value;` for each extra.
+- **Start from:** `Recommended` (selected by default — the recommended field values, *not* an
+  empty form) · `★ <saved brief>` for the educator's own saved briefs.
+- **The panel** is one uniform list of parameter rows. Five standard fields — learning goal,
+  audience, emphasis, volume, language — drive the recommendation engine and analytics and stay
+  fixed. Then the educator's own **`+ Add parameter`** rows: a name and a value
+  (*Curriculum: AP Biology* · *Tone: encouraging* · *Avoid: exam dates*). Everything serialises
+  into one instruction internally — the standard fields plus `name: value;` for each added one.
+- **Save:** `Save this brief` (always available) captures the field values **and** the added
+  parameters as a named, reusable **brief format**; `Update "<name>"` / `Save as a new brief`
+  appear when a loaded brief has been edited, exactly like the prompt section.
 
-The whole thing — the five field values **and** the custom parameters — **saves as a named brief
-template** and reloads from the "Start from:" row, exactly like a prompt template. The saved
-label-set is the reusable **"brief format"**. _Phase 2:_ admins publish brief formats (required
-parameters, house values) org-wide; for now every educator builds their own.
+TTV is unchanged on the fast path — *Recommended* → type a learning goal → Choose activities;
+the added parameters are opt-in. _Phase 2:_ admins publish brief formats (required parameters,
+house values) org-wide; for now every educator builds their own.
 
 **Template library** — one library, holds both **prompts** and **brief formats**, three tiers:
 
@@ -342,7 +346,7 @@ parameters, house values) org-wide; for now every educator builds their own.
 | **Org templates** _(admin layer, later)_ | Admins publish org-wide prompts and brief formats | Read-only to authors |
 
 Personal templates appear in the "Start from:" row for their mode — prompt templates next to the
-system ones (`[Scratch] [system…] [★ My Grade 9 Bio]`), brief templates next to "Blank brief" —
+system ones (`[Scratch] [system…] [★ My Grade 9 Bio]`), brief templates next to `Recommended` —
 and in a searchable **📚 Template library** dropdown.
 
 **Reuse — how an educator picks up a saved prompt on a future import:**
