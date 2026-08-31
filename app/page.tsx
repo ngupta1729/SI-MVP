@@ -17,6 +17,7 @@ import {
   intentLabel,
 } from "@/lib/import-records";
 import type {
+  BriefParam,
   ImportIntent,
   TwinResult,
   SourceAnalysis,
@@ -72,6 +73,7 @@ const DEFAULT_INTENT: ImportIntent = {
   audienceLevel: "beginner",
   emphasis: "balanced",
   volume: "standard",
+  briefExtras: [],
   language: "English",
   mode: "generate",
   contentTypes: [],
@@ -861,9 +863,15 @@ function Configure(p: {
   const promptTemplates = lib.templates
     .filter((t) => t.kind === "prompt")
     .sort((a, b) => (b.usedAt ?? 0) - (a.usedAt ?? 0));
+  const briefTemplates = lib.templates
+    .filter((t) => t.kind === "brief")
+    .sort((a, b) => (b.usedAt ?? 0) - (a.usedAt ?? 0));
   const [saving, setSaving] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [loadedId, setLoadedId] = useState<string | null>(null);
+  const [briefLoadedId, setBriefLoadedId] = useState<string | null>(null);
+  const [savingBrief, setSavingBrief] = useState(false);
+  const [briefSaveName, setBriefSaveName] = useState("");
   const lastId = lib.lastUsedId;
   const [improving, setImproving] = useState(false);
   const [preImprove, setPreImprove] = useState<string | null>(null);
@@ -918,6 +926,46 @@ function Configure(p: {
   const loaded = lib.templates.find((t) => t.id === loadedId);
   const loadedPromptEdited =
     loaded?.kind === "prompt" && loaded.prompt !== p.intent.prompt;
+
+  /* ---- guided brief: editable parameters + templates ---- */
+  const extras = p.intent.briefExtras ?? [];
+  const setExtras = (next: BriefParam[]) => set({ briefExtras: next });
+  const currentBrief = () => ({
+    learningGoal: p.intent.learningGoal,
+    audienceLevel: p.intent.audienceLevel,
+    emphasis: p.intent.emphasis,
+    volume: p.intent.volume,
+    language: p.intent.language,
+    extras: extras.filter((r) => r.label.trim()),
+  });
+  function loadBrief(t: SavedTemplate) {
+    const b = t.brief;
+    if (!b) return;
+    set({
+      authoringMode: "brief",
+      learningGoal: b.learningGoal,
+      audienceLevel: b.audienceLevel,
+      emphasis: b.emphasis,
+      volume: b.volume,
+      language: b.language,
+      briefExtras: b.extras ?? [],
+      ...(t.contentTypes?.length ? { contentTypes: t.contentTypes } : {}),
+    });
+    setBriefLoadedId(t.id);
+    lib.markUsed(t.id);
+  }
+  function commitBriefSave() {
+    const name = briefSaveName.trim();
+    if (!name) return;
+    lib.saveBrief(name, currentBrief(), bundleTypes);
+    setSavingBrief(false);
+    setBriefSaveName("");
+  }
+  const briefLoaded = lib.templates.find((t) => t.id === briefLoadedId);
+  const briefEdited =
+    briefLoaded?.kind === "brief" &&
+    JSON.stringify(briefLoaded.brief ?? {}) !==
+      JSON.stringify(currentBrief());
 
   return (
     <div className="space-y-6">
@@ -1143,64 +1191,192 @@ function Configure(p: {
             )}
           </>
         ) : (
-          <div className="space-y-2">
-            <div className="grid gap-3 rounded-md border border-zinc-200 p-3 text-sm sm:grid-cols-2 dark:border-zinc-800">
-            <Field label="Learning goal">
-              <input
-                value={p.intent.learningGoal}
-                onChange={(e) => set({ learningGoal: e.target.value })}
-                className={fieldInput}
-                placeholder="e.g. Distinguish the three plate-boundary types"
-              />
-            </Field>
-            <Field label="Audience level">
-              <select
-                value={p.intent.audienceLevel}
-                onChange={(e) =>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-zinc-400">Start from:</span>
+              <button
+                onClick={() => {
+                  setBriefLoadedId(null);
                   set({
-                    audienceLevel: e.target.value as ImportIntent["audienceLevel"],
-                  })
-                }
-                className={fieldInput}
+                    learningGoal: "",
+                    audienceLevel: "beginner",
+                    emphasis: "balanced",
+                    volume: "standard",
+                    language: "English",
+                    briefExtras: [],
+                  });
+                }}
+                className={`rounded-md border px-2 py-1 ${
+                  briefLoadedId === null
+                    ? "border-blue-600 font-medium"
+                    : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                }`}
               >
-                <option value="beginner">Beginner</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
-              </select>
-            </Field>
-            <Field label="Emphasis">
-              <select
-                value={p.intent.emphasis}
-                onChange={(e) =>
-                  set({ emphasis: e.target.value as ImportIntent["emphasis"] })
-                }
-                className={fieldInput}
+                Blank brief
+              </button>
+              {briefTemplates.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => loadBrief(t)}
+                  className={`rounded-md border px-2 py-1 ${
+                    briefLoadedId === t.id
+                      ? "border-blue-600 font-medium"
+                      : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                  }`}
+                >
+                  ★ {t.name}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid gap-3 rounded-md border border-zinc-200 p-3 text-sm sm:grid-cols-2 dark:border-zinc-800">
+              <Field label="Learning goal">
+                <input
+                  value={p.intent.learningGoal}
+                  onChange={(e) => set({ learningGoal: e.target.value })}
+                  className={fieldInput}
+                  placeholder="e.g. Distinguish the three plate-boundary types"
+                />
+              </Field>
+              <Field label="Audience level">
+                <select
+                  value={p.intent.audienceLevel}
+                  onChange={(e) =>
+                    set({
+                      audienceLevel: e.target
+                        .value as ImportIntent["audienceLevel"],
+                    })
+                  }
+                  className={fieldInput}
+                >
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
+                </select>
+              </Field>
+              <Field label="Emphasis">
+                <select
+                  value={p.intent.emphasis}
+                  onChange={(e) =>
+                    set({ emphasis: e.target.value as ImportIntent["emphasis"] })
+                  }
+                  className={fieldInput}
+                >
+                  <option value="balanced">Balanced</option>
+                  <option value="assessment">Assessment-heavy</option>
+                  <option value="concept_explanation">Concept explanation</option>
+                </select>
+              </Field>
+              <Field label="Volume">
+                <select
+                  value={p.intent.volume}
+                  onChange={(e) =>
+                    set({ volume: e.target.value as ImportIntent["volume"] })
+                  }
+                  className={fieldInput}
+                >
+                  <option value="light">Light (~4 questions)</option>
+                  <option value="standard">Standard (~6)</option>
+                  <option value="thorough">Thorough (~10)</option>
+                </select>
+              </Field>
+              <Field label="Language">
+                <input
+                  value={p.intent.language}
+                  onChange={(e) => set({ language: e.target.value })}
+                  className={fieldInput}
+                />
+              </Field>
+            </div>
+
+            <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+              <p className="mb-1.5 text-xs font-medium text-zinc-500">
+                Your parameters
+              </p>
+              {extras.length === 0 ? (
+                <p className="text-xs text-zinc-400">
+                  Add anything else the AI should follow — e.g.{" "}
+                  <i>Curriculum: AP Biology</i> · <i>Tone: encouraging</i> ·{" "}
+                  <i>Avoid: specific exam dates</i>.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {extras.map((row, i) => (
+                    <div key={i} className="flex gap-1.5">
+                      <input
+                        value={row.label}
+                        placeholder="Parameter"
+                        onChange={(e) =>
+                          setExtras(
+                            extras.map((r, j) =>
+                              j === i ? { ...r, label: e.target.value } : r,
+                            ),
+                          )
+                        }
+                        className="w-1/3 rounded border border-zinc-300 p-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+                      />
+                      <input
+                        value={row.value}
+                        placeholder="Value"
+                        onChange={(e) =>
+                          setExtras(
+                            extras.map((r, j) =>
+                              j === i ? { ...r, value: e.target.value } : r,
+                            ),
+                          )
+                        }
+                        className="flex-1 rounded border border-zinc-300 p-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+                      />
+                      <button
+                        onClick={() =>
+                          setExtras(extras.filter((_, j) => j !== i))
+                        }
+                        title="Remove parameter"
+                        className="px-1.5 text-zinc-400 hover:text-red-500"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={() => setExtras([...extras, { label: "", value: "" }])}
+                className="mt-2 rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
               >
-                <option value="balanced">Balanced</option>
-                <option value="assessment">Assessment-heavy</option>
-                <option value="concept_explanation">Concept explanation</option>
-              </select>
-            </Field>
-            <Field label="Volume">
-              <select
-                value={p.intent.volume}
-                onChange={(e) =>
-                  set({ volume: e.target.value as ImportIntent["volume"] })
-                }
-                className={fieldInput}
-              >
-                <option value="light">Light (~4 questions)</option>
-                <option value="standard">Standard (~6)</option>
-                <option value="thorough">Thorough (~10)</option>
-              </select>
-            </Field>
-            <Field label="Language">
-              <input
-                value={p.intent.language}
-                onChange={(e) => set({ language: e.target.value })}
-                className={fieldInput}
-              />
-            </Field>
+                + Add parameter
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {briefLoadedId && briefEdited && briefLoaded && (
+                <button
+                  onClick={() =>
+                    lib.update(briefLoaded.id, {
+                      brief: currentBrief(),
+                      contentTypes: bundleTypes,
+                    })
+                  }
+                  className="rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                >
+                  Update “{briefLoaded.name}”
+                </button>
+              )}
+              {savingBrief ? (
+                <SaveRow
+                  value={briefSaveName}
+                  onChange={setBriefSaveName}
+                  onSave={commitBriefSave}
+                  onCancel={() => setSavingBrief(false)}
+                />
+              ) : (
+                <button
+                  onClick={() => setSavingBrief(true)}
+                  className="rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                >
+                  + Save brief {bundleTypes ? "+ activities" : "as template"}
+                </button>
+              )}
             </div>
           </div>
         )}

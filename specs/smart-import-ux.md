@@ -321,21 +321,29 @@ each other, and it's ambiguous which wins. A segmented toggle switches between t
 
 **Guided brief**
 
-Structured form: learning goal, audience level, emphasis (recall ↔ understanding ↔ application),
-volume (light / standard / thorough), language. No free-text prompt, no presets, no "improve" —
-the brief *is* the intent; it is serialised into an instruction internally.
+A structured form the educator can **extend**. Five standard fields — learning goal, audience
+level, emphasis (recall ↔ understanding ↔ application), volume (light / standard / thorough),
+language — drive the recommendation engine and analytics and stay fixed. Below them, **"Your
+parameters"**: the educator adds their own label + value rows (*Curriculum: AP Biology* ·
+*Tone: encouraging* · *Avoid: exam dates*). Everything is serialised into one instruction
+internally — the standard fields plus `label: value;` for each extra.
 
-**Prompt library** — one library, three tiers:
+The whole thing — the five field values **and** the custom parameters — **saves as a named brief
+template** and reloads from the "Start from:" row, exactly like a prompt template. The saved
+label-set is the reusable **"brief format"**. _Phase 2:_ admins publish brief formats (required
+parameters, house values) org-wide; for now every educator builds their own.
+
+**Template library** — one library, holds both **prompts** and **brief formats**, three tiers:
 
 | Tier | Source | Editable |
 |---|---|---|
 | **System templates** | The predesigned prompts (Exam revision, Introduce a topic, Check prior knowledge, Extract existing questions) | Read-only, used as-is |
-| **Personal templates** | Any Scratch prompt the author wrote — named and saved | Author's own (rename / delete) |
-| **Org templates** _(admin layer, later)_ | Admins publish org-wide starting points | Read-only to authors |
+| **Personal templates** | Any Scratch prompt **or** guided brief (fields + custom parameters) the author saved — named | Author's own (rename / delete) |
+| **Org templates** _(admin layer, later)_ | Admins publish org-wide prompts and brief formats | Read-only to authors |
 
-Personal templates appear in the "Start from:" row next to the system ones
-(`[Scratch] [system…] [★ My Grade 9 Bio]`) and in a searchable **📚 Template library** dropdown.
-_(Saving a **brief** as a template is parked for now — templates are prompt-only.)_
+Personal templates appear in the "Start from:" row for their mode — prompt templates next to the
+system ones (`[Scratch] [system…] [★ My Grade 9 Bio]`), brief templates next to "Blank brief" —
+and in a searchable **📚 Template library** dropdown.
 
 **Reuse — how an educator picks up a saved prompt on a future import:**
 

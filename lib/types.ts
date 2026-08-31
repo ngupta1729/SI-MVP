@@ -2,6 +2,12 @@
 
 export type SourceKind = "text" | "url";
 
+/** One educator-defined guided-brief parameter. */
+export interface BriefParam {
+  label: string;
+  value: string;
+}
+
 export interface TwinSource {
   kind: SourceKind;
   /** Raw pasted text, or the URL string. */
@@ -28,6 +34,13 @@ export interface ImportIntent {
   audienceLevel: "beginner" | "intermediate" | "advanced";
   emphasis: "assessment" | "concept_explanation" | "balanced";
   volume: "light" | "standard" | "thorough";
+  /**
+   * Live when authoringMode === "brief". Educator-defined extra parameters —
+   * label + value pairs appended to the generation instruction. The brief
+   * "format" (the set of labels) is what gets saved as a reusable template.
+   * Phase 2: admins publish brief formats org-wide.
+   */
+  briefExtras?: BriefParam[];
 
   /** Applies in both modes. */
   language: string;

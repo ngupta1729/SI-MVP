@@ -4,7 +4,7 @@
 // exposed through useSyncExternalStore. System templates live in lib/intent-presets.ts.
 
 import { useCallback, useSyncExternalStore } from "react";
-import type { ImportIntent } from "./types";
+import type { BriefParam, ImportIntent } from "./types";
 
 export interface SavedTemplate {
   id: string;
@@ -17,7 +17,10 @@ export interface SavedTemplate {
   brief?: Pick<
     ImportIntent,
     "learningGoal" | "audienceLevel" | "emphasis" | "volume" | "language"
-  >;
+  > & {
+    /** Educator-defined extra parameters — the reusable "format". */
+    extras?: BriefParam[];
+  };
   /** Optional bundled activity selection — makes reuse one step: pick, add source, generate. */
   contentTypes?: string[];
 }

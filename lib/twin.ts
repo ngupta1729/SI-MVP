@@ -12,6 +12,16 @@ import type {
   SourceAnalysis,
   ActivityRecommendation,
 } from "./types";
+
+/** Educator-defined guided-brief parameters → a directive suffix. */
+function briefExtras(intent: ImportIntent): string {
+  const rows = (intent.briefExtras ?? []).filter(
+    (r) => r.label.trim() && r.value.trim(),
+  );
+  return rows.length
+    ? " " + rows.map((r) => `${r.label.trim()}: ${r.value.trim()};`).join(" ")
+    : "";
+}
 import { contentType, CONTENT_TYPES } from "./h5p/contentTypes";
 import {
   buildSummary,
@@ -270,7 +280,7 @@ export async function analyzeSource(
     const intentLine =
       intent.authoringMode === "prompt"
         ? `The teacher's instruction: "${intent.prompt || "(none)"}". Emphasis: ${intent.emphasis}. Volume: ${intent.volume}. Mode: ${intent.mode}.`
-        : `Brief — goal: "${intent.learningGoal || "(none)"}", audience: ${intent.audienceLevel}, emphasis: ${intent.emphasis}, volume: ${intent.volume}.`;
+        : `Brief — goal: "${intent.learningGoal || "(none)"}", audience: ${intent.audienceLevel}, emphasis: ${intent.emphasis}, volume: ${intent.volume}.${briefExtras(intent)}`;
     const prompt = `Read this source material that a teacher wants to turn into H5P quiz/assessment activities. Return a neutral read-back — describe it so the teacher knows what to expect. Do NOT tell them whether to use it; that is their choice.
 
 SOURCE:
@@ -543,7 +553,7 @@ async function generateOneItem(
       : "GENERATION: write new items grounded strictly in the source. Test understanding; distractors/false variants must be clearly wrong on a careful read.";
   const intentLine =
     intent.authoringMode === "brief"
-      ? `Brief — goal: "${intent.learningGoal || "(none)"}", audience: ${intent.audienceLevel}, emphasis: ${intent.emphasis}, volume: ${intent.volume} (light≈4 / standard≈6 / thorough≈10).`
+      ? `Brief — goal: "${intent.learningGoal || "(none)"}", audience: ${intent.audienceLevel}, emphasis: ${intent.emphasis}, volume: ${intent.volume} (light≈4 / standard≈6 / thorough≈10).${briefExtras(intent)}`
       : `Instruction: "${intent.prompt || "(none — sensible defaults)"}"  volume: ${intent.volume}`;
   const adjLine = adjustLine(adjustment, intent);
 
