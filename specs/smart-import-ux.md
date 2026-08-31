@@ -33,6 +33,10 @@ for"* problem. Two causes dominate at that magnitude:
 Features that *compound* value (discoverability, preference memory) only help people who return.
 They don't fix an 80% cliff. The roadmap sequences trust-and-cleanup first.
 
+This read is corroborated by [existing customer feedback](#existing-customer-feedback) on the
+shipped product — the section below records what was already known before the rework, and which
+part of it this project takes on.
+
 ### Observed happy path (from a live run — "Plate Tectonics", pasted text → Single Choice Set + Summary)
 
 1. Manage Content → **Smart Import** → **Create Content** (shows remaining import credits).
@@ -46,31 +50,160 @@ They don't fix an 80% cliff. The roadmap sequences trust-and-cleanup first.
 
 ---
 
+## Existing customer feedback
+
+Feedback on the **shipped** Smart Import, gathered before this rework — from the H5P
+customer-success team's `customer-feedback-h5p` Slack channel and the "Customer feedback – Smart
+Import" log (entries roughly Sep 2025 – Apr 2026). It is relayed customer voice (support tickets,
+CS calls, one customer "test week"), not structured research: directional, not quantified. This
+section records what was already known; [User Research](#measurement) will test it against real
+sessions.
+
+**Status column:** `addressed` — the rework's design answers it (built or specified); `partial` —
+partly answered, with a named gap; `out of this slice` — a real ask this project isn't taking on
+(H5P platform, or an explicitly later phase).
+
+### 1 · Output lacks variety and depth
+
+The most serious signal — a *"can't replace my workflow"* verdict, the same shape as the
+retention cliff.
+
+> "Smart Import primarily identifies only a limited number of concepts… often just a simple
+> 'keyword and definition' pair, and the resulting exercises lack variety. [It] can't yet replace
+> my current workflow, which involves using an LLM to generate diverse exercise types and then
+> manually recreating them in H5P." — foreign-language / soft-skills author, after a test week
+
+Also logged: *"AI-generated questions are too dry and miss visual info (graphs / drawings)"* (CS
+log, Feb 2026).
+
+→ The **recommendation engine** (purpose slots, feasibility + desirability) and **Remix** widen
+type variety; the **source read-back** surfaces which concepts were found, so a thin extraction is
+visible before generating. **Status: partial** — variety *across activities* is addressed;
+"too few concepts pulled from a dense document" and richer *per-item* generation are not
+specifically solved, and feed the [eval stream](#measurement) as generation-quality work.
+
+### 2 · No control over what gets generated
+
+Recurring, across several orgs.
+
+- "select number of quiz questions" (K2 Kompetanse) · "specify how many questions, with how many
+  answers per question, in a Question Set" · "adjust the difficulty level of the questions" · for
+  Interactive Video, "no option to decide number / type of questions" and "no option to NOT have
+  hotspots"
+
+→ **Guided brief** (volume, emphasis, language), **per-activity mini-controls** (count,
+difficulty), **recommendation-engine item counts**, and **explicit prompt instructions override**
+the engine. **Status: addressed (design)** — per-activity count / difficulty is `next`, not yet
+built; the Interactive-Video-specific controls are out of this slice.
+
+### 3 · Distractors are obvious — "the longest answer is always correct"
+
+Multiple independent reports; an internal investigation confirmed it — *"extra problematic for
+specific languages, and when the different options are longer sentences."*
+
+> "I would love any tips there are to getting better questions, and especially better distractors
+> (it's always obvious that the long answer is the correct one)."
+
+→ The Screen 3 **"Answers look wrong" steer** plus **per-question trust signals** (answer-key
+note) make it catchable and fixable at the review gate; the **`review_event` stream** quantifies
+how often it's hit, per content type and language. **Status: partial** — the review gate contains
+the symptom; the underlying generation fix (length-balanced distractors, per-language prompt
+tuning) is a known gap this rework surfaces but does not itself close.
+
+### 4 · Authors want their own output templates
+
+> "A customer wish it was possible to generate activities based on their own templates and not the
+> template we have created."
+
+Also logged as "organization templates for Smart Import content format and structure."
+
+→ **Template library** — personal prompt / brief formats (built), **org templates** tier
+(`later`). **Status: addressed** for personal templates; the org layer is a later phase.
+
+### 5 · The flow is rigid — can't iterate mid-generation
+
+- "navigate back and forth in the generation process (allow for more iterations underway)" ·
+  "reduce friction by removing / automating steps" · "improved solution for where the generated
+  content is saved"
+
+→ The **reworked screen flow** (Back between steps), the **Refine / Remix loop** at the review
+gate, and **content landing in the library** rather than a dedicated folder. **Status:
+addressed.**
+
+### 6 · Transparency — what the AI added vs. took from the source
+
+- "Clearly state when additional information is added by the LLM, and what is directly taken from
+  the input material" · "add more data to each generation: language settings, customization
+  prompts used, which H5Ps were generated"
+
+→ **Per-question trust signals** (exact source sentence, extracted-vs-inferred flag), the
+persisted **`ImportRecord`** (source snapshot, intent, engine / model, outcome counts — built),
+and the **"How it read your source"** view (`later`). **Status: addressed (design)** — grounding
+and the import record are built; a line-level added-vs-source diff is `next` / `later`.
+
+### 7 · Responsible-AI and author liability
+
+A US customer, via CS:
+
+> "individual teachers in the US… being sued by their students for using AI to create course
+> content… less confident about recommending Smart Import" — asking for a statement that faculty
+> remain responsible for, and central to, the content.
+
+Related: avoid unhelpful generated feedback such as *"your answer is wrong because it is wrong."*
+
+→ The rework's **approval gate**, **educator-as-author-of-record**, **AI-generated labeling** and
+**known-limitations disclosure** put the author in control by construction. **Status: partial** —
+the workflow makes the "faculty stays responsible" claim *true*; drafting the customer-facing
+legal / positioning statement is H5P's job, not this project's.
+
+### 8 · Out of this slice — noted, not taken on
+
+| Ask | Raised by | Why out |
+|---|---|---|
+| Multiple sources in one generation | CS log | Job-range KPI, `later` |
+| Audiovisual questions · IV auto-bookmarks · edit YouTube / MP4 captions | Univ. of Australia, CS log | Interactive Video / media — text sources come first |
+| Branching-scenario output | College of Veterinary Medicine | Wider type coverage, Job-range KPI `later` |
+| Norwegian UI still shows English buttons | Norwegian customer | H5P platform localization, not Smart Import logic |
+| Credit system "feels old fashioned" → usage-based | London Met | H5P commercial model, not this workflow |
+| Rebrand Smart Import · consolidate with the editor's AI assistant | internal strategic | H5P product strategy |
+
+### What this changes
+
+Nothing structural — the feedback **corroborates** the retention read and the four-part cut. The
+one thing it sharpens: themes 1 and 3 are **generation-quality** problems the review gate
+*catches* but does not *fix*. They sit under **Trust / Foundation** as continuous
+generation-prompt work, prioritised off the `review_event` stream once it is live — not as a new
+milestone.
+
+---
+
 ## The four parts of the workflow
 
 The rework touches four things the educator does. For each: what breaks today (from the H5P.com
 walkthrough) and what we've added — every "reworked" item below is **new vs. the shipped
-product**. This is the opportunity map; the detailed design follows further down.
+product**. The [opportunity map](#opportunity-map) re-cuts these same items by KPI; the
+[roadmap matrix](#roadmap--the-matrix) places them by part × KPI; the detailed design follows
+further down.
 
 ### 1 · Express intent — *what do I want, from what source*
 
 | Today | Reworked (new) |
 |---|---|
-| One optional, collapsed "Customization" box → blank-page problem, usually skipped | **Intent authoring** — a written prompt **or** a guided brief (mutually exclusive) |
+| One optional, collapsed "Customization" box → blank-page problem, usually skipped | **Design brief** — a written prompt **or** a structured brief (mutually exclusive); presets; save & reuse |
 | No guidance on what a good prompt looks like | **Preset prompts** (Exam revision · Introduce a topic · Check prior knowledge · Extract questions) + **"Improve this prompt"** (rewrites rough text to best practice) |
 | Re-type intent every import | **Prompt / brief library** — save, reuse, MRU-sorted, optionally bundles the activity selection; account-scoped later; org templates later |
 | Source goes in as a black box | **Automatic source read-back** — type, length, reading level, concepts, themes, strengths, watch-outs. Advisory, non-blocking |
-| Always generates new questions | **Verbatim question extraction** — Extract as-is · Generate new · Both |
-| `.pptx` (what lecturers actually use) generates poorly | **`.pptx` as a first-class source** — slide + notes + structure parsing (Phase 2) |
+| Always generates new questions | **Question extractor** — pull existing questions from the source verbatim · Generate new · Both |
+| `.pptx` (what lecturers actually use) generates poorly | **PowerPoint as a source** — slide + notes + structure parsing (Job range KPI) |
 
 ### 2 · Choose what gets made — *activity fit*
 
 | Today | Reworked (new) |
 |---|---|
-| Blind checkboxes across 4 categories, no fit-to-source signal | **Activity recommendation engine v1** — feasibility gate (from source) + desirability rank (from intent) + count logic (1/2/3) |
-| No item counts, no per-activity config | Pre-checked set with **item counts + a one-line reason** each; per-activity mini-controls (count, difficulty) |
+| Blind checkboxes across 4 categories, no fit-to-source signal | **Recommendation engine v1** — feasibility gate (from source) + desirability rank (from intent) + count logic (1/2/3) |
+| No item counts, no per-activity config | **"Why this fits" rationale** — per-type source + intent reason, with item counts; per-activity mini-controls (count, difficulty) |
 | Easy to over-select → 5 overlapping activities that all need cleanup | Count capped at 3; marginal/infeasible types shown unchecked with the reason; **explicit prompt instructions override** the engine (with feasibility warnings) |
-| No coverage view | **Coverage grid** (objectives × activities) — planned |
+| No coverage view | **Per-activity controls + coverage grid** (objectives × activities) — planned |
 
 ### 3 · Review & refine what came back — *trust + fix* — the core
 
@@ -86,7 +219,8 @@ product**. This is the opportunity map; the detailed design follows further down
 | No feedback loop | **`review_event` stream + `ImportRecord`** — the labelled dataset that answers "is quality good enough" with data, not opinion |
 | One rigid flow | **Two UI shapes to demo** — A: step-by-step wizard · B: full-screen 3-panel workspace (setup · output · refinement chat) |
 
-_Phase 2: scoped natural-language edits · propagate-a-fix · post-generation coverage report._
+_Later (Repeat-usage KPI): scoped natural-language edits · propagate-a-fix · post-generation
+coverage report._
 
 ### 4 · Find & reuse it later — *organization*
 
@@ -97,7 +231,7 @@ _Phase 2: scoped natural-language edits · propagate-a-fix · post-generation co
 | No record of what the import was | **Persisted `ImportRecord`** — source snapshot, intent, engine/model, outcome counts, per-item decisions, kept items. Survives reload and "Start another import" |
 | — | Library view lists items across every persisted import; each `from:` tag opens that import's receipt |
 
-_Phase 3: a standalone "Smart Imports" list screen · lifecycle (archive/delete an import + its content together) · destination-at-import-time._
+_Later (Repeat-usage KPI): a standalone "Smart Imports" list screen · lifecycle (archive/delete an import + its content together) · destination-at-import-time._
 
 ### Threaded through all four — trust & measurement
 
@@ -107,63 +241,124 @@ audited. The educator's approve / refine / discard decisions **are** a free meas
 
 ---
 
-## Opportunity Solution Tree
+## Opportunity map
+
+*What we're solving for*, organised **by KPI** — every opportunity rolls up to one of four KPIs,
+and all four roll up to the north-star retention number. **Foundation** (measurement) and
+**Trust** sit under every KPI.
+
+Two labels, used the same way here, in [the four parts](#the-four-parts-of-the-workflow) and in
+the [roadmap matrix](#roadmap--the-matrix):
+
+- **Horizon** — `now` / `next` / `later`: when it ships to production.
+- **Prototype** — ✓ if the working prototype already demonstrates it. Independent of horizon —
+  the prototype covers most of `now`, some of `next`, none of `later` yet.
+
+**North star:** week-1 → week-2 retention, ~20% today → **40%+**.
 
 ```mermaid
 graph TD
-  O["Outcome — cut time-to-value · lift W1→W2 retention"]
-
-  O --> P1["1 · Intent is a blank box, not reusable; source is opaque"]
-  O --> P2["2 · Activity choice is blind; easy to over-pick"]
-  O --> P3["3 · No checkpoint before content is committed; can't verify it; fixing means N editors"]
-  O --> P4["4 · Output dumped in a folder; no link back to the import"]
-
-  P1 --> S1a["Prompt XOR brief · presets · Improve"]
-  P1 --> S1b["Prompt / brief library — save & reuse"]
-  P1 --> S1c["Automatic source read-back"]
-  P1 --> S1d["Verbatim question extraction"]
-
-  P2 --> S2a["Recommendation engine — feasibility + desirability + count"]
-  P2 --> S2b["Pre-checked set with counts + reasons"]
-
-  P3 --> S3a["Review & Approve step + Create-N gate"]
-  P3 --> S3b["Live H5P preview per item"]
-  P3 --> S3c["Per-question trust signals"]
-  P3 --> S3d["Refine / Remix / Discard — bounded"]
-  P3 --> S3e["review_event + ImportRecord eval stream"]
-
-  P4 --> S4a["Content in the library, not a folder"]
-  P4 --> S4b["from: import tag + provenance filter"]
-  P4 --> S4c["Persisted ImportRecord receipt"]
+  NS["North star — W1→W2 retention 20% → 40%+"]
+  NS --> K1["KPI 1 · Publish rate ↑<br/>first good H5P"]
+  NS --> K2["KPI 2 · Repeat usage ↑<br/>comes back — the retention gate"]
+  NS --> K3["KPI 3 · Job range ↑<br/>more kinds of source &amp; output"]
+  NS --> K4["KPI 4 · Course authoring<br/>curriculum → a course"]
+  F["Foundation — which KPI is moving, and why"] --- K1
+  F --- K2
+  F --- K3
+  F --- K4
+  T["Trust — every result verifiable"] --- K1
+  T --- K2
+  T --- K3
+  T --- K4
 ```
 
-Text form, with the phase each bet lands in:
+### KPI 1 · Publish rate ↑ — *first good H5P*
 
-```
-Outcome — reduce time-to-value · improve W1→W2 retention
-│
-├─ Opportunity 1 · Intent is a blank box, not reusable, source opaque
-│    ├─ Automatic source read-back ......................... Phase 1
-│    ├─ Verbatim question extraction (Pasted Text) ......... Phase 1
-│    ├─ Prompt XOR brief · presets · "Improve" ............. Phase 2
-│    └─ Prompt / brief library (save, reuse, bundle) ....... Phase 2
-│
-├─ Opportunity 2 · Activity choice is blind, easy to over-pick
-│    ├─ Recommendation engine v1 (feasibility + desirability + count) ... Phase 1
-│    └─ Pre-checked set · item counts · one-line reasons ... Phase 1
-│
-├─ Opportunity 3 · No checkpoint before content is committed; can't verify; N editors to fix   ← the retention fix
-│    ├─ Review & Approve step + "Create N" gate ........... Phase 1  (P0)
-│    ├─ Live H5P preview per item (Review + Play) .......... Phase 1  (P0)
-│    ├─ Per-question trust signals ........................ Phase 1  (P0)
-│    ├─ Refine / Remix / Discard — bounded steers ......... Phase 1–2
-│    └─ review_event + ImportRecord eval stream ........... Phase 1
-│
-└─ Opportunity 4 · Output dumped in a folder, no link to its import
-     ├─ Persisted ImportRecord receipt .................... done (prototype)
-     ├─ Content in the library (no Smart Import folder) ... Phase 3
-     └─ "from: <import>" tag + provenance filter .......... Phase 3
-```
+*The educator ships a good first H5P. You can't retain a bad first run — this is the activation lever.*
+
+| Opportunity | Part | Horizon | Prototype |
+|---|---|---|---|
+| **Source read-back** — what the AI sees in the source, before generate | Express intent | now | ✓ |
+| **Recommendation engine** — feasibility + desirability + count | Choose what gets made | now | ✓ |
+| **"Why this fits"** — per-type source + intent reason, with item counts | Choose what gets made | now | ✓ |
+| **Review & approval gate** — a checkpoint before content is committed ("Create N") | Review & refine | now | ✓ |
+| **Trust signals per question** — source span · answer-key note · confidence | Review & refine | now | ✓ |
+| **Live H5P preview** — Review + Play, per item | Review & refine | now | ✓ |
+| **Content in the library** — no dedicated folder | Find & reuse | now | ✓ |
+
+### KPI 2 · Repeat usage ↑ — *the retention gate*
+
+*Imports per active user per week. This KPI **is** the north-star number.*
+
+| Opportunity | Part | Horizon | Prototype |
+|---|---|---|---|
+| **Prompt & brief library** — save & reuse a prompt or a brief format | Express intent | now | ✓ |
+| **Design brief** — a structured brief: parameters + values, saveable as a template | Express intent | later | ✓ |
+| **Improve my prompt** — rewrite a rough prompt to best practice | Express intent | next | — |
+| **Per-activity controls & coverage** — count, difficulty; objectives × activities | Choose what gets made | next | — |
+| **Refine / Remix / Discard** — bounded, per-activity, reasoned | Review & refine | now | ✓ |
+| **Inline edit** | Review & refine | now | ✓ |
+| **Per-element refine** — regenerate one question, not the whole activity | Review & refine | next | — |
+| **Propagate-a-fix** — apply one correction across items; remember the preference | Review & refine | later | — |
+| **Import record & provenance tag** — reopenable receipt · `from:` filter | Find & reuse | now | ✓ |
+
+### KPI 3 · Job range ↑ — *more kinds of source & output*
+
+*Widens who can use Smart Import at all, and for what.*
+
+| Opportunity | Part | Horizon | Prototype |
+|---|---|---|---|
+| **Question extractor** — pull existing questions from the source verbatim, instead of generating new ones | Express intent | next | ✓ |
+| **PowerPoint as a source** — slide + notes + structure parsing | Express intent | next | — |
+| **Fidelity control** — how creative or restricted the output should be | Express intent | later | — |
+| **Multiple sources** in one import | Express intent | later | — |
+| **Creation without source** — generate from a brief alone, no source document | Express intent | later | — |
+| **Wider type coverage** — more H5P types, by demand × value | Choose what gets made | later | — |
+| **Images & diagrams** — carry them through; image-based types | Choose what gets made | later | — |
+| **Extraction check** — extracted item ↔ source-span diff | Review & refine | next | — |
+
+### KPI 4 · Course authoring — *curriculum → a course*
+
+*Reuses the whole stack (intent → approval → refine → provenance). The later bet.*
+
+| Opportunity | Part | Horizon | Prototype |
+|---|---|---|---|
+| **Curriculum as brief** — syllabus / outcomes drive generation | Express intent | later | — |
+| **Map to objectives** — content ↔ modules / topics / objectives | Choose what gets made | later | — |
+| **Course-aligned set** — generate a whole set in one pass | Choose what gets made | later | — |
+| **Course workspace** — review, reorganise & refine the set | Review & refine | later | — |
+| **Org controls** — admin generation policy + org-published formats | Find & reuse | later | — |
+
+### Foundation — *measurement, under every KPI*
+
+*The read instrument for every roadmap decision.* Fuller event detail in [Measurement](#measurement).
+
+| Opportunity | Horizon | Prototype |
+|---|---|---|
+| **Approve / edit / refine / remix rate** — the educator's implicit quality signal, per content type, per source (`review_event` stream) | now | ✓ |
+
+### Trust — *every result verifiable, under every KPI*
+
+*An educator only publishes what they can check — this multiplies every KPI.*
+
+| Opportunity | Horizon | Prototype |
+|---|---|---|
+| **Source read-back** — inspect the source behind any generated item | now | ✓ |
+| **Evidence & rationale** — where an answer came from; flag unsupported | now | ✓ (partial) |
+| **Value shown back to the educator** — "you approved 6 activities · ~40 min saved" | next | — |
+| **"How it read your source"** — transparency view of the transformation | later | — |
+
+### The compact view (one slide)
+
+| KPI | What it measures | Where it stands |
+|---|---|---|
+| **Publish rate ↑** | First good H5P — first-use success | all `now` · 7 of 7 in the prototype |
+| **Repeat usage ↑** | Imports / active user / week — *the retention gate* | `now → later` · 5 of 9 in the prototype |
+| **Job range ↑** | More kinds of source & output | `next → later` · 1 of 8 in the prototype |
+| **Course authoring** | Curriculum → a course | all `later` · none yet |
+| **Foundation** | Which KPI is moving, and why | `now` · the approve / edit / refine / remix rate, in the prototype |
+| **Trust** | Every result verifiable | `now → later` · 2 of 4 in the prototype |
 
 ---
 
@@ -196,10 +391,12 @@ rework keeps that shell and inserts new steps.
 - **NEW — Question handling** when questions are detected:
   **[Extract as-is]** · **[Generate new]** · **[Both]**. Extraction lifts the educator's own
   questions into the target H5P type with minimal rewriting — faster, and their own wording.
-- **NEW — Intent authoring** replaces the single Customization box. The educator picks **one
+- **NEW — Design brief** replaces the single Customization box. The educator picks **one
   mode** — *Write a prompt* **or** *Guided brief* — never both at once (a free-text prompt and a
   structured brief can contradict each other). Prompt mode carries **preset prompts** to start
-  from and an **"improve this prompt"** action; brief mode is a structured form only.
+  from and an **"improve my prompt"** action; brief mode is a structured, parameterised form,
+  saveable as a template. _(Making the brief a `later` priority — the current version is
+  preliminary.)_
 - **Language** unchanged.
 
 ### Screen 2 — Select Activities _(existing, enhanced)_
@@ -305,7 +502,7 @@ statements"), propagate-a-fix-and-remember, inline flag-distractor · publish-se
 
 ## Stages (detail)
 
-### Stage 1 — Intent authoring
+### Stage 1 — Design brief
 
 The educator authors intent in **exactly one mode** — a written prompt **or** a guided brief.
 They are mutually exclusive: a free-text prompt and a set of structured fields can contradict
@@ -408,7 +605,7 @@ automated verbatim-diff check added then.
   **Activity recommendation engine (v1)** documented below (feasibility gate from the source,
   desirability rank from the intent, count 1–3, explicit prompt instructions override).
 - **Auto-propose learning objectives** from the source.
-- **Verbatim question extraction** — when the source already contains questions (worksheet,
+- **Question extractor** — when the source already contains questions (worksheet,
   question bank, past paper), detect them and offer to import as-is into the chosen H5P type
   rather than generating new ones. Faster, and it is the educator's own material.
 - **PowerPoint (.pptx) as a first-class source** — lecturers live in PowerPoint; today's
@@ -607,11 +804,10 @@ Every action writes a `review_event` (schema in the Screen 3 section); this is t
 eval stream — approve-without-edit rate, which steer people reach for, remix from→to pairs,
 discard reasons by source kind, refine attempt-loops.
 
-**Phase 2 (not built).** Scoped natural-language edits · propagate-a-fix (and remember) ·
-diagnosis→strategy branching on Refine · "refine instead of discard" redirect ·
-difficulty / count / activity-type as standalone controls · post-generation coverage report
-with "fill the gap" / coverage-grid-tied Add-item · attempt-loop escalation ("this source keeps
-failing for this type — try a different type").
+**Not built (Repeat-usage KPI items).** Per-element refine (regenerate one question) · scoped
+natural-language edits · propagate-a-fix (and remember) · diagnosis→strategy branching on Refine ·
+"refine instead of discard" redirect · post-generation coverage report with "fill the gap" ·
+attempt-loop escalation ("this source keeps failing for this type — try a different type").
 
 ### Stage 4 — Discoverability & organization
 
@@ -627,11 +823,11 @@ ties a set together.
 (`.imports.jsonl`); the library view lists items across every persisted import, and each item's
 `from:` tag opens that import's receipt. Survives "Start another import" and reload.
 
-**Phase 3:** a standalone **Smart Imports list** screen (the second index — "what did I import?"),
-full two-way navigation, and lifecycle (archive/delete an import + its content together). Render
-output is not yet namespaced by import (`public/h5p/_render/<itemId>/` collides across imports),
-so a *reopened* past import shows item metadata but is not re-playable — namespacing + `_render`
-GC is a Phase-3 item.
+**Not built (Repeat-usage KPI items).** A standalone **Smart Imports list** screen (the second
+index — "what did I import?"), full two-way navigation, and lifecycle (archive/delete an import +
+its content together). Render output is not yet namespaced by import
+(`public/h5p/_render/<itemId>/` collides across imports), so a *reopened* past import shows item
+metadata but is not re-playable — namespacing + `_render` GC is a later item.
 
 ### Stage 5 — Trust
 
@@ -708,73 +904,68 @@ retention by variant.
 
 ---
 
-## Roadmap — prioritization, sequencing, success measures
+## Roadmap — the matrix
+
+The same opportunities from the [opportunity map](#opportunity-map), placed where they act:
+**workflow part** across, **KPI** down. Each entry shows its **horizon** (`now` / `next` /
+`later`) and **✓** if the prototype already has it.
 
 ### North star & guardrail
 
-- **North star: W1→W2 retention** (currently ~20%). Target **35%+ end of Phase 1**, **40%+ end
-  of Phase 2**. Full metric tree in [Measurement](#measurement).
-- **Guardrail — reduce, don't add, time-to-value.** The approval gate must make the *whole* job
-  (idea → usable content) faster, not just add a review step. Levers: source read-back runs
-  automatically; recommended activities pre-checked; a **Quick generate** path that skips activity
-  selection entirely; everything **approved by default** so review is opt-out. Target:
-  **time from source pasted → first approved set is lower than today's source → cleaned-up
-  content**, even though a review screen now exists.
+- **North star: retention** — Smart Import used again the week after first use (~20% today →
+  **40%+**). The intermediate levers are **publish rate** (KPI 1) and **repeat usage** (KPI 2).
+  Full metric tree in [Measurement](#measurement).
+- **Guardrail — don't add time-to-value.** Every checkpoint, read-back and recommendation must
+  make the *whole* job (idea → usable content) faster, not just insert a step. The fast path
+  stays source → generate → create: read-back is automatic and non-blocking, recommendations
+  pre-checked, review approve-by-default.
+- **Foundation** and **Trust** ship *continuously*, under every row — never as a milestone.
 
-### Phase 1 — Fix the cliff (first-run trust + the gate)
+### The matrix
 
-| Seq | Item | Priority | Success measure |
-|---|---|---|---|
-| 1 | Approval gate: proposed-content list + **live H5P preview per item** + approve/drop/refine | P0 | ≥ 60% of imports reach an approved set (vs. abandon after generate); median generate→approved < 5 min |
-| 2 | Source grounding per item (show the source sentence) | P0 | Educator "I could tell if each item was right" ≥ 4/5 in usability test |
-| 2 | Answer-key justification per item | P1 | Contributes to approve-without-edit rate ≥ 55% |
-| 3 | Activity recommendation engine v1 (feasibility gate + desirability rank + count logic; see spec) | P1 | ≥ 50% of imports keep the recommended activity set unchanged; "created an activity then deleted it whole" rate ↓ |
-| 3 | Source read-back panel | P1 | Leading indicator: poor-fit activity selections ↓ |
-| 3 | Verbatim question extraction — **Pasted Text only**, prompt + approval-gate verification | P1 | For question-bearing sources, ≥ 50% choose Extract; edit rate on extracted items < 10% |
-| 4 | Known-limitations disclosure at create time | P2 | First-run on unsupported sources (math/procedural) ↓ |
-| — | **Phase gate** | | **W1→W2 retention 20% → 35%+** |
+| KPI ↓ / Part → | 1 · Express intent | 2 · Choose what gets made | 3 · Review & refine | 4 · Find & reuse |
+|---|---|---|---|---|
+| **KPI 1 · Publish rate ↑**<br>*the Sprint 2 demo — fully in the prototype* | `now ✓` Source read-back | `now ✓` Recommendation engine<br>`now ✓` "Why this fits" | `now ✓` Review & approval gate<br>`now ✓` Trust signals per question<br>`now ✓` Live H5P preview | `now ✓` Content in the library |
+| **KPI 2 · Repeat usage ↑**<br>*W1→W2 20% → 40%+ — the retention number* | `now ✓` Prompt & brief library<br>`later ✓` Design brief<br>`next` Improve my prompt | `next` Per-activity controls & coverage | `now ✓` Refine / Remix / Discard<br>`now ✓` Inline edit<br>`next` Per-element refine<br>`later` Propagate-a-fix | `now ✓` Import record & provenance tag |
+| **KPI 3 · Job range ↑**<br>*more kinds of source & output* | `next ✓` Question extractor<br>`next` PowerPoint as a source<br>`later` Fidelity control<br>`later` Multiple sources<br>`later` Creation without source | `later` Wider type coverage<br>`later` Images & diagrams | `next` Extraction check | — |
+| **KPI 4 · Course authoring**<br>*curriculum → a course — reuses the whole stack* | `later` Curriculum as brief | `later` Map to objectives<br>`later` Course-aligned set | `later` Course workspace | `later` Org controls |
 
-### Phase 2 — Fast & repeatable (returners → regulars)
+### Foundation & Trust — continuous (under every cell)
 
-| Seq | Item | Priority | Success measure |
-|---|---|---|---|
-| 1 | Document ingestion pipeline: `.pptx` + PDF/DOCX (layout-aware, OCR) — file-based question extraction rides on this | P1 | `.pptx` approve-without-edit rate reaches clean-article parity; W2 retention for `.pptx`-first users reaches cohort average |
-| 2 | Extraction verification pass (extracted item ↔ source-span diff, flag paraphrase/drop/renumber, unresolved keys) | P1 | Verbatim-mismatch rate on extracted items < 2%; educator-reported trust in extraction ≥ 4/5 |
-| 1 | Full intent authoring: prompt-XOR-brief toggle · preset prompts · "improve" (user text only) | P1 | Prompt or brief used in ≥ 30% of imports by users with ≥ 2 imports; approve-without-edit higher for intent-driven imports |
-| 2 | **Prompt & brief library** — system + author-saved templates (prompt or brief), optionally bundling the activity selection; MRU-sorted, recent marker, edit-without-clobber ("Update" vs "Save as new"). Account-scoped storage. | P1 | Among users with ≥ 3 imports, ≥ 40% start from a saved or system template; median time-to-generate ↓ for template starts; ≥ 20% of template users reuse the same template 3+ times |
-| 2 | Inline item actions + scoped natural-language edits (Refine) | P1 | Median edits per approved item trends **down** across a user's successive imports |
-| 2 | Per-activity controls + coverage grid | P2 | Cross-activity concept overlap ↓ (measured); "too many/few questions" feedback ↓ |
-| 3 | Propagate-a-fix + preference memory | P2 | Same correction made twice by the same user → near zero |
-| 3 | Personal track record + confidence indicators | P2 | Approval time decreases as track record accumulates |
-| — | **Phase gate** | | **W2 retention 40%+; imports/active user/week ↑** |
+**Foundation — measurement:** `now ✓` the educator's **approve / edit / refine / remix rate**,
+per content type and source (`review_event` stream). This is the read instrument for every
+decision below.
 
-### Phase 3 — Stickiness (habit + team expansion)
+**Trust — every result verifiable:**
 
-| Seq | Item | Priority | Success measure |
-|---|---|---|---|
-| 1 | Per-session containers + provenance + two-way navigation | P1 | % of users who re-open a past import ↑; "find the content from last week's import" task success ≥ 90% |
-| 2 | Session workspace (refine / add / export / publish set / bulk-move) | P2 | Published (not just created) rate ↑; bulk actions used |
-| 2 | Choose destination at import time | P2 | ≥ 50% of imports placed outside the "Smart Import" folder |
-| 3 | Confusion-report loop | P2 | % of confusion-flagged items regenerated ↑; downstream confusion rate on regenerated items ↓ |
-| 3 | Assemble into a coherent Interactive Book | P2 | "Assemble" adoption; retention delta assembled vs. loose output |
-| 3 | **Org layer**: admin-set generation policy (invisible: house style, spelling, accessibility, integrity) + org-published prompt/brief templates + optional 1–2 admin brief fields (course, standard) | P2 | Orgs with a policy set show lower cross-author style variance; ≥ 25% of enterprise/K-12 authors start from an org template |
-| 4 | Lifecycle (archive/delete session + content) | P3 | Per-active-user folder growth rate ↓ |
-| — | **Phase gate** | | **W4→W8 retention ↑; seats per org ↑** |
+| Opportunity | Horizon | Prototype |
+|---|---|---|
+| Source read-back | now | ✓ |
+| Evidence & rationale | now | ✓ (partial) |
+| Value shown back to the educator | next | — |
+| "How it read your source" view | later | — |
 
-### Deferred
+### Sequencing — why this order
 
-| Item | Trigger to revisit |
-|---|---|
-| Image ingestion & image-based content types | Image-based content types (Image Hotspots, image Drag-and-Drop, Find the Hotspot) added to the Smart Import catalog |
+1. **Publish rate first.** Retention is the goal, but you cannot retain an educator whose first
+   run was unusable — the ~20% cliff *is* a first-run-quality problem. This row is also the
+   smallest scope and already built, so it **is** the Sprint 2 demo: the demo and the roadmap's
+   first bet are the same thing.
+2. **PowerPoint as a source next.** The single biggest ask from real usage; it widens the top of
+   the funnel (more educators can use Smart Import *at all*), which compounds with a publish rate
+   that is now good.
+3. **Repeat-usage refinements after we can measure them.** Per-element refine and propagate-a-fix
+   are polish on a loop that already works — ship them once the approve / edit / refine rate shows
+   they cut real work, not before.
+4. **Course authoring last.** It reuses the entire stack (intent → approval → refine → provenance),
+   so every earlier investment carries into it; building it early would mean building on an
+   unvalidated foundation.
 
-### Where to focus
+The **approve / edit / refine / remix rate** is already live and never waits for a horizon — it
+is the number the sequencing above is read from.
 
-**Phase 1, Seq 1–2: the approval gate + live preview + grounding.** It is the retention fix and
-it is the Sprint 2 demo slice — the demo and the roadmap's first bet are the same thing.
-
-**Quick wins shippable independently:** known-limitations disclosure · content-type
-recommendation · source-grounding display (if generation already produces the spans) ·
-answer-key justification.
+**Quick wins, shippable independently, any time:** "evaluate my prompt" · the value shown back
+to the educator (the data is already collected).
 
 ### How the prototype de-risks this
 
