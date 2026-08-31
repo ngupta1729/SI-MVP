@@ -929,7 +929,33 @@ function Configure(p: {
 
   /* ---- guided brief: editable parameters + templates ---- */
   const extras = p.intent.briefExtras ?? [];
-  const setExtras = (next: BriefParam[]) => set({ briefExtras: next });
+  const addExtra = () =>
+    p.setIntent((it) => ({
+      ...it,
+      briefExtras: [...(it.briefExtras ?? []), { label: "", value: "" }],
+    }));
+  const updateExtra = (i: number, patch: Partial<BriefParam>) =>
+    p.setIntent((it) => ({
+      ...it,
+      briefExtras: (it.briefExtras ?? []).map((r, j) =>
+        j === i ? { ...r, ...patch } : r,
+      ),
+    }));
+  const removeExtra = (i: number) =>
+    p.setIntent((it) => ({
+      ...it,
+      briefExtras: (it.briefExtras ?? []).filter((_, j) => j !== i),
+    }));
+  const applyRecommendedBrief = () => {
+    setBriefLoadedId(null);
+    set({
+      audienceLevel: "beginner",
+      emphasis: "balanced",
+      volume: "standard",
+      language: "English",
+      briefExtras: [],
+    });
+  };
   const currentBrief = () => ({
     learningGoal: p.intent.learningGoal,
     audienceLevel: p.intent.audienceLevel,
@@ -957,7 +983,8 @@ function Configure(p: {
   function commitBriefSave() {
     const name = briefSaveName.trim();
     if (!name) return;
-    lib.saveBrief(name, currentBrief(), bundleTypes);
+    const id = lib.saveBrief(name, currentBrief(), bundleTypes);
+    setBriefLoadedId(id);
     setSavingBrief(false);
     setBriefSaveName("");
   }
@@ -1191,28 +1218,18 @@ function Configure(p: {
             )}
           </>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="text-zinc-400">Start from:</span>
               <button
-                onClick={() => {
-                  setBriefLoadedId(null);
-                  set({
-                    learningGoal: "",
-                    audienceLevel: "beginner",
-                    emphasis: "balanced",
-                    volume: "standard",
-                    language: "English",
-                    briefExtras: [],
-                  });
-                }}
+                onClick={applyRecommendedBrief}
                 className={`rounded-md border px-2 py-1 ${
                   briefLoadedId === null
                     ? "border-blue-600 font-medium"
                     : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
                 }`}
               >
-                Blank brief
+                Recommended
               </button>
               {briefTemplates.map((t) => (
                 <button
@@ -1229,7 +1246,7 @@ function Configure(p: {
               ))}
             </div>
 
-            <div className="divide-y divide-zinc-100 rounded-md border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+            <div className="divide-y divide-zinc-100 overflow-hidden rounded-md border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
               <BriefRow label="Learning goal">
                 <input
                   value={p.intent.learningGoal}
@@ -1238,7 +1255,7 @@ function Configure(p: {
                   placeholder="e.g. Distinguish the three plate-boundary types"
                 />
               </BriefRow>
-              <BriefRow label="Audience level">
+              <BriefRow label="Audience">
                 <select
                   value={p.intent.audienceLevel}
                   onChange={(e) =>
@@ -1289,38 +1306,24 @@ function Configure(p: {
               </BriefRow>
 
               {extras.map((row, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 px-3 py-1.5"
-                >
+                <div key={i} className="flex items-center gap-2 px-3 py-1.5">
                   <input
                     value={row.label}
-                    placeholder="parameter"
-                    onChange={(e) =>
-                      setExtras(
-                        extras.map((r, j) =>
-                          j === i ? { ...r, label: e.target.value } : r,
-                        ),
-                      )
-                    }
-                    className="w-28 shrink-0 rounded border border-zinc-300 p-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+                    placeholder="parameter name"
+                    onChange={(e) => updateExtra(i, { label: e.target.value })}
+                    className="w-32 shrink-0 rounded border border-zinc-300 p-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
                   />
                   <input
                     value={row.value}
-                    placeholder="value"
-                    onChange={(e) =>
-                      setExtras(
-                        extras.map((r, j) =>
-                          j === i ? { ...r, value: e.target.value } : r,
-                        ),
-                      )
-                    }
+                    placeholder="value the AI should follow"
+                    onChange={(e) => updateExtra(i, { value: e.target.value })}
                     className={briefControl}
                   />
                   <button
-                    onClick={() => setExtras(extras.filter((_, j) => j !== i))}
+                    onClick={() => removeExtra(i)}
                     title="Remove parameter"
-                    className="shrink-0 px-1 text-zinc-300 hover:text-red-500"
+                    aria-label="Remove parameter"
+                    className="shrink-0 rounded px-1 text-zinc-400 hover:bg-zinc-100 hover:text-red-500 dark:hover:bg-zinc-800"
                   >
                     ×
                   </button>
@@ -1328,46 +1331,58 @@ function Configure(p: {
               ))}
 
               <button
-                onClick={() => setExtras([...extras, { label: "", value: "" }])}
-                className="w-full px-3 py-1.5 text-left text-xs text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+                onClick={addExtra}
+                className="w-full px-3 py-2 text-left text-xs font-medium text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
               >
-                + Add a parameter
+                + Add parameter
                 {extras.length === 0 && (
-                  <span className="ml-1 text-zinc-400">
-                    — e.g. Curriculum, Tone, Reading level, Avoid
+                  <span className="ml-1 font-normal text-zinc-400">
+                    — e.g. Curriculum, Tone, Reading level, Things to avoid
                   </span>
                 )}
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              {briefLoadedId && briefEdited && briefLoaded && (
-                <button
-                  onClick={() =>
-                    lib.update(briefLoaded.id, {
-                      brief: currentBrief(),
-                      contentTypes: bundleTypes,
-                    })
-                  }
-                  className="rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
-                >
-                  Update “{briefLoaded.name}”
-                </button>
-              )}
+            <div className="flex flex-wrap items-center gap-2 text-xs">
               {savingBrief ? (
-                <SaveRow
-                  value={briefSaveName}
-                  onChange={setBriefSaveName}
-                  onSave={commitBriefSave}
-                  onCancel={() => setSavingBrief(false)}
-                />
+                <>
+                  <span className="text-zinc-400">Name this brief:</span>
+                  <SaveRow
+                    value={briefSaveName}
+                    onChange={setBriefSaveName}
+                    onSave={commitBriefSave}
+                    onCancel={() => setSavingBrief(false)}
+                  />
+                </>
               ) : (
-                <button
-                  onClick={() => setSavingBrief(true)}
-                  className="rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
-                >
-                  + Save {bundleTypes ? "brief + activities" : "as brief format"}
-                </button>
+                <>
+                  {briefLoaded && briefEdited && (
+                    <button
+                      onClick={() =>
+                        lib.update(briefLoaded.id, {
+                          brief: currentBrief(),
+                          contentTypes: bundleTypes,
+                        })
+                      }
+                      className="rounded-md border border-zinc-300 px-2.5 py-1 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                    >
+                      Update “{briefLoaded.name}”
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setSavingBrief(true)}
+                    className="rounded-md border border-blue-600 px-2.5 py-1 font-medium text-blue-700 dark:text-blue-300"
+                  >
+                    {briefLoaded && briefEdited
+                      ? "Save as a new brief"
+                      : "Save this brief"}
+                  </button>
+                  {briefLoaded && !briefEdited && (
+                    <span className="text-zinc-400">
+                      Using saved brief “{briefLoaded.name}”
+                    </span>
+                  )}
+                </>
               )}
             </div>
           </div>

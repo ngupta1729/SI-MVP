@@ -130,17 +130,12 @@ export function useTemplates() {
       brief: NonNullable<SavedTemplate["brief"]>,
       contentTypes?: string[],
     ) => {
+      const id = crypto.randomUUID();
       writeList([
-        {
-          id: crypto.randomUUID(),
-          name,
-          kind: "brief",
-          brief,
-          contentTypes,
-          createdAt: Date.now(),
-        },
+        { id, name, kind: "brief", brief, contentTypes, createdAt: Date.now() },
         ...readList(),
       ]);
+      return id;
     },
     [],
   );
