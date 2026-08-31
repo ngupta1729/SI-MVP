@@ -49,6 +49,21 @@ interface Recommendation {
   itemCount?: number;
 }
 
+/** Anonymous per-browser id — tags every review_event and ImportRecord for the dashboard. */
+function getSessionId(): string {
+  try {
+    const k = "smartimport.sessionId.v1";
+    let s = localStorage.getItem(k);
+    if (!s) {
+      s = crypto.randomUUID();
+      localStorage.setItem(k, s);
+    }
+    return s;
+  } catch {
+    return "no-storage";
+  }
+}
+
 const DEFAULT_INTENT: ImportIntent = {
   authoringMode: "prompt",
   prompt: "",
@@ -237,6 +252,10 @@ export default function Page() {
   // One id per import session; carried on every review_event and the final record.
   // Fresh on "Start another import" (a plain useMemo would collide the 2nd import).
   const [importId, setImportId] = useState<string>(() => crypto.randomUUID());
+  // Anonymous per-browser id — stable across imports, not reset in startAnother.
+  const [sessionId] = useState<string>(() =>
+    typeof window === "undefined" ? "" : getSessionId(),
+  );
   const [attempts, setAttempts] = useState<Record<string, number>>({});
   const [remixes, setRemixes] = useState<Record<string, number>>({});
 
@@ -247,6 +266,8 @@ export default function Page() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         importId,
+        sessionId,
+        uiVariant,
         engine: result?.engine,
         sourceKind: sourceTab,
         readbackKind: shownAnalysis?.kind,
@@ -371,6 +392,8 @@ export default function Page() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         importId,
+        sessionId,
+        uiVariant,
         summary: {
           generated: result.items.length,
           created: kept.length,
@@ -421,6 +444,8 @@ export default function Page() {
     }));
     const record: ImportRecord = {
       id: importId,
+      sessionId,
+      uiVariant,
       name: label,
       createdAt: Date.now(),
       source: {
@@ -496,7 +521,15 @@ export default function Page() {
             <span className="text-sm font-semibold">Smart Import</span>
             <span className="ml-2 text-xs text-zinc-400">Workspace</span>
           </div>
-          <VariantToggle value={uiVariant} onChange={setUiVariant} />
+          <div className="flex items-center gap-3">
+            <a
+              href="/dashboard"
+              className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+            >
+              Dashboard
+            </a>
+            <VariantToggle value={uiVariant} onChange={setUiVariant} />
+          </div>
         </div>
 
         {error && (
@@ -589,7 +622,15 @@ export default function Page() {
         <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
           <div className="flex items-start justify-between gap-3">
             <h1 className="text-lg font-semibold">Smart Import</h1>
-            <VariantToggle value={uiVariant} onChange={setUiVariant} />
+            <div className="flex items-center gap-3">
+              <a
+                href="/dashboard"
+                className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+              >
+                Dashboard
+              </a>
+              <VariantToggle value={uiVariant} onChange={setUiVariant} />
+            </div>
           </div>
           <Stepper screen={screen} />
           <p className="mt-1 text-xs text-zinc-400">

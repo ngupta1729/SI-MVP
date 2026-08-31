@@ -65,6 +65,10 @@ export interface ImportRecord {
   promptPresetId: string | null;
   engine: string;
   model: string | null;
+  /** Anonymous per-browser id (localStorage), shared with the review_event stream. */
+  sessionId?: string;
+  /** Which UI shape produced this import. */
+  uiVariant?: "wizard" | "workspace";
   outcome: ImportOutcome;
   /** One per generated item — kept and discarded. */
   decisions: ImportItemDecision[];
