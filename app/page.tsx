@@ -1535,91 +1535,90 @@ function Activities(p: {
         ? "three — the source is long and multi-theme and the intent asks for breadth"
         : "two — one to check recall, one to check understanding, with minimal overlap";
 
+  const chosenRecs = recs.filter((r) =>
+    p.intent.contentTypes.includes(r.name),
+  );
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       {a ? (
         <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-900">
           <p className="font-medium text-zinc-500">Why these activities</p>
           <p className="mt-1 text-zinc-600 dark:text-zinc-300">
-            Your source {kindVerb(a.kind)} — ~{a.wordCount} words,{" "}
-            {a.concepts.length} key{" "}
-            {a.kind === "reference" ? "terms" : "concepts"}
-            {a.themes.length > 1 ? `, ${a.themes.length} themes` : ""}. Your intent:{" "}
-            {intentBit}.
+            Source {kindVerb(a.kind)} — ~{a.wordCount} words, {a.concepts.length}{" "}
+            key {a.kind === "reference" ? "terms" : "concepts"}
+            {a.themes.length > 1 ? `, ${a.themes.length} themes` : ""}. Intent:{" "}
+            {intentBit}. → <b>{recLabels || "a recall check"}</b>, {countWhy}.
           </p>
-          <p className="mt-1 text-zinc-600 dark:text-zinc-300">
-            That points to <b>{recLabels || "a recall check"}</b> — {countWhy}. Each
-            recommended card says which source trait and which part of your intent it
-            answers.
-          </p>
+          {chosenRecs.length > 0 && (
+            <ul className="mt-1.5 space-y-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+              {chosenRecs.map((r) => (
+                <li key={r.name}>
+                  <b className="text-zinc-600 dark:text-zinc-300">
+                    {contentType(r.name)?.label}
+                  </b>{" "}
+                  — {r.reason}
+                  {r.itemCount ? ` · ~${r.itemCount} items` : ""}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       ) : (
         <p className="text-sm text-zinc-500">
-          Recommended activities are pre-checked from your source and intent. All
-          overridable.
+          Recommended activities are pre-checked from your source and intent.
         </p>
       )}
-      {CATEGORIES.map((cat) => {
-        const items = CONTENT_TYPES.filter((c) => c.category === cat);
-        if (!items.length) return null;
-        return (
-          <div key={cat}>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-              {cat}
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {items.map((ct) => {
-                const rec = p.recByName[ct.name];
-                const checked = p.intent.contentTypes.includes(ct.name);
-                return (
-                  <button
-                    key={ct.name}
-                    onClick={() => p.toggle(ct.name)}
-                    className={`rounded-lg border p-3 text-left ${
-                      checked
-                        ? "border-blue-600 bg-blue-50/60 dark:bg-blue-950/30"
-                        : "border-zinc-200 dark:border-zinc-800"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{ct.label}</span>
-                      <span className="flex items-center gap-1.5">
-                        {rec?.recommended && (
-                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                            recommended
-                          </span>
-                        )}
-                        {ct.twin !== "full" && (
-                          <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800">
-                            {ct.twin === "mock" ? "no preview" : "catalog only"}
-                          </span>
-                        )}
-                        <input readOnly type="checkbox" checked={checked} />
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-zinc-500">{ct.blurb}</p>
-                    {rec && (
-                      <p
-                        className={`mt-1 text-[11px] ${
-                          rec.recommended
-                            ? "text-emerald-700 dark:text-emerald-400"
-                            : "text-zinc-400"
-                        }`}
-                      >
-                        {rec.recommended ? "Why: " : ""}
-                        {rec.reason}
-                        {rec.recommended && rec.itemCount
-                          ? ` · ~${rec.itemCount} items`
-                          : ""}
-                      </p>
-                    )}
-                  </button>
-                );
-              })}
+
+      <div className="space-y-2">
+        {CATEGORIES.map((cat) => {
+          const items = CONTENT_TYPES.filter((c) => c.category === cat);
+          if (!items.length) return null;
+          return (
+            <div key={cat}>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                {cat}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {items.map((ct) => {
+                  const rec = p.recByName[ct.name];
+                  const checked = p.intent.contentTypes.includes(ct.name);
+                  const tip = [ct.blurb, rec?.reason]
+                    .filter(Boolean)
+                    .join(" — ");
+                  return (
+                    <button
+                      key={ct.name}
+                      onClick={() => p.toggle(ct.name)}
+                      title={tip}
+                      className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                        checked
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : rec?.recommended
+                            ? "border-emerald-500 text-emerald-700 dark:text-emerald-300"
+                            : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-300"
+                      } ${ct.twin !== "full" ? "opacity-60" : ""}`}
+                    >
+                      {rec?.recommended && !checked && (
+                        <span aria-hidden>★ </span>
+                      )}
+                      {ct.label}
+                      {checked && rec?.itemCount ? (
+                        <span className="opacity-70"> ·{rec.itemCount}</span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+
+      <p className="text-[10px] text-zinc-400">
+        Filled = in your set · ★ = recommended · faded = no live preview yet ·
+        hover a chip for what it&rsquo;s good for
+      </p>
     </div>
   );
 }
