@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SI-MVP — Reworked H5P Smart Import (prototype)
 
-## Getting Started
+A working Next.js prototype of a reworked **H5P.com Smart Import**: turn a source document into
+H5P interactive content, then review, refine, and approve what the AI generates before anything
+is committed — rendered in the real H5P player.
 
-First, run the development server:
+Companion product/UX spec: `specs/smart-import-ux.md`.
+
+## Run locally
 
 ```bash
+npm install
+cp .env.local.example .env.local   # optional — set OPENAI_API_KEY for the model engine
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000. Without `OPENAI_API_KEY` the app runs a deterministic **mock engine**
+so the whole flow still works; with a key set it generates with `gpt-4o-mini`
+(override via `TWIN_MODEL` / `TWIN_ANALYZE_MODEL`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploy to Vercel
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Import `ngupta1729/SI-MVP` at [vercel.com/new](https://vercel.com/new) (framework auto-detected
+   as Next.js).
+2. Add environment variable **`OPENAI_API_KEY`** (optional — omit to demo on the mock engine).
+3. Deploy.
 
-## Learn More
+Notes for the demo:
 
-To learn more about Next.js, take a look at the following resources:
+- The H5P **library substrate** (`public/h5p/<host>/…`) is committed and served as static assets.
+- Generated content is staged to the serverless instance's `/tmp` and re-staged by the browser
+  each time you open **Play**, so it survives cold starts. It is not durable storage.
+- `/dashboard` reads the review-event / import logs from `/tmp` on Vercel, so its numbers are
+  per-instance and reset on redeploy. Locally the logs persist in the project root
+  (`.review-events.jsonl`, `.imports.jsonl`, both gitignored).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Regenerating the H5P substrate
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+`scripts/prepare-h5p.mjs` extracts `data/*.h5p` exports into `public/h5p/<host>/`. The source
+`.h5p` files aren't in the repo; the extracted output is committed so the app runs without them.
+To add a content type: drop its `.h5p` into `data/` and run `node scripts/prepare-h5p.mjs`.
 
-## Deploy on Vercel
+## Layout
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Path | What |
+|---|---|
+| `app/page.tsx` | The whole reworked workflow UI (configure → activities → review → library) |
+| `app/dashboard/` | Read-only evals + feedback roll-up |
+| `app/api/twin`, `regenerate` | Generate / refine content from the source |
+| `app/api/h5p-render/[id]` | Stage + serve per-item render content |
+| `lib/twin.ts` | Model + mock generation, recommendation engine |
+| `lib/h5p/` | Content-type registry, render hosts |
+| `components/H5PRender.tsx` | `h5p-standalone` player wrapper |

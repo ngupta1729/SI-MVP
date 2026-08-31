@@ -8,31 +8,26 @@ import type { ImportIntent, TwinSource } from "@/lib/types";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const RENDER_DIR = path.join(process.cwd(), "public", "h5p", "_render");
-
 /**
- * Materialise each generated item into public/h5p/_render/<id>/ so
- * h5p-standalone can load it: our content.json + the host's h5p.json,
- * with libraries served from the extracted real export.
+ * Describe how to render an item: libraries come from the committed host export
+ * (served statically), h5p.json is the host's package definition, and the
+ * per-item content is staged to tmp by the client via /api/h5p-render/<id>.
  */
-async function materialise(id: string, host: string, contentJson: unknown) {
-  const hostDir = path.join(process.cwd(), "public", "h5p", host);
-  const dest = path.join(RENDER_DIR, id);
-  await fs.rm(dest, { recursive: true, force: true });
-  await fs.mkdir(path.join(dest, "content"), { recursive: true });
-
+async function renderPlan(id: string, host: string) {
   let h5pJson = "{}";
   try {
-    h5pJson = await fs.readFile(path.join(hostDir, "h5p.json"), "utf8");
+    h5pJson = await fs.readFile(
+      path.join(process.cwd(), "public", "h5p", host, "h5p.json"),
+      "utf8",
+    );
   } catch {
-    /* host not prepared yet */
+    /* host not prepared */
   }
-  await fs.writeFile(path.join(dest, "h5p.json"), h5pJson);
-  await fs.writeFile(
-    path.join(dest, "content", "content.json"),
-    JSON.stringify(contentJson),
-  );
-  return { librariesPath: `/h5p/${host}`, h5pJsonPath: `/h5p/_render/${id}` };
+  return {
+    librariesPath: `/h5p/${host}`,
+    h5pJsonPath: `/api/h5p-render/${id}`,
+    h5pJson,
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -50,7 +45,7 @@ export async function POST(req: NextRequest) {
   for (const item of result.items) {
     const def = contentType(item.contentType);
     const host = def?.renderHost ?? "summary";
-    const render = await materialise(item.id, host, item.contentJson);
+    const render = await renderPlan(item.id, host);
     items.push({ ...item, render, hostPrepared: await hostExists(host) });
   }
 

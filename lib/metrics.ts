@@ -2,12 +2,9 @@
 // metrics for the /dashboard page. Pure functions + a thin fs reader; no React.
 
 import { promises as fs } from "node:fs";
-import path from "node:path";
 import type { ImportRecord, ImportItemDecision } from "./import-records";
 import { contentType } from "./h5p/contentTypes";
-
-const IMPORTS_LOG = path.join(process.cwd(), ".imports.jsonl");
-const EVENTS_LOG = path.join(process.cwd(), ".review-events.jsonl");
+import { importsLog as IMPORTS_LOG, eventsLog as EVENTS_LOG } from "./server-paths";
 
 export type UiVariant = "wizard" | "workspace";
 

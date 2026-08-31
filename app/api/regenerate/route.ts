@@ -8,25 +8,21 @@ import type { ImportIntent, TwinSource } from "@/lib/types";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const RENDER_DIR = path.join(process.cwd(), "public", "h5p", "_render");
-
-async function materialise(id: string, host: string, contentJson: unknown) {
-  const hostDir = path.join(process.cwd(), "public", "h5p", host);
-  const dest = path.join(RENDER_DIR, id);
-  await fs.rm(dest, { recursive: true, force: true });
-  await fs.mkdir(path.join(dest, "content"), { recursive: true });
+async function renderPlan(id: string, host: string) {
   let h5pJson = "{}";
   try {
-    h5pJson = await fs.readFile(path.join(hostDir, "h5p.json"), "utf8");
+    h5pJson = await fs.readFile(
+      path.join(process.cwd(), "public", "h5p", host, "h5p.json"),
+      "utf8",
+    );
   } catch {
     /* host not prepared */
   }
-  await fs.writeFile(path.join(dest, "h5p.json"), h5pJson);
-  await fs.writeFile(
-    path.join(dest, "content", "content.json"),
-    JSON.stringify(contentJson),
-  );
-  return { librariesPath: `/h5p/${host}`, h5pJsonPath: `/h5p/_render/${id}` };
+  return {
+    librariesPath: `/h5p/${host}`,
+    h5pJsonPath: `/api/h5p-render/${id}`,
+    h5pJson,
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -56,7 +52,7 @@ export async function POST(req: NextRequest) {
   const def = contentType(body.contentType);
   const host = def?.renderHost ?? "single-choice-set";
   const id = body.itemId; // keep the same id so it slots back into the list
-  const render = await materialise(id, host, item.contentJson);
+  const render = await renderPlan(id, host);
   const hostPrepared = await fs
     .access(path.join(process.cwd(), "public", "h5p", host, "h5p.json"))
     .then(() => true)

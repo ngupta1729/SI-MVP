@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "node:fs";
-import path from "node:path";
+import { importsLog as LOG } from "@/lib/server-paths";
 
 export const runtime = "nodejs";
 
 // Persisted import records — one appended line per finish (and per rename).
 // GET dedupes by id (last line wins) so this stays an append-only log, like
 // .review-events.jsonl next to it.
-const LOG = path.join(process.cwd(), ".imports.jsonl");
 
 export async function POST(req: NextRequest) {
   const record = await req.json();

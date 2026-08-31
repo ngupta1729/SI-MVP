@@ -1,0 +1,3 @@
+# H5P library substrate — vendored assets, not source we edit. Treat as binary
+# so diffs stay quiet and line endings are left alone.
+/public/h5p/** binary

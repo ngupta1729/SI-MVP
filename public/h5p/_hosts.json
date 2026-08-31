@@ -1,0 +1,30 @@
+[
+  {
+    "machineName": "H5P.SingleChoiceSet",
+    "host": "single-choice-set"
+  },
+  {
+    "machineName": "H5P.Summary",
+    "host": "summary"
+  },
+  {
+    "machineName": "H5P.QuestionSet",
+    "host": "question-set"
+  },
+  {
+    "machineName": "H5P.Dialogcards",
+    "host": "dialog-cards"
+  },
+  {
+    "machineName": "H5P.DragText",
+    "host": "drag-text"
+  },
+  {
+    "machineName": "H5P.Crossword",
+    "host": "crossword"
+  },
+  {
+    "machineName": "H5P.Accordion",
+    "host": "accordion"
+  }
+]

@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "node:fs";
-import path from "node:path";
+import { eventsLog as LOG } from "@/lib/server-paths";
 
 export const runtime = "nodejs";
 
 // MVP: append review-stage feedback to a JSONL log. This is the eval stream —
 // approve-without-edit rate, regenerate adjustments, discard reasons, edit
 // magnitude, per content type / source kind / intent.
-const LOG = path.join(process.cwd(), ".review-events.jsonl");
 
 export async function POST(req: NextRequest) {
   const event = await req.json();

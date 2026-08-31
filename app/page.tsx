@@ -36,7 +36,7 @@ const MOCK_LIBRARY_ITEMS = [
 type SourceTab = "Pasted Text" | "Wikipedia";
 
 type RenderedItem = TwinResult["items"][number] & {
-  render: { librariesPath: string; h5pJsonPath: string };
+  render: { librariesPath: string; h5pJsonPath: string; h5pJson: string };
   hostPrepared: boolean;
 };
 type ApiResult = Omit<TwinResult, "items"> & {
@@ -3170,6 +3170,9 @@ function ItemPanel(p: {
               h5pJsonPath={p.item.render.h5pJsonPath}
               librariesPath={p.item.render.librariesPath}
               renderKey={p.item.id}
+              renderId={p.item.id}
+              contentJson={p.item.contentJson}
+              h5pJson={p.item.render.h5pJson}
             />
             {edited && (
               <p className="text-[11px] text-amber-600">

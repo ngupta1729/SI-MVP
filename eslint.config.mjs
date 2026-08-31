@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored H5P library substrate — static assets, not our source.
+    "public/**",
   ]),
 ]);
 
