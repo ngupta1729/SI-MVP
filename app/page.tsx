@@ -1229,16 +1229,16 @@ function Configure(p: {
               ))}
             </div>
 
-            <div className="grid gap-3 rounded-md border border-zinc-200 p-3 text-sm sm:grid-cols-2 dark:border-zinc-800">
-              <Field label="Learning goal">
+            <div className="divide-y divide-zinc-100 rounded-md border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+              <BriefRow label="Learning goal">
                 <input
                   value={p.intent.learningGoal}
                   onChange={(e) => set({ learningGoal: e.target.value })}
-                  className={fieldInput}
+                  className={briefControl}
                   placeholder="e.g. Distinguish the three plate-boundary types"
                 />
-              </Field>
-              <Field label="Audience level">
+              </BriefRow>
+              <BriefRow label="Audience level">
                 <select
                   value={p.intent.audienceLevel}
                   onChange={(e) =>
@@ -1247,104 +1247,96 @@ function Configure(p: {
                         .value as ImportIntent["audienceLevel"],
                     })
                   }
-                  className={fieldInput}
+                  className={briefControl}
                 >
                   <option value="beginner">Beginner</option>
                   <option value="intermediate">Intermediate</option>
                   <option value="advanced">Advanced</option>
                 </select>
-              </Field>
-              <Field label="Emphasis">
+              </BriefRow>
+              <BriefRow label="Emphasis">
                 <select
                   value={p.intent.emphasis}
                   onChange={(e) =>
                     set({ emphasis: e.target.value as ImportIntent["emphasis"] })
                   }
-                  className={fieldInput}
+                  className={briefControl}
                 >
                   <option value="balanced">Balanced</option>
                   <option value="assessment">Assessment-heavy</option>
                   <option value="concept_explanation">Concept explanation</option>
                 </select>
-              </Field>
-              <Field label="Volume">
+              </BriefRow>
+              <BriefRow label="Volume">
                 <select
                   value={p.intent.volume}
                   onChange={(e) =>
                     set({ volume: e.target.value as ImportIntent["volume"] })
                   }
-                  className={fieldInput}
+                  className={briefControl}
                 >
                   <option value="light">Light (~4 questions)</option>
                   <option value="standard">Standard (~6)</option>
                   <option value="thorough">Thorough (~10)</option>
                 </select>
-              </Field>
-              <Field label="Language">
+              </BriefRow>
+              <BriefRow label="Language">
                 <input
                   value={p.intent.language}
                   onChange={(e) => set({ language: e.target.value })}
-                  className={fieldInput}
+                  className={briefControl}
                 />
-              </Field>
-            </div>
+              </BriefRow>
 
-            <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-              <p className="mb-1.5 text-xs font-medium text-zinc-500">
-                Your parameters
-              </p>
-              {extras.length === 0 ? (
-                <p className="text-xs text-zinc-400">
-                  Add anything else the AI should follow — e.g.{" "}
-                  <i>Curriculum: AP Biology</i> · <i>Tone: encouraging</i> ·{" "}
-                  <i>Avoid: specific exam dates</i>.
-                </p>
-              ) : (
-                <div className="space-y-1.5">
-                  {extras.map((row, i) => (
-                    <div key={i} className="flex gap-1.5">
-                      <input
-                        value={row.label}
-                        placeholder="Parameter"
-                        onChange={(e) =>
-                          setExtras(
-                            extras.map((r, j) =>
-                              j === i ? { ...r, label: e.target.value } : r,
-                            ),
-                          )
-                        }
-                        className="w-1/3 rounded border border-zinc-300 p-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900"
-                      />
-                      <input
-                        value={row.value}
-                        placeholder="Value"
-                        onChange={(e) =>
-                          setExtras(
-                            extras.map((r, j) =>
-                              j === i ? { ...r, value: e.target.value } : r,
-                            ),
-                          )
-                        }
-                        className="flex-1 rounded border border-zinc-300 p-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900"
-                      />
-                      <button
-                        onClick={() =>
-                          setExtras(extras.filter((_, j) => j !== i))
-                        }
-                        title="Remove parameter"
-                        className="px-1.5 text-zinc-400 hover:text-red-500"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
+              {extras.map((row, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-2 px-3 py-1.5"
+                >
+                  <input
+                    value={row.label}
+                    placeholder="parameter"
+                    onChange={(e) =>
+                      setExtras(
+                        extras.map((r, j) =>
+                          j === i ? { ...r, label: e.target.value } : r,
+                        ),
+                      )
+                    }
+                    className="w-28 shrink-0 rounded border border-zinc-300 p-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+                  />
+                  <input
+                    value={row.value}
+                    placeholder="value"
+                    onChange={(e) =>
+                      setExtras(
+                        extras.map((r, j) =>
+                          j === i ? { ...r, value: e.target.value } : r,
+                        ),
+                      )
+                    }
+                    className={briefControl}
+                  />
+                  <button
+                    onClick={() => setExtras(extras.filter((_, j) => j !== i))}
+                    title="Remove parameter"
+                    className="shrink-0 px-1 text-zinc-300 hover:text-red-500"
+                  >
+                    ×
+                  </button>
                 </div>
-              )}
+              ))}
+
               <button
                 onClick={() => setExtras([...extras, { label: "", value: "" }])}
-                className="mt-2 rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                className="w-full px-3 py-1.5 text-left text-xs text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
               >
-                + Add parameter
+                + Add a parameter
+                {extras.length === 0 && (
+                  <span className="ml-1 text-zinc-400">
+                    — e.g. Curriculum, Tone, Reading level, Avoid
+                  </span>
+                )}
               </button>
             </div>
 
@@ -1374,7 +1366,7 @@ function Configure(p: {
                   onClick={() => setSavingBrief(true)}
                   className="rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
                 >
-                  + Save brief {bundleTypes ? "+ activities" : "as template"}
+                  + Save {bundleTypes ? "brief + activities" : "as brief format"}
                 </button>
               )}
             </div>
@@ -1475,14 +1467,20 @@ function Configure(p: {
   );
 }
 
-const fieldInput =
-  "w-full rounded border border-zinc-300 p-1.5 dark:border-zinc-700 dark:bg-zinc-900";
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+const briefControl =
+  "min-w-0 flex-1 rounded border border-zinc-300 p-1 text-sm dark:border-zinc-700 dark:bg-zinc-900";
+function BriefRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
-    <label className="block">
-      <span className="mb-1 block text-xs text-zinc-500">{label}</span>
+    <div className="flex items-center gap-3 px-3 py-1.5">
+      <span className="w-28 shrink-0 text-xs text-zinc-500">{label}</span>
       {children}
-    </label>
+    </div>
   );
 }
 
