@@ -1933,7 +1933,7 @@ function RefineChat(p: {
   }
 
   return (
-    <div className="flex h-full flex-col rounded-md border border-zinc-200 dark:border-zinc-800">
+    <div className="flex h-full flex-col">
       <p className="border-b border-zinc-200 px-3 py-2 text-xs font-medium text-zinc-500 dark:border-zinc-800">
         Refine · {contentType(p.item.contentType)?.label}
       </p>
@@ -2052,6 +2052,154 @@ function RefineChat(p: {
   );
 }
 
+/* ---------------- Workspace: resizable + collapsible 3-panel layout ---------------- */
+
+const PANELS_KEY = "smartimport.workspacePanels.v1";
+const MIN_FRAC = 0.3; // an open panel stays ~a third of the row; collapse to free real room
+
+type PanelState = { open: [boolean, boolean, boolean]; frac: [number, number, number] };
+function loadPanels(): PanelState | null {
+  try {
+    const s = JSON.parse(localStorage.getItem(PANELS_KEY) || "null");
+    if (
+      s &&
+      Array.isArray(s.open) &&
+      s.open.length === 3 &&
+      Array.isArray(s.frac) &&
+      s.frac.length === 3
+    )
+      return s as PanelState;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function ResizablePanels({
+  panels,
+}: {
+  panels: { id: string; title: string; node: React.ReactNode }[];
+}) {
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const [open, setOpen] = useState<boolean[]>(
+    () => loadPanels()?.open ?? [true, true, true],
+  );
+  const [frac, setFrac] = useState<number[]>(
+    () => loadPanels()?.frac ?? [1 / 3, 1 / 3, 1 / 3],
+  );
+  const drag = useRef<{ l: number; r: number; startX: number; sf: number[] } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PANELS_KEY, JSON.stringify({ open, frac }));
+    } catch {
+      /* ignore */
+    }
+  }, [open, frac]);
+
+  const openIdx = [0, 1, 2].filter((i) => open[i]);
+  const openSum = openIdx.reduce((s, i) => s + frac[i], 0) || 1;
+
+  function toggle(i: number) {
+    setOpen((o) => {
+      if (o[i] && o.filter(Boolean).length === 1) return o; // keep one open
+      const n = [...o];
+      n[i] = !n[i];
+      return n;
+    });
+  }
+
+  function move(e: React.PointerEvent) {
+    const d = drag.current;
+    if (!d || !wrapRef.current) return;
+    const total = wrapRef.current.getBoundingClientRect().width;
+    if (total <= 0) return;
+    const openNow = [0, 1, 2].filter((i) => open[i]);
+    const sfSum = openNow.reduce((s, i) => s + d.sf[i], 0) || 1;
+    const dx = (e.clientX - d.startX) / total;
+    const pair = (d.sf[d.l] + d.sf[d.r]) / sfSum;
+    let l = d.sf[d.l] / sfSum + dx;
+    l = Math.max(MIN_FRAC, Math.min(pair - MIN_FRAC, l));
+    const r = pair - l;
+    setFrac((f) => {
+      const n = [...f];
+      n[d.l] = l * sfSum;
+      n[d.r] = r * sfSum;
+      return n;
+    });
+  }
+
+  const els: React.ReactNode[] = [];
+  panels.forEach((pn, i) => {
+    const isOpen = open[i];
+    els.push(
+      <div
+        key={pn.id}
+        className={`flex min-h-0 flex-col rounded-md border border-zinc-200 dark:border-zinc-800 ${
+          isOpen ? "min-w-0 flex-1" : "shrink-0 lg:w-9"
+        }`}
+        style={isOpen ? { flexBasis: 0, flexGrow: frac[i] / openSum } : undefined}
+      >
+        {isOpen ? (
+          <>
+            <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-500 dark:border-zinc-800">
+              <span className="truncate">{pn.title}</span>
+              <button
+                onClick={() => toggle(i)}
+                title={`Collapse ${pn.title}`}
+                className="rounded px-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+              >
+                ⟨⟩
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-hidden">{pn.node}</div>
+          </>
+        ) : (
+          <button
+            onClick={() => toggle(i)}
+            title={`Expand ${pn.title}`}
+            className="flex h-full w-full flex-col items-center gap-2 py-2 text-[11px] text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+          >
+            <span>⟩</span>
+            <span className="[writing-mode:vertical-rl] rotate-180 whitespace-nowrap">
+              {pn.title}
+            </span>
+          </button>
+        )}
+      </div>,
+    );
+    // resize handle between this open panel and the next open one
+    const next = openIdx.find((j) => j > i);
+    if (isOpen && next !== undefined) {
+      els.push(
+        <div
+          key={`h-${i}`}
+          onPointerDown={(e) => {
+            (e.target as HTMLElement).setPointerCapture(e.pointerId);
+            drag.current = { l: i, r: next, startX: e.clientX, sf: [...frac] };
+          }}
+          onPointerMove={move}
+          onPointerUp={() => {
+            drag.current = null;
+          }}
+          className="hidden w-1.5 shrink-0 cursor-col-resize touch-none rounded bg-zinc-200 hover:bg-blue-400 lg:block dark:bg-zinc-800"
+        />,
+      );
+    }
+  });
+
+  return (
+    <div
+      ref={wrapRef}
+      className="flex h-full flex-col gap-2 overflow-hidden p-3 lg:flex-row"
+    >
+      {els}
+    </div>
+  );
+}
+
 function Workspace(p: {
   sourceTab: SourceTab;
   setSourceTab: (s: SourceTab) => void;
@@ -2150,129 +2298,130 @@ function Workspace(p: {
     );
   }
 
-  // (b) after generate — 3 panels
+  // (b) after generate — 3 resizable / collapsible panels
   const cur = p.current;
   const items = p.result.items;
-  return (
-    <div className="grid h-full gap-3 overflow-hidden p-3 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)_minmax(0,360px)]">
-      {/* Panel 1 — setup rail */}
-      <div className="overflow-auto rounded-md border border-zinc-200 p-3 text-xs dark:border-zinc-800">
-        <div className="flex items-center justify-between">
-          <p className="font-semibold text-zinc-500">Setup</p>
+
+  const setupNode = (
+    <div className="h-full overflow-auto p-3 text-xs">
+      <button
+        onClick={() => setEditSetup((v) => !v)}
+        className="text-[11px] underline"
+      >
+        {editSetup ? "Collapse setup form" : "Edit setup"}
+      </button>
+      {editSetup ? (
+        <div className="mt-2">{setupForm}</div>
+      ) : (
+        <div className="mt-2 space-y-1 text-zinc-500">
+          <p className="truncate">
+            {p.sourceTab === "Wikipedia"
+              ? p.wikiUrl || "(no URL)"
+              : `Pasted text · ${p.analysis?.wordCount ?? "?"} words`}
+          </p>
+          <p className="truncate">
+            {p.intent.authoringMode === "brief"
+              ? `Brief: ${p.intent.learningGoal || "—"}`
+              : p.intent.prompt || "(defaults)"}
+          </p>
+          <p>{p.intent.contentTypes.length} activity type(s)</p>
           <button
-            onClick={() => setEditSetup((v) => !v)}
-            className="text-[11px] underline"
+            onClick={() => p.generate()}
+            disabled={p.generating}
+            className={`${chip} mt-1`}
           >
-            {editSetup ? "Collapse" : "Edit setup"}
+            {p.generating ? "Regenerating…" : "Regenerate all"}
           </button>
         </div>
-        {editSetup ? (
-          <div className="mt-2">{setupForm}</div>
-        ) : (
-          <div className="mt-1 space-y-1 text-zinc-500">
-            <p className="truncate">
-              {p.sourceTab === "Wikipedia"
-                ? p.wikiUrl || "(no URL)"
-                : `Pasted text · ${p.analysis?.wordCount ?? "?"} words`}
-            </p>
-            <p className="truncate">
-              {p.intent.authoringMode === "brief"
-                ? `Brief: ${p.intent.learningGoal || "—"}`
-                : p.intent.prompt || "(defaults)"}
-            </p>
-            <p>{p.intent.contentTypes.length} activity type(s)</p>
-            <button
-              onClick={() => p.generate()}
-              disabled={p.generating}
-              className={`${chip} mt-1`}
-            >
-              {p.generating ? "Regenerating…" : "Regenerate all"}
-            </button>
-          </div>
-        )}
-      </div>
+      )}
+    </div>
+  );
 
-      {/* Panel 2 — output */}
-      <div className="flex min-w-0 flex-col gap-2 overflow-hidden">
-        <ul className="flex shrink-0 gap-2 overflow-x-auto pb-1">
-          {items.map((it) => {
-            const s = p.itemState[it.id];
-            return (
-              <li key={it.id}>
-                <button
-                  onClick={() => p.setSelected(it.id)}
-                  className={`w-40 shrink-0 rounded-md border p-2 text-left text-xs ${
-                    p.selected === it.id
-                      ? "border-blue-600"
-                      : "border-zinc-200 dark:border-zinc-800"
-                  } ${s === "discarded" ? "opacity-40" : ""}`}
-                >
-                  <p className="truncate font-medium">
-                    {contentType(it.contentType)?.label}
-                  </p>
-                  <p className="truncate text-[10px] text-zinc-400">
-                    {p.attempts[it.id]
-                      ? `refined ×${p.attempts[it.id] - 1}`
-                      : "generated"}
-                    {p.remixes[it.id] ? " · remixed" : ""}
-                    {s === "discarded" ? " · discarded" : ""}
-                    {s === "refining" ? " · refining…" : ""}
-                    {s === "remixing" ? " · remixing…" : ""}
-                  </p>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        <div className="min-h-0 flex-1 overflow-auto rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-          {cur ? (
-            <ItemPanel
-              key={cur.id}
-              item={cur}
-              value={p.edits[cur.id] ?? cur.contentJson}
-              onChange={(v) =>
-                p.setEdits((e) => ({ ...e, [cur.id]: v }))
-              }
-              editing={p.itemState[cur.id] === "editing"}
-            />
-          ) : (
-            <p className="text-sm text-zinc-400">Select an activity.</p>
-          )}
-        </div>
-      </div>
-
-      {/* Panel 3 — refine chat */}
-      <div className="min-h-0 overflow-hidden">
+  const outputNode = (
+    <div className="flex h-full min-w-0 flex-col gap-2 overflow-hidden p-2">
+      <ul className="flex shrink-0 gap-2 overflow-x-auto pb-1">
+        {items.map((it) => {
+          const s = p.itemState[it.id];
+          return (
+            <li key={it.id}>
+              <button
+                onClick={() => p.setSelected(it.id)}
+                className={`w-40 shrink-0 rounded-md border p-2 text-left text-xs ${
+                  p.selected === it.id
+                    ? "border-blue-600"
+                    : "border-zinc-200 dark:border-zinc-800"
+                } ${s === "discarded" ? "opacity-40" : ""}`}
+              >
+                <p className="truncate font-medium">
+                  {contentType(it.contentType)?.label}
+                </p>
+                <p className="truncate text-[10px] text-zinc-400">
+                  {p.attempts[it.id]
+                    ? `refined ×${p.attempts[it.id] - 1}`
+                    : "generated"}
+                  {p.remixes[it.id] ? " · remixed" : ""}
+                  {s === "discarded" ? " · discarded" : ""}
+                  {s === "refining" ? " · refining…" : ""}
+                  {s === "remixing" ? " · remixing…" : ""}
+                </p>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="min-h-0 flex-1 overflow-auto rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
         {cur ? (
-          <RefineChat
+          <ItemPanel
             key={cur.id}
             item={cur}
-            state={p.itemState[cur.id]}
-            turns={p.transcript[cur.id] ?? []}
-            append={(turn) =>
-              p.setTranscript((t) => ({
-                ...t,
-                [cur.id]: [...(t[cur.id] ?? []), turn],
-              }))
-            }
-            onRefine={p.onRefine}
-            onRemix={p.onRemix}
-            onDiscard={p.onDiscard}
-            onUndiscard={() => p.setItem(cur.id, "approved")}
-            onToggleEdit={() =>
-              p.setItem(
-                cur.id,
-                p.itemState[cur.id] === "editing" ? "approved" : "editing",
-              )
-            }
+            value={p.edits[cur.id] ?? cur.contentJson}
+            onChange={(v) => p.setEdits((e) => ({ ...e, [cur.id]: v }))}
+            editing={p.itemState[cur.id] === "editing"}
           />
         ) : (
-          <div className="h-full rounded-md border border-dashed border-zinc-300 p-4 text-xs text-zinc-400 dark:border-zinc-700">
-            Select an activity to refine it.
-          </div>
+          <p className="text-sm text-zinc-400">Select an activity.</p>
         )}
       </div>
     </div>
+  );
+
+  const refineNode = cur ? (
+    <RefineChat
+      key={cur.id}
+      item={cur}
+      state={p.itemState[cur.id]}
+      turns={p.transcript[cur.id] ?? []}
+      append={(turn) =>
+        p.setTranscript((t) => ({
+          ...t,
+          [cur.id]: [...(t[cur.id] ?? []), turn],
+        }))
+      }
+      onRefine={p.onRefine}
+      onRemix={p.onRemix}
+      onDiscard={p.onDiscard}
+      onUndiscard={() => p.setItem(cur.id, "approved")}
+      onToggleEdit={() =>
+        p.setItem(
+          cur.id,
+          p.itemState[cur.id] === "editing" ? "approved" : "editing",
+        )
+      }
+    />
+  ) : (
+    <div className="h-full p-4 text-xs text-zinc-400">
+      Select an activity to refine it.
+    </div>
+  );
+
+  return (
+    <ResizablePanels
+      panels={[
+        { id: "setup", title: "Setup", node: setupNode },
+        { id: "output", title: "Activities", node: outputNode },
+        { id: "refine", title: "Refine", node: refineNode },
+      ]}
+    />
   );
 }
 
