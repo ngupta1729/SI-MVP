@@ -2144,14 +2144,15 @@ function ResizablePanels({
       >
         {isOpen ? (
           <>
-            <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-500 dark:border-zinc-800">
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-zinc-200 bg-zinc-50 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
               <span className="truncate">{pn.title}</span>
               <button
                 onClick={() => toggle(i)}
                 title={`Collapse ${pn.title}`}
-                className="rounded px-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+                aria-label={`Collapse ${pn.title}`}
+                className="shrink-0 rounded border border-zinc-300 px-1.5 leading-none text-zinc-400 hover:border-blue-500 hover:text-blue-600 dark:border-zinc-700"
               >
-                ⟨⟩
+                –
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-hidden">{pn.node}</div>
@@ -2160,9 +2161,10 @@ function ResizablePanels({
           <button
             onClick={() => toggle(i)}
             title={`Expand ${pn.title}`}
-            className="flex h-full w-full flex-col items-center gap-2 py-2 text-[11px] text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+            aria-label={`Expand ${pn.title}`}
+            className="flex h-full w-full flex-col items-center gap-2 bg-zinc-50 py-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 hover:text-blue-600 dark:bg-zinc-900"
           >
-            <span>⟩</span>
+            <span aria-hidden>+</span>
             <span className="[writing-mode:vertical-rl] rotate-180 whitespace-nowrap">
               {pn.title}
             </span>
@@ -2184,18 +2186,28 @@ function ResizablePanels({
           onPointerUp={() => {
             drag.current = null;
           }}
-          className="hidden w-1.5 shrink-0 cursor-col-resize touch-none rounded bg-zinc-200 hover:bg-blue-400 lg:block dark:bg-zinc-800"
-        />,
+          title="Drag to resize"
+          className="group hidden w-2 shrink-0 cursor-col-resize touch-none items-center justify-center rounded bg-zinc-200 hover:bg-blue-400 lg:flex dark:bg-zinc-700"
+        >
+          <span className="text-[9px] leading-none text-zinc-400 group-hover:text-white">
+            ⋮
+          </span>
+        </div>,
       );
     }
   });
 
   return (
-    <div
-      ref={wrapRef}
-      className="flex h-full flex-col gap-2 overflow-hidden p-3 lg:flex-row"
-    >
-      {els}
+    <div className="flex h-full flex-col overflow-hidden">
+      <p className="shrink-0 px-3 pt-2 text-[11px] text-zinc-400">
+        Drag the dividers to resize · click <b>–</b> to collapse a panel
+      </p>
+      <div
+        ref={wrapRef}
+        className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3 pt-2 lg:flex-row"
+      >
+        {els}
+      </div>
     </div>
   );
 }
