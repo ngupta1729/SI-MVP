@@ -575,6 +575,7 @@ export default function Page() {
             onDiscard={discardActivity}
             importRecord={importRecord}
             priorImports={priorImports}
+            onStartAnother={startAnother}
           />
         </div>
 
@@ -2092,12 +2093,10 @@ function RefineChat(p: {
   onRemix: (id: string, toType: string) => Promise<RenderedItem | null>;
   onDiscard: (id: string, reason: string) => void;
   onUndiscard: () => void;
-  onToggleEdit: () => void;
 }) {
   const [expand, setExpand] = useState<null | "type" | "discard">(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const busy = p.state === "refining" || p.state === "remixing";
-  const editing = p.state === "editing";
   const discarded = p.state === "discarded";
 
   useEffect(() => {
@@ -2175,13 +2174,6 @@ function RefineChat(p: {
               ))}
               <button
                 disabled={busy}
-                onClick={p.onToggleEdit}
-                className={`${chip} ${editing ? "border-blue-600 font-medium" : ""}`}
-              >
-                {editing ? "Done editing" : "Edit text"}
-              </button>
-              <button
-                disabled={busy}
                 onClick={() => setExpand(expand === "type" ? null : "type")}
                 className={chip}
               >
@@ -2242,38 +2234,44 @@ function RefineChat(p: {
 
 /* ---------------- Workspace: resizable + collapsible 3-panel layout ---------------- */
 
-const PANELS_KEY = "smartimport.workspacePanels.v1";
-const MIN_FRAC = 0.3; // an open panel stays ~a third of the row; collapse to free real room
+const PANELS_KEY = "smartimport.workspacePanels.v2";
+// How small an open panel may get, as a fraction of the row. Low enough that a
+// divider has real travel with three panels open (0.3 left almost none).
+const MIN_FRAC = 0.14;
 
-type PanelState = { open: [boolean, boolean, boolean]; frac: [number, number, number] };
-function loadPanels(): PanelState | null {
+/** Only the widths are remembered; which panels are open is decided per stage. */
+function loadFrac(): number[] | null {
   try {
     const s = JSON.parse(localStorage.getItem(PANELS_KEY) || "null");
-    if (
-      s &&
-      Array.isArray(s.open) &&
-      s.open.length === 3 &&
-      Array.isArray(s.frac) &&
-      s.frac.length === 3
-    )
-      return s as PanelState;
+    if (Array.isArray(s?.frac) && s.frac.length === 3) return s.frac as number[];
   } catch {
     /* ignore */
   }
   return null;
 }
 
+type Panel = {
+  id: string;
+  title: string;
+  node: React.ReactNode;
+  /** Shown in the thin strip when the panel is collapsed (falls back to the title). */
+  rail?: React.ReactNode;
+};
+
 function ResizablePanels({
   panels,
+  initialOpen,
 }: {
-  panels: { id: string; title: string; node: React.ReactNode }[];
+  panels: Panel[];
+  /** Open/closed state at mount — lets a stage collapse a panel by default. */
+  initialOpen?: boolean[];
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState<boolean[]>(
-    () => loadPanels()?.open ?? [true, true, true],
+    () => initialOpen ?? [true, true, true],
   );
   const [frac, setFrac] = useState<number[]>(
-    () => loadPanels()?.frac ?? [1 / 3, 1 / 3, 1 / 3],
+    () => loadFrac() ?? [1 / 3, 1 / 3, 1 / 3],
   );
   const drag = useRef<{ l: number; r: number; startX: number; sf: number[] } | null>(
     null,
@@ -2281,11 +2279,11 @@ function ResizablePanels({
 
   useEffect(() => {
     try {
-      localStorage.setItem(PANELS_KEY, JSON.stringify({ open, frac }));
+      localStorage.setItem(PANELS_KEY, JSON.stringify({ frac }));
     } catch {
       /* ignore */
     }
-  }, [open, frac]);
+  }, [frac]);
 
   const openIdx = [0, 1, 2].filter((i) => open[i]);
   const openSum = openIdx.reduce((s, i) => s + frac[i], 0) || 1;
@@ -2325,8 +2323,8 @@ function ResizablePanels({
     els.push(
       <div
         key={pn.id}
-        className={`flex min-h-0 flex-col rounded-md border border-zinc-200 dark:border-zinc-800 ${
-          isOpen ? "min-w-0 flex-1" : "shrink-0 lg:w-9"
+        className={`flex min-h-0 flex-col overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-800 ${
+          isOpen ? "min-w-0 flex-1" : pn.rail ? "shrink-0 lg:w-44" : "shrink-0 lg:w-9"
         }`}
         style={isOpen ? { flexBasis: 0, flexGrow: frac[i] / openSum } : undefined}
       >
@@ -2345,6 +2343,18 @@ function ResizablePanels({
             </div>
             <div className="min-h-0 flex-1 overflow-hidden">{pn.node}</div>
           </>
+        ) : pn.rail ? (
+          <div className="flex h-full flex-col items-stretch bg-zinc-50 dark:bg-zinc-900">
+            <button
+              onClick={() => toggle(i)}
+              title={`Expand ${pn.title}`}
+              aria-label={`Expand ${pn.title}`}
+              className="shrink-0 border-b border-zinc-200 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 hover:text-blue-600 dark:border-zinc-800"
+            >
+              {pn.title} ›
+            </button>
+            <div className="min-h-0 flex-1 overflow-auto">{pn.rail}</div>
+          </div>
         ) : (
           <button
             onClick={() => toggle(i)}
@@ -2436,8 +2446,10 @@ function Workspace(p: {
   onDiscard: (id: string, reason: string) => void;
   importRecord: ImportRecord | null;
   priorImports: ImportRecord[];
+  onStartAnother: () => void;
 }) {
   const [editSetup, setEditSetup] = useState(false);
+  const [panel3Tab, setPanel3Tab] = useState<"refine" | "edit">("refine");
 
   const setupForm = (
     <>
@@ -2502,18 +2514,44 @@ function Workspace(p: {
   const cur = p.current;
   const items = p.result.items;
 
-  const setupNode = (
-    <div className="h-full overflow-auto p-3 text-xs">
-      <button
-        onClick={() => setEditSetup((v) => !v)}
-        className="text-[11px] underline"
-      >
-        {editSetup ? "Collapse setup form" : "Edit setup"}
-      </button>
+  const itemLine = (it: RenderedItem) => {
+    const s = p.itemState[it.id];
+    return [
+      p.attempts[it.id] ? `refined ×${p.attempts[it.id] - 1}` : "generated",
+      p.remixes[it.id] ? "remixed" : "",
+      s === "discarded" ? "discarded" : "",
+      s === "refining" ? "refining…" : "",
+      s === "remixing" ? "remixing…" : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  };
+
+  // Panel 1 — setup summary + every generated activity (pick any to preview / refine)
+  const activitiesNode = (
+    <div className="h-full space-y-3 overflow-auto p-3 text-xs">
+      <div className="flex flex-wrap gap-1.5">
+        <button onClick={() => setEditSetup((v) => !v)} className={chip}>
+          {editSetup ? "Hide setup" : "Edit setup"}
+        </button>
+        <button
+          onClick={() => p.generate()}
+          disabled={p.generating}
+          className={chip}
+        >
+          {p.generating ? "Regenerating…" : "Regenerate all"}
+        </button>
+        <button onClick={p.onStartAnother} className={chip}>
+          Start again
+        </button>
+      </div>
+
       {editSetup ? (
-        <div className="mt-2">{setupForm}</div>
+        <div className="border-t border-zinc-200 pt-3 dark:border-zinc-800">
+          {setupForm}
+        </div>
       ) : (
-        <div className="mt-2 space-y-1 text-zinc-500">
+        <div className="space-y-0.5 text-zinc-500">
           <p className="truncate">
             {p.sourceTab === "Wikipedia"
               ? p.wikiUrl || "(no URL)"
@@ -2524,102 +2562,140 @@ function Workspace(p: {
               ? `Brief: ${p.intent.learningGoal || "—"}`
               : p.intent.prompt || "(defaults)"}
           </p>
-          <p>{p.intent.contentTypes.length} activity type(s)</p>
-          <button
-            onClick={() => p.generate()}
-            disabled={p.generating}
-            className={`${chip} mt-1`}
-          >
-            {p.generating ? "Regenerating…" : "Regenerate all"}
-          </button>
         </div>
+      )}
+
+      <ul className="space-y-1.5 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+        {items.map((it) => (
+          <li key={it.id}>
+            <button
+              onClick={() => p.setSelected(it.id)}
+              className={`w-full rounded-md border p-2 text-left ${
+                p.selected === it.id
+                  ? "border-blue-600"
+                  : "border-zinc-200 dark:border-zinc-800"
+              } ${p.itemState[it.id] === "discarded" ? "opacity-40" : ""}`}
+            >
+              <p className="truncate font-medium">
+                {contentType(it.contentType)?.label}
+              </p>
+              {it.concepts.length > 0 && (
+                <p className="truncate text-[10px] text-zinc-400">
+                  {it.concepts.slice(0, 3).join(", ")}
+                </p>
+              )}
+              <p className="truncate text-[10px] text-zinc-400">{itemLine(it)}</p>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
+  // Rail shown when panel 1 is collapsed — still pick an activity
+  const activitiesRail = (
+    <ul className="space-y-1 p-1.5">
+      {items.map((it, i) => (
+        <li key={it.id}>
+          <button
+            onClick={() => p.setSelected(it.id)}
+            title={contentType(it.contentType)?.label}
+            className={`w-full rounded border px-1.5 py-1 text-left text-[10px] ${
+              p.selected === it.id
+                ? "border-blue-600 font-medium"
+                : "border-zinc-200 text-zinc-500 dark:border-zinc-800"
+            } ${p.itemState[it.id] === "discarded" ? "line-through opacity-40" : ""}`}
+          >
+            {i + 1}. {contentType(it.contentType)?.label}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+
+  // Panel 2 — live preview of the selected activity only (Review / Play)
+  const previewNode = (
+    <div className="h-full overflow-auto p-3">
+      {cur ? (
+        <ItemPanel
+          key={cur.id}
+          item={cur}
+          value={p.edits[cur.id] ?? cur.contentJson}
+          onChange={(v) => p.setEdits((e) => ({ ...e, [cur.id]: v }))}
+          editing={false}
+        />
+      ) : (
+        <p className="text-sm text-zinc-400">Select an activity to preview it.</p>
       )}
     </div>
   );
 
-  const outputNode = (
-    <div className="flex h-full min-w-0 flex-col gap-2 overflow-hidden p-2">
-      <ul className="flex shrink-0 gap-2 overflow-x-auto pb-1">
-        {items.map((it) => {
-          const s = p.itemState[it.id];
-          return (
-            <li key={it.id}>
-              <button
-                onClick={() => p.setSelected(it.id)}
-                className={`w-40 shrink-0 rounded-md border p-2 text-left text-xs ${
-                  p.selected === it.id
-                    ? "border-blue-600"
-                    : "border-zinc-200 dark:border-zinc-800"
-                } ${s === "discarded" ? "opacity-40" : ""}`}
-              >
-                <p className="truncate font-medium">
-                  {contentType(it.contentType)?.label}
-                </p>
-                <p className="truncate text-[10px] text-zinc-400">
-                  {p.attempts[it.id]
-                    ? `refined ×${p.attempts[it.id] - 1}`
-                    : "generated"}
-                  {p.remixes[it.id] ? " · remixed" : ""}
-                  {s === "discarded" ? " · discarded" : ""}
-                  {s === "refining" ? " · refining…" : ""}
-                  {s === "remixing" ? " · remixing…" : ""}
-                </p>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      <div className="min-h-0 flex-1 overflow-auto rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-        {cur ? (
-          <ItemPanel
+  // Panel 3 — Refine (guided actions) or Edit (inline text) for the selected activity
+  const refinePanelNode = (
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="flex shrink-0 gap-1 border-b border-zinc-200 p-2 dark:border-zinc-800">
+        {(["refine", "edit"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setPanel3Tab(t)}
+            className={`rounded border px-2 py-0.5 text-[11px] ${
+              panel3Tab === t
+                ? "border-blue-600 font-medium"
+                : "border-zinc-300 text-zinc-500 dark:border-zinc-700"
+            }`}
+          >
+            {t === "refine" ? "Refine" : "Edit text"}
+          </button>
+        ))}
+      </div>
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {!cur ? (
+          <p className="p-4 text-xs text-zinc-400">Select an activity.</p>
+        ) : panel3Tab === "edit" ? (
+          <div className="h-full overflow-auto p-3">
+            <ItemPanel
+              key={cur.id}
+              item={cur}
+              value={p.edits[cur.id] ?? cur.contentJson}
+              onChange={(v) => p.setEdits((e) => ({ ...e, [cur.id]: v }))}
+              editing
+              hideViewToggle
+            />
+          </div>
+        ) : (
+          <RefineChat
             key={cur.id}
             item={cur}
-            value={p.edits[cur.id] ?? cur.contentJson}
-            onChange={(v) => p.setEdits((e) => ({ ...e, [cur.id]: v }))}
-            editing={p.itemState[cur.id] === "editing"}
+            state={p.itemState[cur.id]}
+            turns={p.transcript[cur.id] ?? []}
+            append={(turn) =>
+              p.setTranscript((t) => ({
+                ...t,
+                [cur.id]: [...(t[cur.id] ?? []), turn],
+              }))
+            }
+            onRefine={p.onRefine}
+            onRemix={p.onRemix}
+            onDiscard={p.onDiscard}
+            onUndiscard={() => p.setItem(cur.id, "approved")}
           />
-        ) : (
-          <p className="text-sm text-zinc-400">Select an activity.</p>
         )}
       </div>
     </div>
   );
 
-  const refineNode = cur ? (
-    <RefineChat
-      key={cur.id}
-      item={cur}
-      state={p.itemState[cur.id]}
-      turns={p.transcript[cur.id] ?? []}
-      append={(turn) =>
-        p.setTranscript((t) => ({
-          ...t,
-          [cur.id]: [...(t[cur.id] ?? []), turn],
-        }))
-      }
-      onRefine={p.onRefine}
-      onRemix={p.onRemix}
-      onDiscard={p.onDiscard}
-      onUndiscard={() => p.setItem(cur.id, "approved")}
-      onToggleEdit={() =>
-        p.setItem(
-          cur.id,
-          p.itemState[cur.id] === "editing" ? "approved" : "editing",
-        )
-      }
-    />
-  ) : (
-    <div className="h-full p-4 text-xs text-zinc-400">
-      Select an activity to refine it.
-    </div>
-  );
-
   return (
     <ResizablePanels
+      initialOpen={[false, true, true]}
       panels={[
-        { id: "setup", title: "Setup", node: setupNode },
-        { id: "output", title: "Activities", node: outputNode },
-        { id: "refine", title: "Refine", node: refineNode },
+        {
+          id: "activities",
+          title: "Activities",
+          node: activitiesNode,
+          rail: activitiesRail,
+        },
+        { id: "preview", title: "Preview", node: previewNode },
+        { id: "refine", title: "Refine", node: refinePanelNode },
       ]}
     />
   );
@@ -3113,6 +3189,8 @@ function ItemPanel(p: {
   value: unknown;
   onChange: (v: unknown) => void;
   editing: boolean;
+  /** Hide the Review/Play switch — used when the caller already owns the mode (workspace Edit tab). */
+  hideViewToggle?: boolean;
 }) {
   const [viewChoice, setViewChoice] = useState<"review" | "play">("review");
   // Editing only exists in the Review view, so force it there while Edit is on.
@@ -3139,29 +3217,31 @@ function ItemPanel(p: {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-1 text-[11px]">
-        {(["review", "play"] as const).map((v) => (
-          <button
-            key={v}
-            disabled={p.editing && v === "play"}
-            onClick={() => setViewChoice(v)}
-            className={`rounded border px-2 py-0.5 disabled:opacity-40 ${
-              view === v
-                ? "border-blue-600 font-medium"
-                : "border-zinc-300 dark:border-zinc-700"
-            }`}
-          >
-            {v === "review" ? "Review" : "Play"}
-          </button>
-        ))}
-        <span className="ml-1 text-zinc-400">
-          {p.editing
-            ? "editing — Play is available once you finish"
-            : view === "review"
-              ? "scan every question without answering"
-              : "the real H5P player — as a learner sees it"}
-        </span>
-      </div>
+      {!p.hideViewToggle && (
+        <div className="flex items-center gap-1 text-[11px]">
+          {(["review", "play"] as const).map((v) => (
+            <button
+              key={v}
+              disabled={p.editing && v === "play"}
+              onClick={() => setViewChoice(v)}
+              className={`rounded border px-2 py-0.5 disabled:opacity-40 ${
+                view === v
+                  ? "border-blue-600 font-medium"
+                  : "border-zinc-300 dark:border-zinc-700"
+              }`}
+            >
+              {v === "review" ? "Review" : "Play"}
+            </button>
+          ))}
+          <span className="ml-1 text-zinc-400">
+            {p.editing
+              ? "editing — Play is available once you finish"
+              : view === "review"
+                ? "scan every question without answering"
+                : "the real H5P player — as a learner sees it"}
+          </span>
+        </div>
+      )}
 
       {view === "play" ? (
         p.item.hostPrepared && p.value ? (
