@@ -2740,18 +2740,28 @@ function Workspace(p: {
   const [editSetup, setEditSetup] = useState(false);
   const [panel3Tab, setPanel3Tab] = useState<"refine" | "edit">("refine");
 
-  // Panel layout defaults per phase — all three visible before generate, then
-  // setup collapses so preview + refine sit side by side. The user still
-  // resizes / collapses freely after that.
-  const [open, setOpen] = useState<boolean[]>([true, true, true]);
+  // Panel layout defaults per phase. Before generate: Setup + a sample
+  // Preview of the selected type(s), Refine collapsed (nothing to refine
+  // yet). After generate: Setup collapses to its rail, Preview + Refine take
+  // the row. The user still resizes / collapses freely either way.
+  const [open, setOpen] = useState<boolean[]>([true, true, false]);
   const hadResult = useRef(false);
   useEffect(() => {
     const has = !!p.result;
     if (has !== hadResult.current) {
       hadResult.current = has;
-      setOpen(has ? [false, true, true] : [true, true, true]);
+      setOpen(has ? [false, true, true] : [true, true, false]);
     }
   }, [p.result]);
+
+  // Which selected type's sample shows in Preview before generate. Falls
+  // back to the first selected type whenever the explicit pick is no longer
+  // in the selection (computed at render, not synced via an effect).
+  const [previewTypePick, setPreviewTypePick] = useState<string | null>(null);
+  const previewType =
+    previewTypePick && p.intent.contentTypes.includes(previewTypePick)
+      ? previewTypePick
+      : (p.intent.contentTypes[0] ?? null);
 
   const setupForm = (
     <>
@@ -2896,8 +2906,10 @@ function Workspace(p: {
     </ul>
   );
 
-  // Panel 2 — live preview of the selected activity only (Review / Play)
-  const previewNode = (
+  // Panel 2 — before generate: a read-only sample of the selected type(s), so
+  // a new user can see the shape of what they're about to make. After
+  // generate: the live preview of the selected activity (Review / Play).
+  const previewNode = hasResult ? (
     <div className="h-full overflow-auto p-3">
       {cur ? (
         <ItemPanel
@@ -2908,11 +2920,43 @@ function Workspace(p: {
           editing={false}
         />
       ) : (
+        <p className="text-sm text-zinc-400">Select an activity to preview it.</p>
+      )}
+    </div>
+  ) : (
+    <div className="h-full overflow-auto p-3">
+      <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+        <b>Example only</b> — not your content. Shows the shape of a type so
+        it&rsquo;s easier to pick. Your generated activities replace this once
+        you click Generate.
+      </div>
+      {p.intent.contentTypes.length === 0 ? (
         <p className="text-sm text-zinc-400">
-          {hasResult
-            ? "Select an activity to preview it."
-            : "A live preview of each activity shows here once you generate."}
+          Select one or more activity types to see an example.
         </p>
+      ) : (
+        <>
+          {p.intent.contentTypes.length > 1 && (
+            <div className="mb-2 flex flex-wrap gap-1">
+              {p.intent.contentTypes.map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setPreviewTypePick(n)}
+                  className={`rounded-full border px-2 py-0.5 text-[11px] ${
+                    previewType === n
+                      ? "border-blue-600 bg-blue-600 text-white"
+                      : "border-zinc-300 text-zinc-500 dark:border-zinc-700"
+                  }`}
+                >
+                  {contentType(n)?.label ?? n}
+                </button>
+              ))}
+            </div>
+          )}
+          {previewType && (
+            <TypeSamplePreview key={previewType} typeName={previewType} />
+          )}
+        </>
       )}
     </div>
   );
@@ -4224,5 +4268,75 @@ function ItemPanel(p: {
         />
       )}
     </div>
+  );
+}
+
+// A real example content.json ships alongside every "full" content type's
+// render bundle (public/h5p/<host>/content/content.json — the same file the
+// model engine is shown as its format reference). Reused here, client-side,
+// as sample material so a new user can see the *shape* of a type before
+// generating anything.
+const sampleCache = new Map<string, Promise<unknown>>();
+function fetchTypeSample(typeName: string): Promise<unknown> {
+  const host = contentType(typeName)?.renderHost;
+  if (!host) return Promise.resolve(null);
+  if (!sampleCache.has(host)) {
+    sampleCache.set(
+      host,
+      fetch(`/h5p/${host}/content/content.json`)
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+    );
+  }
+  return sampleCache.get(host)!;
+}
+
+/** Read-only example of a content type, pre-generate — clearly marked as a
+ *  sample so it's never mistaken for the educator's own content. Callers key
+ *  this by `typeName` so switching types remounts it (fresh loading state)
+ *  instead of syncing that reset through an effect. */
+function TypeSamplePreview({ typeName }: { typeName: string }) {
+  const [sample, setSample] = useState<unknown>(undefined); // undefined = loading
+  useEffect(() => {
+    let alive = true;
+    fetchTypeSample(typeName).then((v) => {
+      if (alive) setSample(v);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [typeName]);
+
+  const def = contentType(typeName);
+  if (sample === undefined) {
+    return <p className="text-xs text-zinc-400">Loading example…</p>;
+  }
+  if (sample == null) {
+    return (
+      <p className="text-xs text-zinc-400">
+        No example available for {def?.label ?? typeName} yet.
+      </p>
+    );
+  }
+  const fakeItem: RenderedItem = {
+    id: `sample:${typeName}`,
+    contentType: typeName,
+    title: def?.label ?? typeName,
+    concepts: [],
+    rationale: "",
+    contentJson: sample,
+    mainLibrary: def?.library ?? "",
+    hostPrepared: false,
+    render: { librariesPath: "", h5pJsonPath: "", h5pJson: "" },
+  };
+  return (
+    <ItemPanel
+      key={typeName}
+      item={fakeItem}
+      value={sample}
+      onChange={() => {}}
+      editing={false}
+      hideViewToggle
+    />
   );
 }
