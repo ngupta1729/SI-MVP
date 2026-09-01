@@ -2081,9 +2081,7 @@ function Activities(p: {
                         p.locked ? "cursor-default" : ""
                       }`}
                     >
-                      {rec?.recommended && !checked && (
-                        <span aria-hidden>★ </span>
-                      )}
+                      {rec?.recommended && <span aria-hidden>★ </span>}
                       {ct.label}
                     </button>
                   );
