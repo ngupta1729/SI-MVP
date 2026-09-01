@@ -198,13 +198,13 @@ function QualitySection({ m }: { m: DashboardMetrics }) {
           hint={`of ${h.approveWithoutEditN} kept — no edit, refine or remix`}
         />
         <Stat
-          label="Edited before keeping"
-          value={pct(ratio(o.edited, o.total))}
-          hint={
+          label="Refined before keeping"
+          value={pct(ratio(o.edited + o.refined + o.remixed, o.total))}
+          hint={`${o.edited} edited · ${o.refined} refined · ${o.remixed} remixed${
             h.medianEditChars == null
-              ? undefined
-              : `median ${h.medianEditChars} chars changed`
-          }
+              ? ""
+              : ` · ~${h.medianEditChars} chars/edit`
+          }`}
         />
         <Stat
           label="Discarded"
