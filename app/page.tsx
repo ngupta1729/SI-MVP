@@ -154,10 +154,22 @@ export default function Page() {
     sourceTab === "Wikipedia"
       ? { kind: "url" as const, value: wikiUrl }
       : { kind: "text" as const, value: text };
+  const MIN_SOURCE_CHARS = 120;
   const sourceReady =
     sourceTab === "Wikipedia"
       ? /^https?:\/\/\S+wikipedia\.org\/\S+/i.test(wikiUrl)
-      : text.trim().length >= 120;
+      : text.trim().length >= MIN_SOURCE_CHARS;
+
+  /** Why "Choose activities" is disabled, in the user's terms (null = ready). */
+  const sourceBlocker: string | null = sourceReady
+    ? null
+    : sourceTab === "Wikipedia"
+      ? wikiUrl.trim()
+        ? "That doesn't look like a Wikipedia article URL — it should start with https:// and point to wikipedia.org"
+        : "Paste a Wikipedia article URL to continue"
+      : text.trim().length === 0
+        ? "Paste the source text you want to build activities from"
+        : `Add a bit more source text — ${text.trim().length}/${MIN_SOURCE_CHARS} characters`;
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -625,12 +637,20 @@ export default function Page() {
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-zinc-200 px-4 py-2 dark:border-zinc-800">
-          <span className="text-xs text-zinc-400">
+          <span
+            className={`text-xs ${
+              !result && sourceBlocker
+                ? "text-amber-600 dark:text-amber-500"
+                : "text-zinc-400"
+            }`}
+          >
             {result
               ? `${keptIds.length}/${result.items.length} kept · engine: ${result.engine}`
-              : analyzing
-                ? "analyzing source…"
-                : "add a source to begin"}
+              : sourceBlocker
+                ? sourceBlocker
+                : analyzing
+                  ? "analyzing source…"
+                  : "add a source to begin"}
           </span>
           <div className="flex gap-2">
             <button onClick={exitFlow} className={btnGhost}>
@@ -649,6 +669,12 @@ export default function Page() {
                 onClick={() => generate()}
                 disabled={
                   generating || !intent.contentTypes.length || !sourceReady
+                }
+                title={
+                  sourceBlocker ??
+                  (!intent.contentTypes.length
+                    ? "Pick at least one activity type"
+                    : undefined)
                 }
                 className={btnPrimary}
               >
@@ -730,18 +756,26 @@ export default function Page() {
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-zinc-200 px-6 py-3 dark:border-zinc-800">
-          <span className="text-xs text-zinc-400">
+          <span
+            className={`text-xs ${
+              screen === "configure" && sourceBlocker
+                ? "text-amber-600 dark:text-amber-500"
+                : "text-zinc-400"
+            }`}
+          >
             {screen === "review" && result
               ? `${keptIds.length}/${result.items.length} kept · engine: ${result.engine}`
-              : shownAnalysis
-                ? `${shownAnalysis.kind}, ${shownAnalysis.wordCount} words${
-                    shownAnalysis.detectedQuestions > 3
-                      ? ` · ${shownAnalysis.detectedQuestions} existing questions`
-                      : ""
-                  }`
-                : analyzing
-                  ? "analyzing source…"
-                  : "add a source to begin"}
+              : screen === "configure" && sourceBlocker
+                ? sourceBlocker
+                : shownAnalysis
+                  ? `${shownAnalysis.kind}, ${shownAnalysis.wordCount} words${
+                      shownAnalysis.detectedQuestions > 3
+                        ? ` · ${shownAnalysis.detectedQuestions} existing questions`
+                        : ""
+                    }`
+                  : analyzing
+                    ? "analyzing source…"
+                    : "add a source to begin"}
           </span>
           <div className="flex gap-2">
             <button
@@ -756,6 +790,7 @@ export default function Page() {
               <button
                 onClick={() => setScreen("activities")}
                 disabled={!sourceReady}
+                title={sourceBlocker ?? undefined}
                 className={btnPrimary}
               >
                 Choose activities
