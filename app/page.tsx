@@ -3546,6 +3546,41 @@ type Choice = { subContentId?: string; question: string; answers: string[] };
 const stripHtml = (s: unknown) =>
   typeof s === "string" ? s.replace(/<[^>]+>/g, "").trim() : "";
 
+/** Turn an H5P HTML value into plain text for an edit field: tags out, block
+ *  ends become newlines, common entities decoded. */
+const toPlainText = (s: unknown): string => {
+  if (typeof s !== "string") return "";
+  return s
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0?39;|&apos;/gi, "'")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+};
+
+/** Re-apply the wrapping the original value had, so the H5P player still
+ *  renders it. Plain-text originals pass straight through. */
+const fromPlainText = (text: string, original: unknown): string => {
+  const wasHtml =
+    typeof original === "string" && /^\s*<[a-z!]/i.test(original.trim());
+  if (!wasHtml) return text;
+  const esc = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return esc
+    .split("\n")
+    .map((line) => `<p>${line.trim() || "&nbsp;"}</p>`)
+    .join("");
+};
+
 /** Review renderer for the non-choices content shapes (Summary, Dialog Cards,
  *  Drag Text, Crossword, Accordion, Question Set). Read-only by default; inline
  *  text editing when `editing` + `onChange` are supplied. */
@@ -3585,11 +3620,11 @@ function OtherReview({
           {s.summary.map((opt, oi) => (
             <input
               key={oi}
-              value={opt}
+              value={toPlainText(opt)}
               onChange={(e) =>
                 patch((d) => {
                   (d.summaries as { summary: string[] }[])[si].summary[oi] =
-                    e.target.value;
+                    fromPlainText(e.target.value, opt);
                 })
               }
               className={`${eInp} mb-1 ${oi === 0 ? "border-emerald-400" : ""}`}
@@ -3605,20 +3640,26 @@ function OtherReview({
         <div key={di} className={eBox}>
           <p className="mb-1 text-[10px] text-zinc-400">Card {di + 1}</p>
           <input
-            value={d.text}
+            value={toPlainText(d.text)}
             onChange={(e) =>
               patch((dr) => {
-                (dr.dialogs as { text: string }[])[di].text = e.target.value;
+                (dr.dialogs as { text: string }[])[di].text = fromPlainText(
+                  e.target.value,
+                  d.text,
+                );
               })
             }
             placeholder="Front (prompt)"
             className={`${eInp} mb-1`}
           />
           <input
-            value={d.answer}
+            value={toPlainText(d.answer)}
             onChange={(e) =>
               patch((dr) => {
-                (dr.dialogs as { answer: string }[])[di].answer = e.target.value;
+                (dr.dialogs as { answer: string }[])[di].answer = fromPlainText(
+                  e.target.value,
+                  d.answer,
+                );
               })
             }
             placeholder="Back (answer)"
@@ -3675,7 +3716,7 @@ function OtherReview({
             className={`${eInp} mb-1 font-medium`}
           />
           <textarea
-            value={pn.content?.params?.text ?? ""}
+            value={toPlainText(pn.content?.params?.text ?? "")}
             rows={3}
             onChange={(e) =>
               patch((d) => {
@@ -3684,7 +3725,10 @@ function OtherReview({
                 }[])[pi];
                 if (!p2.content) p2.content = {};
                 if (!p2.content.params) p2.content.params = {};
-                p2.content.params.text = e.target.value;
+                p2.content.params.text = fromPlainText(
+                  e.target.value,
+                  pn.content?.params?.text ?? "<p></p>",
+                );
               })
             }
             className={eInp}
@@ -3703,13 +3747,16 @@ function OtherReview({
       return editable(questions, (q, qi) => (
         <div key={qi} className={eBox}>
           <textarea
-            value={q.params?.question ?? ""}
+            value={toPlainText(q.params?.question ?? "")}
             rows={2}
             onChange={(e) =>
               patch((d) => {
                 const qq = (d.questions as { params?: { question?: string } }[])[qi];
                 if (!qq.params) qq.params = {};
-                qq.params.question = e.target.value;
+                qq.params.question = fromPlainText(
+                  e.target.value,
+                  q.params?.question ?? "<p></p>",
+                );
               })
             }
             className={`${eInp} mb-1`}
@@ -3717,7 +3764,7 @@ function OtherReview({
           {(q.params?.answers ?? []).map((a, ai) => (
             <input
               key={ai}
-              value={a.text}
+              value={toPlainText(a.text)}
               onChange={(e) =>
                 patch((d) => {
                   const qq = (d.questions as {
@@ -3725,7 +3772,7 @@ function OtherReview({
                   }[])[qi];
                   if (!qq.params) qq.params = {};
                   if (!qq.params.answers) qq.params.answers = [];
-                  qq.params.answers[ai].text = e.target.value;
+                  qq.params.answers[ai].text = fromPlainText(e.target.value, a.text);
                 })
               }
               className={`${eInp} mb-1 ${a.correct ? "border-emerald-400" : ""}`}
@@ -3941,16 +3988,18 @@ function ItemPanel(p: {
               >
                 {p.editing ? (
                   <textarea
-                    value={c.question}
+                    value={toPlainText(c.question)}
                     onChange={(e) =>
-                      updateChoice(ci, { question: e.target.value })
+                      updateChoice(ci, {
+                        question: fromPlainText(e.target.value, c.question),
+                      })
                     }
                     rows={2}
                     className="w-full rounded border border-zinc-300 p-1 dark:border-zinc-700 dark:bg-zinc-900"
                   />
                 ) : (
                   <p className="font-medium">
-                    {ci + 1}. {c.question}
+                    {ci + 1}. {stripHtml(c.question) || c.question}
                   </p>
                 )}
                 <ul className="mt-1 space-y-0.5">
@@ -3958,10 +4007,10 @@ function ItemPanel(p: {
                     p.editing ? (
                       <li key={ai}>
                         <input
-                          value={a}
+                          value={toPlainText(a)}
                           onChange={(e) => {
                             const answers = [...c.answers];
-                            answers[ai] = e.target.value;
+                            answers[ai] = fromPlainText(e.target.value, a);
                             updateChoice(ci, { answers });
                           }}
                           className={`w-full rounded border p-1 ${
@@ -3981,7 +4030,7 @@ function ItemPanel(p: {
                         }
                       >
                         {ai === 0 ? "✓ " : "• "}
-                        {a}
+                        {stripHtml(a) || a}
                       </li>
                     ),
                   )}
