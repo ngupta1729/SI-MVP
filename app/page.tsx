@@ -514,6 +514,14 @@ export default function Page() {
         : [...i.contentTypes, n],
     }));
 
+  const setTypeCount = (n: string, count: number | null) =>
+    setIntent((i) => {
+      const next = { ...(i.contentTypeCounts ?? {}) };
+      if (count == null) delete next[n];
+      else next[n] = count;
+      return { ...i, contentTypeCounts: next };
+    });
+
   if (uiVariant === "workspace") {
     return (
       <div className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-white dark:bg-zinc-950">
@@ -555,6 +563,7 @@ export default function Page() {
             analyzing={analyzing}
             recByName={recByName}
             toggleType={toggleType}
+            setTypeCount={setTypeCount}
             generating={generating}
             generate={generate}
             result={result}
@@ -671,6 +680,8 @@ export default function Page() {
               recByName={recByName}
               analysis={shownAnalysis}
               toggle={toggleType}
+              setCount={setTypeCount}
+              locked={!!result}
             />
           )}
           {screen === "review" && result && (
@@ -1858,7 +1869,12 @@ function Activities(p: {
   recByName: Record<string, Recommendation>;
   analysis: SourceAnalysis | null;
   toggle: (n: string) => void;
+  setCount: (n: string, count: number | null) => void;
+  /** After generate — selection & counts are fixed; refine/remix happen in review. */
+  locked?: boolean;
 }) {
+  const countFor = (name: string) =>
+    p.intent.contentTypeCounts?.[name] ?? p.recByName[name]?.itemCount ?? null;
   const a = p.analysis;
   const recs = Object.values(p.recByName).filter((r) => r.recommended);
   const recLabels = recs
@@ -1901,7 +1917,7 @@ function Activities(p: {
                     {contentType(r.name)?.label}
                   </b>{" "}
                   — {r.reason}
-                  {r.itemCount ? ` · ~${r.itemCount} items` : ""}
+                  {countFor(r.name) ? ` · ${countFor(r.name)} items` : ""}
                 </li>
               ))}
             </ul>
@@ -1929,25 +1945,69 @@ function Activities(p: {
                   const tip = [ct.blurb, rec?.reason]
                     .filter(Boolean)
                     .join(" — ");
+                  const count = countFor(ct.name);
+                  const tone = checked
+                    ? "border-blue-600 bg-blue-600 text-white"
+                    : rec?.recommended
+                      ? "border-emerald-500 text-emerald-700 dark:text-emerald-300"
+                      : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-300";
+                  const faded = ct.twin !== "full" ? "opacity-60" : "";
+
+                  // checked + not locked → chip with an inline, editable item count
+                  if (checked && !p.locked) {
+                    return (
+                      <span
+                        key={ct.name}
+                        className={`inline-flex items-stretch overflow-hidden rounded-full border text-xs ${tone} ${faded}`}
+                      >
+                        <button
+                          onClick={() => p.toggle(ct.name)}
+                          title={tip}
+                          className="px-2.5 py-1"
+                        >
+                          {ct.label}
+                        </button>
+                        <input
+                          type="number"
+                          min={1}
+                          max={30}
+                          value={count ?? ""}
+                          onChange={(e) => {
+                            const v = e.target.value.trim();
+                            if (!v) return p.setCount(ct.name, null);
+                            p.setCount(
+                              ct.name,
+                              Math.max(1, Math.min(30, Math.round(Number(v)) || 1)),
+                            );
+                          }}
+                          aria-label={`${ct.label} — number of items`}
+                          title="Number of items to generate for this activity"
+                          className="w-10 border-l border-white/40 bg-white/15 px-1 text-center focus:bg-white/25 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        />
+                      </span>
+                    );
+                  }
+
                   return (
                     <button
                       key={ct.name}
-                      onClick={() => p.toggle(ct.name)}
-                      title={tip}
-                      className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
-                        checked
-                          ? "border-blue-600 bg-blue-600 text-white"
-                          : rec?.recommended
-                            ? "border-emerald-500 text-emerald-700 dark:text-emerald-300"
-                            : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-300"
-                      } ${ct.twin !== "full" ? "opacity-60" : ""}`}
+                      onClick={p.locked ? undefined : () => p.toggle(ct.name)}
+                      disabled={p.locked}
+                      title={
+                        p.locked
+                          ? "Locked after generating — refine or remix in review"
+                          : tip
+                      }
+                      className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${tone} ${faded} ${
+                        p.locked ? "cursor-default" : ""
+                      }`}
                     >
                       {rec?.recommended && !checked && (
                         <span aria-hidden>★ </span>
                       )}
                       {ct.label}
-                      {checked && rec?.itemCount ? (
-                        <span className="opacity-70"> ·{rec.itemCount}</span>
+                      {checked && count ? (
+                        <span className="opacity-70"> ·{count}</span>
                       ) : null}
                     </button>
                   );
@@ -1958,10 +2018,17 @@ function Activities(p: {
         })}
       </div>
 
-      <p className="text-[10px] text-zinc-400">
-        Filled = in your set · ★ = recommended · faded = no live preview yet ·
-        hover a chip for what it&rsquo;s good for
-      </p>
+      {p.locked ? (
+        <p className="text-[10px] text-amber-600">
+          Activity selection and counts are locked after generating. Use
+          Refine / Remix in review, or Start again to change the set.
+        </p>
+      ) : (
+        <p className="text-[10px] text-zinc-400">
+          Filled = in your set · ★ = recommended · the number is how many items to
+          generate — click it to change · faded = no live preview yet
+        </p>
+      )}
     </div>
   );
 }
@@ -2569,6 +2636,7 @@ function Workspace(p: {
   analyzing: boolean;
   recByName: Record<string, Recommendation>;
   toggleType: (n: string) => void;
+  setTypeCount: (n: string, count: number | null) => void;
   generating: boolean;
   generate: () => void;
   result: ApiResult | null;
@@ -2618,6 +2686,8 @@ function Workspace(p: {
           recByName={p.recByName}
           analysis={p.analysis}
           toggle={p.toggleType}
+          setCount={p.setTypeCount}
+          locked={!!p.result}
         />
       </div>
     </>

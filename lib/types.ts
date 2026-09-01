@@ -60,6 +60,12 @@ export interface ImportIntent {
   mode: "generate" | "extract";
   /** H5P content-type machine names the educator wants generated. */
   contentTypes: string[];
+  /**
+   * Per-type item-count overrides, keyed by content-type machine name. Set when
+   * the educator edits the count on Screen 2; absent = use the engine's default
+   * (from volume + what the source supports).
+   */
+  contentTypeCounts?: Record<string, number>;
 }
 
 /**
