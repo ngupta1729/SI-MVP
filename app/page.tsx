@@ -139,6 +139,8 @@ export default function Page() {
     itemId: string;
   } | null>(null);
   const [confirmSoloExit, setConfirmSoloExit] = useState(false);
+  // Shown when the user hits "Save" in the library Refine view — new activity vs replace.
+  const [soloSaveChoice, setSoloSaveChoice] = useState(false);
   const [soloOpen, setSoloOpen] = useState<boolean[]>([true, true]);
   const [soloWorkTab, setSoloWorkTab] = useState<"chat" | "editor">("chat");
   // Wall-clock from starting the import to the generated set landing — i.e.
@@ -645,6 +647,7 @@ export default function Page() {
 
   function closeSoloRefine() {
     setConfirmSoloExit(false);
+    setSoloSaveChoice(false);
     setSoloRefine(null);
     resetFlow();
   }
@@ -653,46 +656,57 @@ export default function Page() {
     !!soloRefine &&
     (!!edits[soloRefine.itemId] ||
       (attempts[soloRefine.itemId] ?? 0) > 0 ||
-      (remixes[soloRefine.itemId] ?? 0) > 0 ||
-      itemState[soloRefine.itemId] === "discarded");
+      (remixes[soloRefine.itemId] ?? 0) > 0);
 
   function requestCloseSoloRefine() {
     if (soloDirty) setConfirmSoloExit(true);
     else closeSoloRefine();
   }
 
-  /** Write the refined/edited/discarded item back into its saved session. */
-  function saveSoloRefine() {
+  /**
+   * Commit the refined/remixed activity. "new" adds it alongside the original,
+   * which is left untouched; "replace" overwrites the original in place (its
+   * data and anything linked to it goes with it).
+   */
+  function saveSoloRefine(mode: "new" | "replace") {
     if (!soloRefine) return;
     const target = soloRefine;
     const it = result?.items.find((i) => i.id === target.itemId);
     if (!it) return;
-    const discarded = itemState[target.itemId] === "discarded";
     const rec = allImports.find((r) => r.id === target.recId);
     if (!rec) return;
 
-    const next: ImportRecord = discarded
-      ? {
-          ...rec,
-          items: rec.items.filter((i) => i.id !== target.itemId),
-          outcome: { ...rec.outcome, kept: Math.max(0, rec.outcome.kept - 1) },
-        }
-      : {
-          ...rec,
-          items: rec.items.map((i) =>
-            i.id === it.id
-              ? ({
-                  id: it.id,
-                  title: it.title,
-                  contentType: it.contentType,
-                  concepts: it.concepts,
-                  contentJson: edits[it.id] ?? it.contentJson,
-                  render: it.render,
-                  hostPrepared: it.hostPrepared,
-                } satisfies ImportKeptItem)
-              : i,
-          ),
-        };
+    const base = {
+      title: it.title,
+      contentType: it.contentType,
+      concepts: it.concepts,
+      contentJson: edits[it.id] ?? it.contentJson,
+      render: it.render,
+      hostPrepared: it.hostPrepared,
+    };
+
+    const next: ImportRecord =
+      mode === "new"
+        ? {
+            ...rec,
+            items: [
+              ...rec.items,
+              {
+                ...base,
+                id: crypto.randomUUID(),
+                title: `${it.title} (refined)`,
+              } satisfies ImportKeptItem,
+            ],
+            outcome: { ...rec.outcome, kept: rec.outcome.kept + 1 },
+          }
+        : {
+            ...rec,
+            items: rec.items.map((i) =>
+              i.id === it.id
+                ? ({ ...base, id: it.id } satisfies ImportKeptItem)
+                : i,
+            ),
+          };
 
     saveImport(next);
     setAllImports((prev) => prev.map((r) => (r.id === next.id ? next : r)));
@@ -728,10 +742,11 @@ export default function Page() {
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <button
-              onClick={saveSoloRefine}
-              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+              onClick={() => setSoloSaveChoice(true)}
+              disabled={!soloDirty}
+              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-40"
             >
-              Save changes
+              Save…
             </button>
             <button
               onClick={requestCloseSoloRefine}
@@ -770,6 +785,45 @@ export default function Page() {
                 className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        )}
+
+        {soloSaveChoice && cur && (
+          <div className="border-b border-blue-200 bg-blue-50 px-4 py-3 text-sm dark:border-blue-900 dark:bg-blue-950/30">
+            <p className="mb-2 font-medium text-blue-900 dark:text-blue-100">
+              Keep both versions, or replace the original?
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => saveSoloRefine("new")}
+                className="rounded-md border border-blue-300 bg-white px-3 py-1.5 text-left text-xs dark:border-blue-800 dark:bg-zinc-950"
+              >
+                <span className="block font-medium">Save as a new activity</span>
+                <span className="block text-zinc-500">
+                  &ldquo;{cur.title || contentType(cur.contentType)?.label}&rdquo;
+                  stays exactly as it is; the refined version is added alongside
+                  it.
+                </span>
+              </button>
+              <button
+                onClick={() => saveSoloRefine("replace")}
+                className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-left text-xs dark:border-red-800 dark:bg-zinc-950"
+              >
+                <span className="block font-medium text-red-700 dark:text-red-400">
+                  Replace the original
+                </span>
+                <span className="block text-zinc-500">
+                  Overwrites it in place. Its data and anything linked to it is
+                  wiped. Can&rsquo;t be undone.
+                </span>
+              </button>
+              <button
+                onClick={() => setSoloSaveChoice(false)}
+                className="self-start text-xs text-zinc-500 underline"
+              >
+                Keep editing
               </button>
             </div>
           </div>
@@ -853,6 +907,7 @@ export default function Page() {
                           onRemix={remixActivity}
                           onDiscard={discardActivity}
                           onUndiscard={() => setItem(cur.id, "approved")}
+                          hideDiscard
                         />
                       )}
                     </div>
@@ -2660,7 +2715,12 @@ function RefineChat(p: {
   onRemix: (id: string, toType: string) => Promise<RenderedItem | null>;
   onDiscard: (id: string, reason: string) => void;
   onUndiscard: () => void;
+  /** Library-refine: discarding already-published content doesn't belong here. */
+  hideDiscard?: boolean;
 }) {
+  const actions = p.hideDiscard
+    ? REFINE_ACTIONS.filter((a) => a.key !== "discard")
+    : REFINE_ACTIONS;
   const [expand, setExpand] = useState<null | "refine" | "remix" | "discard">(
     null,
   );
@@ -2717,7 +2777,7 @@ function RefineChat(p: {
           </div>
         ) : (
           <div className="space-y-1.5">
-            {REFINE_ACTIONS.map((a) => {
+            {actions.map((a) => {
               const on = expand === a.key;
               const danger = a.key === "discard";
               return (
