@@ -2260,16 +2260,15 @@ type Panel = {
 
 function ResizablePanels({
   panels,
-  initialOpen,
+  open,
+  onOpenChange,
 }: {
   panels: Panel[];
-  /** Open/closed state at mount — lets a stage collapse a panel by default. */
-  initialOpen?: boolean[];
+  /** Which panels are expanded — controlled by the caller so a stage can set defaults. */
+  open: boolean[];
+  onOpenChange: (next: boolean[]) => void;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
-  const [open, setOpen] = useState<boolean[]>(
-    () => initialOpen ?? [true, true, true],
-  );
   const [frac, setFrac] = useState<number[]>(
     () => loadFrac() ?? [1 / 3, 1 / 3, 1 / 3],
   );
@@ -2289,12 +2288,10 @@ function ResizablePanels({
   const openSum = openIdx.reduce((s, i) => s + frac[i], 0) || 1;
 
   function toggle(i: number) {
-    setOpen((o) => {
-      if (o[i] && o.filter(Boolean).length === 1) return o; // keep one open
-      const n = [...o];
-      n[i] = !n[i];
-      return n;
-    });
+    if (open[i] && open.filter(Boolean).length === 1) return; // keep one open
+    const n = [...open];
+    n[i] = !n[i];
+    onOpenChange(n);
   }
 
   function move(e: React.PointerEvent) {
@@ -2451,6 +2448,19 @@ function Workspace(p: {
   const [editSetup, setEditSetup] = useState(false);
   const [panel3Tab, setPanel3Tab] = useState<"refine" | "edit">("refine");
 
+  // Panel layout defaults per phase — all three visible before generate, then
+  // setup collapses so preview + refine sit side by side. The user still
+  // resizes / collapses freely after that.
+  const [open, setOpen] = useState<boolean[]>([true, true, true]);
+  const hadResult = useRef(false);
+  useEffect(() => {
+    const has = !!p.result;
+    if (has !== hadResult.current) {
+      hadResult.current = has;
+      setOpen(has ? [false, true, true] : [true, true, true]);
+    }
+  }, [p.result]);
+
   const setupForm = (
     <>
       <Configure
@@ -2493,26 +2503,10 @@ function Workspace(p: {
     );
   }
 
-  // (a) before generate — setup panel prominent, others collapsed
-  if (!p.result) {
-    return (
-      <div className="grid h-full gap-3 overflow-hidden p-3 lg:grid-cols-[minmax(0,1fr)_260px_300px]">
-        <div className="overflow-auto rounded-md border border-zinc-200 p-4 dark:border-zinc-800">
-          {setupForm}
-        </div>
-        <div className="hidden rounded-md border border-dashed border-zinc-300 p-4 text-xs text-zinc-400 lg:block dark:border-zinc-700">
-          Generated activities appear here once you generate.
-        </div>
-        <div className="hidden rounded-md border border-dashed border-zinc-300 p-4 text-xs text-zinc-400 lg:block dark:border-zinc-700">
-          Refinement chat — available once activities exist.
-        </div>
-      </div>
-    );
-  }
-
-  // (b) after generate — 3 resizable / collapsible panels
+  // (b) the 3 resizable / collapsible panels — same shell before and after generate
   const cur = p.current;
-  const items = p.result.items;
+  const hasResult = !!p.result;
+  const items = p.result?.items ?? [];
 
   const itemLine = (it: RenderedItem) => {
     const s = p.itemState[it.id];
@@ -2527,7 +2521,14 @@ function Workspace(p: {
       .join(" · ");
   };
 
-  // Panel 1 — setup summary + every generated activity (pick any to preview / refine)
+  // Panel 1 — before generate: the setup form. After: setup summary + the list
+  // of every generated activity (pick any to preview / refine).
+  const setupPanelNode = (
+    <div className="h-full overflow-auto p-3 text-xs">
+      {setupForm}
+    </div>
+  );
+
   const activitiesNode = (
     <div className="h-full space-y-3 overflow-auto p-3 text-xs">
       <div className="flex flex-wrap gap-1.5">
@@ -2625,7 +2626,11 @@ function Workspace(p: {
           editing={false}
         />
       ) : (
-        <p className="text-sm text-zinc-400">Select an activity to preview it.</p>
+        <p className="text-sm text-zinc-400">
+          {hasResult
+            ? "Select an activity to preview it."
+            : "A live preview of each activity shows here once you generate."}
+        </p>
       )}
     </div>
   );
@@ -2650,7 +2655,11 @@ function Workspace(p: {
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
         {!cur ? (
-          <p className="p-4 text-xs text-zinc-400">Select an activity.</p>
+          <p className="p-4 text-xs text-zinc-400">
+            {hasResult
+              ? "Select an activity."
+              : "Refine and edit tools appear here once you generate."}
+          </p>
         ) : panel3Tab === "edit" ? (
           <div className="h-full overflow-auto p-3">
             <ItemPanel
@@ -2686,13 +2695,14 @@ function Workspace(p: {
 
   return (
     <ResizablePanels
-      initialOpen={[false, true, true]}
+      open={open}
+      onOpenChange={setOpen}
       panels={[
         {
           id: "activities",
-          title: "Activities",
-          node: activitiesNode,
-          rail: activitiesRail,
+          title: hasResult ? "Activities" : "Setup",
+          node: hasResult ? activitiesNode : setupPanelNode,
+          rail: hasResult ? activitiesRail : undefined,
         },
         { id: "preview", title: "Preview", node: previewNode },
         { id: "refine", title: "Refine", node: refinePanelNode },
