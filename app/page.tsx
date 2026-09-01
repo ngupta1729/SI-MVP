@@ -1057,7 +1057,6 @@ export default function Page() {
             intent={intent}
             setIntent={setIntent}
             analysis={shownAnalysis}
-            analyzing={analyzing}
             recByName={recByName}
             toggleType={toggleType}
             generating={generating}
@@ -1188,7 +1187,6 @@ export default function Page() {
                 intent,
                 setIntent,
                 analysis: shownAnalysis,
-                analyzing,
               }}
             />
           )}
@@ -1291,8 +1289,6 @@ export default function Page() {
   );
 }
 
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-
 const btnPrimary =
   "rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40";
 const btnGhost =
@@ -1370,8 +1366,8 @@ function Configure(p: {
   setWikiUrl: (s: string) => void;
   intent: ImportIntent;
   setIntent: (f: (i: ImportIntent) => ImportIntent) => void;
+  /** Kept for the "source has questions → extract" nudge; no read-back panel. */
   analysis: SourceAnalysis | null;
-  analyzing: boolean;
 }) {
   const set = (patch: Partial<ImportIntent>) =>
     p.setIntent((i) => ({ ...i, ...patch }));
@@ -1953,89 +1949,29 @@ function Configure(p: {
         )}
       </div>
 
-      {(p.analyzing || p.analysis) && (
-        <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-800 dark:bg-zinc-900">
-          {p.analyzing && !p.analysis ? (
-            <p className="text-zinc-500">
-              Reading the source… <span className="text-zinc-400">(you can keep going —
-              this is just a heads-up on the material)</span>
-            </p>
-          ) : p.analysis ? (
-            <>
-              <p className="text-xs font-medium text-zinc-400">
-                Source read-back — what to expect from this material. Advisory only;
-                using it is your call.
-              </p>
-              <p className="mt-1">
-                {cap(p.analysis.kind)} material, {p.analysis.wordCount} words
-                {p.analysis.readingLevel && p.analysis.readingLevel !== "not assessed"
-                  ? `, ${p.analysis.readingLevel} level`
-                  : ""}
-                . Covers: {p.analysis.themes.join(", ") || p.analysis.concepts.join(", ")}.
-              </p>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                {p.analysis.strengths.length > 0 && (
-                  <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs dark:border-emerald-900 dark:bg-emerald-950/30">
-                    <p className="font-medium text-emerald-700 dark:text-emerald-300">
-                      Strengths
-                    </p>
-                    <ul className="mt-0.5 list-disc pl-4 text-zinc-600 dark:text-zinc-300">
-                      {p.analysis.strengths.map((s, i) => (
-                        <li key={i}>{s}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {p.analysis.watchOuts.length > 0 && (
-                  <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs dark:border-amber-900 dark:bg-amber-950/30">
-                    <p className="font-medium text-amber-700 dark:text-amber-300">
-                      Watch-outs
-                    </p>
-                    <ul className="mt-0.5 list-disc pl-4 text-zinc-600 dark:text-zinc-300">
-                      {p.analysis.watchOuts.map((s, i) => (
-                        <li key={i}>{s}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-              {p.analysis.detectedQuestions > 3 && (
-                <div className="mt-2 rounded border border-zinc-300 bg-white p-2 text-xs dark:border-zinc-700 dark:bg-zinc-950">
-                  This source contains ~{p.analysis.detectedQuestions} existing
-                  questions.{" "}
-                  <button
-                    onClick={() => {
-                      const ex = findPreset("extract-questions")!;
-                      set(
-                        promptMode
-                          ? {
-                              mode: "extract",
-                              prompt: ex.prompt,
-                              promptPresetId: ex.id,
-                            }
-                          : { mode: "extract" },
-                      );
-                    }}
-                    className={`underline ${p.intent.mode === "extract" ? "font-semibold" : ""}`}
-                  >
-                    Extract them as-is
-                  </button>{" "}
-                  ·{" "}
-                  <button
-                    onClick={() => set({ mode: "generate" })}
-                    className={`underline ${p.intent.mode === "generate" ? "font-semibold" : ""}`}
-                  >
-                    Generate new
-                  </button>
-                </div>
-              )}
-              <p className="mt-1 text-[10px] text-zinc-400">
-                {p.analysis.engine === "model"
-                  ? "read-back by model"
-                  : "read-back is heuristic (no model key) — concepts are frequency-based"}
-              </p>
-            </>
-          ) : null}
+      {p.analysis && p.analysis.detectedQuestions > 3 && (
+        <div className="rounded-md border border-zinc-300 bg-white p-2 text-xs dark:border-zinc-700 dark:bg-zinc-950">
+          This source already contains ~{p.analysis.detectedQuestions} questions.{" "}
+          <button
+            onClick={() => {
+              const ex = findPreset("extract-questions")!;
+              set(
+                promptMode
+                  ? { mode: "extract", prompt: ex.prompt, promptPresetId: ex.id }
+                  : { mode: "extract" },
+              );
+            }}
+            className={`underline ${p.intent.mode === "extract" ? "font-semibold" : ""}`}
+          >
+            Extract them as-is
+          </button>{" "}
+          ·{" "}
+          <button
+            onClick={() => set({ mode: "generate" })}
+            className={`underline ${p.intent.mode === "generate" ? "font-semibold" : ""}`}
+          >
+            Generate new
+          </button>
         </div>
       )}
     </div>
@@ -3574,7 +3510,6 @@ function Workspace(p: {
   intent: ImportIntent;
   setIntent: (f: (i: ImportIntent) => ImportIntent) => void;
   analysis: SourceAnalysis | null;
-  analyzing: boolean;
   recByName: Record<string, Recommendation>;
   toggleType: (n: string) => void;
   generating: boolean;
@@ -3638,7 +3573,6 @@ function Workspace(p: {
         intent={p.intent}
         setIntent={p.setIntent}
         analysis={p.analysis}
-        analyzing={p.analyzing}
       />
       <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
