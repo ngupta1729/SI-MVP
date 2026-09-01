@@ -826,6 +826,14 @@ export default function Page() {
                 Keep editing
               </button>
             </div>
+            <p className="mt-2 border-t border-blue-200 pt-2 text-[11px] text-zinc-500 dark:border-blue-900">
+              If this activity is embedded in an LMS (LTI), those courses point
+              at it live. <b>Replace</b> changes what students see on their next
+              open and can break scores already recorded against the old
+              version &mdash; there&rsquo;s no LMS prompt or opt-in.{" "}
+              <b>Save as a new activity</b> leaves every existing embed untouched;
+              you choose where to use the new one.
+            </p>
           </div>
         )}
 
