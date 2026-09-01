@@ -129,6 +129,15 @@ export default function Page() {
   const [justCreatedId, setJustCreatedId] = useState<string | null>(null);
   // Set when the user asks to close the flow but has generated (unsaved) content.
   const [confirmExit, setConfirmExit] = useState(false);
+  // Refining one already-created library item, outside the create flow —
+  // the same Preview + Refine panels (Workspace B), without Setup/Activities.
+  const [soloRefine, setSoloRefine] = useState<{
+    recId: string;
+    recName: string;
+    itemId: string;
+  } | null>(null);
+  const [confirmSoloExit, setConfirmSoloExit] = useState(false);
+  const [soloOpen, setSoloOpen] = useState<boolean[]>([true, true]);
   // Wall-clock from starting the import to the generated set landing — i.e.
   // steps 1–2 (source + intent + choose activities + generate). Review/approve
   // time is deliberately excluded.
@@ -560,6 +569,100 @@ export default function Page() {
     else exitFlow();
   }
 
+  /** Open one already-created library item in the Preview + Refine panels —
+   *  the same tools as before "Create", minus Setup/Choose activities. */
+  function openRefine(rec: ImportRecord, itemId: string) {
+    const it = rec.items.find((i) => i.id === itemId);
+    if (!it) return;
+    resetFlow();
+    setImportId(rec.id);
+    setSourceTab(rec.source.kind === "url" ? "Wikipedia" : "Pasted Text");
+    setText(rec.source.kind === "text" ? rec.source.value : "");
+    setWikiUrl(rec.source.kind === "url" ? rec.source.value : "");
+    setIntent(rec.intent);
+    const asRendered: RenderedItem = {
+      id: it.id,
+      contentType: it.contentType,
+      title: it.title,
+      concepts: it.concepts,
+      rationale: "",
+      contentJson: it.contentJson,
+      mainLibrary: contentType(it.contentType)?.library ?? "",
+      // ImportKeptItem's type omits h5pJson (kept out of the persisted-record
+      // shape), but finishCreate still writes it through — recover it here so
+      // Play mode works the same as it did on first generation.
+      render: it.render as RenderedItem["render"],
+      hostPrepared: it.hostPrepared,
+    };
+    setResult({
+      sourceSummary: "",
+      planNarrative: "",
+      engine: rec.engine as TwinResult["engine"],
+      model: rec.model,
+      items: [asRendered],
+    });
+    setItemState({ [it.id]: "approved" });
+    setSelected(it.id);
+    setSoloOpen([true, true]);
+    setSoloRefine({ recId: rec.id, recName: rec.name, itemId: it.id });
+  }
+
+  function closeSoloRefine() {
+    setConfirmSoloExit(false);
+    setSoloRefine(null);
+    resetFlow();
+  }
+
+  const soloDirty =
+    !!soloRefine &&
+    (!!edits[soloRefine.itemId] ||
+      (attempts[soloRefine.itemId] ?? 0) > 0 ||
+      (remixes[soloRefine.itemId] ?? 0) > 0 ||
+      itemState[soloRefine.itemId] === "discarded");
+
+  function requestCloseSoloRefine() {
+    if (soloDirty) setConfirmSoloExit(true);
+    else closeSoloRefine();
+  }
+
+  /** Write the refined/edited/discarded item back into its saved session. */
+  function saveSoloRefine() {
+    if (!soloRefine) return;
+    const target = soloRefine;
+    const it = result?.items.find((i) => i.id === target.itemId);
+    if (!it) return;
+    const discarded = itemState[target.itemId] === "discarded";
+    const rec = allImports.find((r) => r.id === target.recId);
+    if (!rec) return;
+
+    const next: ImportRecord = discarded
+      ? {
+          ...rec,
+          items: rec.items.filter((i) => i.id !== target.itemId),
+          outcome: { ...rec.outcome, kept: Math.max(0, rec.outcome.kept - 1) },
+        }
+      : {
+          ...rec,
+          items: rec.items.map((i) =>
+            i.id === it.id
+              ? ({
+                  id: it.id,
+                  title: it.title,
+                  contentType: it.contentType,
+                  concepts: it.concepts,
+                  contentJson: edits[it.id] ?? it.contentJson,
+                  render: it.render,
+                  hostPrepared: it.hostPrepared,
+                } satisfies ImportKeptItem)
+              : i,
+          ),
+        };
+
+    saveImport(next);
+    setAllImports((prev) => prev.map((r) => (r.id === next.id ? next : r)));
+    closeSoloRefine();
+  }
+
   const keptIds = result
     ? result.items.filter((i) => itemState[i.id] !== "discarded").map((i) => i.id)
     : [];
@@ -574,6 +677,130 @@ export default function Page() {
     }));
 
 
+  if (soloRefine) {
+    const cur = current;
+    return (
+      <div className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-white dark:bg-zinc-950">
+        <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
+          <div className="min-w-0">
+            <span className="text-sm font-semibold">
+              Refine · {cur ? contentType(cur.contentType)?.label : ""}
+            </span>
+            <span className="ml-2 truncate text-xs text-zinc-400">
+              from {soloRefine.recName}
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={saveSoloRefine}
+              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+            >
+              Save changes
+            </button>
+            <button
+              onClick={requestCloseSoloRefine}
+              aria-label="Close"
+              title="Close"
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-zinc-300 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            >
+              <span aria-hidden className="text-lg leading-none">
+                &times;
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+            {error}
+          </div>
+        )}
+
+        {confirmSoloExit && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm dark:border-amber-900 dark:bg-amber-950/30">
+            <span className="text-amber-800 dark:text-amber-200">
+              Close without saving? Your changes to this activity won&rsquo;t be
+              kept.
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmSoloExit(false)}
+                className={btnGhost}
+              >
+                Keep editing
+              </button>
+              <button
+                onClick={closeSoloRefine}
+                className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <ResizablePanels
+            storageKey="smartimport.refinePanels.v1"
+            open={soloOpen}
+            onOpenChange={setSoloOpen}
+            panels={[
+              {
+                id: "preview",
+                title: "Preview",
+                node: (
+                  <div className="h-full overflow-auto p-3">
+                    {cur ? (
+                      <ItemPanel
+                        key={cur.id}
+                        item={cur}
+                        value={edits[cur.id] ?? cur.contentJson}
+                        onChange={(v) =>
+                          setEdits((e) => ({ ...e, [cur.id]: v }))
+                        }
+                        editing={false}
+                      />
+                    ) : (
+                      <p className="text-sm text-zinc-400">
+                        This activity is no longer available.
+                      </p>
+                    )}
+                  </div>
+                ),
+              },
+              {
+                id: "refine",
+                title: "Refine",
+                node: cur ? (
+                  <RefineChat
+                    key={cur.id}
+                    item={cur}
+                    state={itemState[cur.id]}
+                    turns={transcript[cur.id] ?? []}
+                    append={(turn) =>
+                      setTranscript((t) => ({
+                        ...t,
+                        [cur.id]: [...(t[cur.id] ?? []), turn],
+                      }))
+                    }
+                    onRefine={refineActivity}
+                    onRemix={remixActivity}
+                    onDiscard={discardActivity}
+                    onUndiscard={() => setItem(cur.id, "approved")}
+                  />
+                ) : (
+                  <div className="h-full p-4 text-xs text-zinc-400">
+                    This activity is no longer available.
+                  </div>
+                ),
+              },
+            ]}
+          />
+        </div>
+      </div>
+    );
+  }
+
   if (view === "shell") {
     return (
       <Shell
@@ -586,6 +813,7 @@ export default function Page() {
         justCreatedId={justCreatedId}
         clearJustCreated={() => setJustCreatedId(null)}
         onStartSmartImport={startFlow}
+        onRefineItem={openRefine}
         uiVariant={uiVariant}
         setUiVariant={setUiVariant}
       />
@@ -2534,10 +2762,10 @@ const PANELS_KEY = "smartimport.workspacePanels.v2";
 const MIN_FRAC = 0.14;
 
 /** Only the widths are remembered; which panels are open is decided per stage. */
-function loadFrac(): number[] | null {
+function loadFrac(storageKey: string, n: number): number[] | null {
   try {
-    const s = JSON.parse(localStorage.getItem(PANELS_KEY) || "null");
-    if (Array.isArray(s?.frac) && s.frac.length === 3) return s.frac as number[];
+    const s = JSON.parse(localStorage.getItem(storageKey) || "null");
+    if (Array.isArray(s?.frac) && s.frac.length === n) return s.frac as number[];
   } catch {
     /* ignore */
   }
@@ -2556,15 +2784,22 @@ function ResizablePanels({
   panels,
   open,
   onOpenChange,
+  storageKey = PANELS_KEY,
 }: {
   panels: Panel[];
   /** Which panels are expanded — controlled by the caller so a stage can set defaults. */
   open: boolean[];
   onOpenChange: (next: boolean[]) => void;
+  /** Widths persist independently per caller — a solo 2-panel view shouldn't
+   *  overwrite the full 3-panel workspace's saved layout. */
+  storageKey?: string;
 }) {
+  const panelCount = panels.length;
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [frac, setFrac] = useState<number[]>(
-    () => loadFrac() ?? [1 / 3, 1 / 3, 1 / 3],
+    () =>
+      loadFrac(storageKey, panelCount) ??
+      Array(panelCount).fill(1 / panelCount),
   );
   const drag = useRef<{ l: number; r: number; startX: number; sf: number[] } | null>(
     null,
@@ -2572,13 +2807,14 @@ function ResizablePanels({
 
   useEffect(() => {
     try {
-      localStorage.setItem(PANELS_KEY, JSON.stringify({ frac }));
+      localStorage.setItem(storageKey, JSON.stringify({ frac }));
     } catch {
       /* ignore */
     }
-  }, [frac]);
+  }, [frac, storageKey]);
 
-  const openIdx = [0, 1, 2].filter((i) => open[i]);
+  const idxs = Array.from({ length: panelCount }, (_, i) => i);
+  const openIdx = idxs.filter((i) => open[i]);
   const openSum = openIdx.reduce((s, i) => s + frac[i], 0) || 1;
 
   function toggle(i: number) {
@@ -2593,7 +2829,7 @@ function ResizablePanels({
     if (!d || !wrapRef.current) return;
     const total = wrapRef.current.getBoundingClientRect().width;
     if (total <= 0) return;
-    const openNow = [0, 1, 2].filter((i) => open[i]);
+    const openNow = idxs.filter((i) => open[i]);
     const sfSum = openNow.reduce((s, i) => s + d.sf[i], 0) || 1;
     const dx = (e.clientX - d.startX) / total;
     const pair = (d.sf[d.l] + d.sf[d.r]) / sfSum;
@@ -3189,6 +3425,7 @@ function Shell(p: {
   justCreatedId: string | null;
   clearJustCreated: () => void;
   onStartSmartImport: () => void;
+  onRefineItem: (rec: ImportRecord, itemId: string) => void;
   uiVariant: UiVariant;
   setUiVariant: (v: UiVariant) => void;
 }) {
@@ -3255,6 +3492,7 @@ function Shell(p: {
                 justCreatedId={p.justCreatedId}
                 clearJustCreated={p.clearJustCreated}
                 onStart={p.onStartSmartImport}
+                onRefineItem={p.onRefineItem}
               />
             ) : (
               <GenericContentList
@@ -3361,6 +3599,7 @@ function SmartImportHome(p: {
   justCreatedId: string | null;
   clearJustCreated: () => void;
   onStart: () => void;
+  onRefineItem: (rec: ImportRecord, itemId: string) => void;
 }) {
   const [tab, setTab] = useState<"content" | "sessions">("content");
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -3555,9 +3794,17 @@ function SmartImportHome(p: {
                       {tags.length ? ` · ${tags.join(" · ")}` : ""}
                     </p>
                   </div>
-                  <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800">
-                    draft
-                  </span>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      onClick={() => p.onRefineItem(rec, it.id)}
+                      className="rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] text-zinc-600 hover:border-blue-500 hover:text-blue-600 dark:border-zinc-700 dark:text-zinc-300"
+                    >
+                      Refine
+                    </button>
+                    <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800">
+                      draft
+                    </span>
+                  </div>
                 </li>
               );
             })}
