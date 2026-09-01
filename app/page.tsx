@@ -127,6 +127,8 @@ export default function Page() {
   const [allImports, setAllImports] = useState<ImportRecord[]>([]);
   const [siFilter, setSiFilter] = useState<string>(""); // "" all SI · "all"·id
   const [justCreatedId, setJustCreatedId] = useState<string | null>(null);
+  // Set when the user asks to close the flow but has generated (unsaved) content.
+  const [confirmExit, setConfirmExit] = useState(false);
   // Wall-clock from starting the import to the generated set landing — i.e.
   // steps 1–2 (source + intent + choose activities + generate). Review/approve
   // time is deliberately excluded.
@@ -547,8 +549,15 @@ export default function Page() {
 
   /** Leave the flow without creating anything. */
   function exitFlow() {
+    setConfirmExit(false);
     resetFlow();
     setView("shell");
+  }
+
+  /** Close from any stage. Guards only when generated activities would be lost. */
+  function requestExitFlow() {
+    if (result) setConfirmExit(true);
+    else exitFlow();
   }
 
   const keptIds = result
@@ -591,12 +600,45 @@ export default function Page() {
             <span className="text-sm font-semibold">Smart Import</span>
             <span className="ml-2 text-xs text-zinc-400">Workspace</span>
           </div>
-          <VariantToggle value={uiVariant} onChange={setUiVariant} />
+          <div className="flex items-center gap-2">
+            <VariantToggle value={uiVariant} onChange={setUiVariant} />
+            <button
+              onClick={requestExitFlow}
+              aria-label="Close Smart Import"
+              title="Close"
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-zinc-300 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            >
+              <span aria-hidden className="text-lg leading-none">
+                &times;
+              </span>
+            </button>
+          </div>
         </div>
 
         {error && (
           <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
             {error}
+          </div>
+        )}
+
+        {confirmExit && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm dark:border-amber-900 dark:bg-amber-950/30">
+            <span className="text-amber-800 dark:text-amber-200">
+              Close without creating? The {result?.items.length} generated{" "}
+              {result?.items.length === 1 ? "activity" : "activities"} won&rsquo;t
+              be saved.
+            </span>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmExit(false)} className={btnGhost}>
+                Keep editing
+              </button>
+              <button
+                onClick={exitFlow}
+                className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+              >
+                Close
+              </button>
+            </div>
           </div>
         )}
 
@@ -653,7 +695,7 @@ export default function Page() {
                   : "add a source to begin"}
           </span>
           <div className="flex gap-2">
-            <button onClick={exitFlow} className={btnGhost}>
+            <button onClick={requestExitFlow} className={btnGhost}>
               Cancel
             </button>
             {result ? (
@@ -693,7 +735,19 @@ export default function Page() {
         <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
           <div className="flex items-start justify-between gap-3">
             <h1 className="text-lg font-semibold">Smart Import</h1>
-            <VariantToggle value={uiVariant} onChange={setUiVariant} />
+            <div className="flex items-center gap-2">
+              <VariantToggle value={uiVariant} onChange={setUiVariant} />
+              <button
+                onClick={requestExitFlow}
+                aria-label="Close Smart Import"
+                title="Close"
+                className="flex h-7 w-7 items-center justify-center rounded-md border border-zinc-300 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+              >
+                <span aria-hidden className="text-lg leading-none">
+                  &times;
+                </span>
+              </button>
+            </div>
           </div>
           <Stepper screen={screen} />
           <p className="mt-1 text-xs text-zinc-400">
@@ -705,6 +759,27 @@ export default function Page() {
         {error && (
           <div className="border-b border-red-200 bg-red-50 px-6 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
             {error}
+          </div>
+        )}
+
+        {confirmExit && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-6 py-2.5 text-sm dark:border-amber-900 dark:bg-amber-950/30">
+            <span className="text-amber-800 dark:text-amber-200">
+              Close without creating? The {result?.items.length} generated{" "}
+              {result?.items.length === 1 ? "activity" : "activities"} won&rsquo;t
+              be saved.
+            </span>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmExit(false)} className={btnGhost}>
+                Keep editing
+              </button>
+              <button
+                onClick={exitFlow}
+                className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+              >
+                Close
+              </button>
+            </div>
           </div>
         )}
 
@@ -779,9 +854,14 @@ export default function Page() {
           </span>
           <div className="flex gap-2">
             <button
-              onClick={screen === "configure" ? exitFlow : () => setScreen(
-                screen === "activities" ? "configure" : "activities",
-              )}
+              onClick={
+                screen === "configure"
+                  ? requestExitFlow
+                  : () =>
+                      setScreen(
+                        screen === "activities" ? "configure" : "activities",
+                      )
+              }
               className={btnGhost}
             >
               {screen === "configure" ? "Cancel" : "Back"}
