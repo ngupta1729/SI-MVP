@@ -3003,6 +3003,9 @@ function Shell(p: {
 }
 
 function GenericContentList(p: { nav: ShellNav; imports: ImportRecord[] }) {
+  const [openFolder, setOpenFolder] = useState<null | "examples" | "smartimport">(
+    null,
+  );
   if (p.nav === "shared" || p.nav === "trash") {
     return (
       <p className="text-sm text-zinc-400">
@@ -3013,30 +3016,80 @@ function GenericContentList(p: { nav: ShellNav; imports: ImportRecord[] }) {
   const siItems = p.imports.flatMap((rec) =>
     rec.items.map((it) => ({ rec, it })),
   );
+
+  if (openFolder) {
+    const folderLabel =
+      openFolder === "examples" ? "Examples and templates" : "Smart Import";
+    return (
+      <div className="space-y-3">
+        <p className="text-xs text-zinc-500">
+          <button
+            onClick={() => setOpenFolder(null)}
+            className="text-blue-700 hover:underline dark:text-blue-300"
+          >
+            {navLabel(p.nav)}
+          </button>{" "}
+          &raquo; <span className="font-medium">{folderLabel}</span>
+        </p>
+        <ul className="space-y-1.5 text-xs">
+          {openFolder === "smartimport" && siItems.length === 0 && (
+            <li className="rounded-md border border-dashed border-zinc-300 p-3 text-zinc-400 dark:border-zinc-700">
+              Nothing here yet &mdash; content you generate with Smart Import
+              lands in this folder.
+            </li>
+          )}
+          {openFolder === "smartimport" &&
+            siItems.map(({ rec, it }) => (
+              <li
+                key={`${rec.id}:${it.id}`}
+                className="rounded-md border border-zinc-200 p-2 dark:border-zinc-800"
+              >
+                <p className="truncate font-medium">
+                  {it.title || contentType(it.contentType)?.label}
+                </p>
+                <p className="truncate text-zinc-500">
+                  {contentType(it.contentType)?.label} &middot; from {rec.name}
+                </p>
+              </li>
+            ))}
+          {openFolder === "examples" && (
+            <li className="rounded-md border border-dashed border-zinc-300 p-3 text-zinc-400 dark:border-zinc-700">
+              Organization-shared examples and templates &mdash; not part of the
+              prototype.
+            </li>
+          )}
+        </ul>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
         {navLabel(p.nav)}
       </p>
       <ul className="space-y-1.5 text-xs">
-        <li className="rounded-md border border-zinc-200 p-2 dark:border-zinc-800">
-          <p className="font-medium">Examples and templates</p>
-          <p className="text-zinc-500">Shared with the entire organization</p>
-        </li>
-        {siItems.map(({ rec, it }) => (
-          <li
-            key={`${rec.id}:${it.id}`}
-            className="rounded-md border border-zinc-200 p-2 dark:border-zinc-800"
+        <li>
+          <button
+            onClick={() => setOpenFolder("examples")}
+            className="w-full rounded-md border border-zinc-200 p-2 text-left hover:border-blue-300 dark:border-zinc-800"
           >
-            <p className="truncate font-medium">
-              {it.title || contentType(it.contentType)?.label}
+            <p className="font-medium">&#128193; Examples and templates</p>
+            <p className="text-zinc-500">Shared with the entire organization</p>
+          </button>
+        </li>
+        <li>
+          <button
+            onClick={() => setOpenFolder("smartimport")}
+            className="w-full rounded-md border border-zinc-200 p-2 text-left hover:border-blue-300 dark:border-zinc-800"
+          >
+            <p className="font-medium">&#128193; Smart Import</p>
+            <p className="text-zinc-500">
+              {siItems.length} item{siItems.length === 1 ? "" : "s"} generated
+              from source
             </p>
-            <p className="truncate text-zinc-500">
-              {contentType(it.contentType)?.label} &middot; Smart Import &middot;{" "}
-              {rec.name}
-            </p>
-          </li>
-        ))}
+          </button>
+        </li>
         {MOCK_LIBRARY_ITEMS.map((m) => (
           <li
             key={m.title}
@@ -3050,8 +3103,8 @@ function GenericContentList(p: { nav: ShellNav; imports: ImportRecord[] }) {
         ))}
       </ul>
       <p className="text-[11px] text-zinc-400">
-        No separate &ldquo;Smart Import&rdquo; folder &mdash; generated content
-        sits in the library, tagged to its import.
+        Open the &ldquo;Smart Import&rdquo; folder for generated content, or the
+        Smart Import tab in the left nav to work by session.
       </p>
     </div>
   );

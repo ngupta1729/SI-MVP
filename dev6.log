@@ -1,0 +1,13 @@
+
+> h5p-twin@0.1.0 dev
+> next dev
+
+▲ Next.js 16.3.3 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://10.95.8.92:3000
+- Environments: .env.local
+✓ Ready in 885ms
+✓ Running next.config.ts took 55ms
+
+○ Compiling / ...
+ GET / 200 in 4.7s (next.js: 4.5s, application-code: 259ms)
