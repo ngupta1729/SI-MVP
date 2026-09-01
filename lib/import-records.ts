@@ -87,6 +87,12 @@ export interface ImportRecord {
   items: ImportKeptItem[];
   /** Overall-experience pulse — set only once the educator answers the survey. */
   feedback?: ImportFeedback;
+  /**
+   * Wall-clock ms from starting the import to the generated set landing —
+   * steps 1–2 (source + intent + choose activities + generate). Review and
+   * approve time is excluded. Absent on records made before this was tracked.
+   */
+  buildMs?: number;
 }
 
 export async function fetchImports(): Promise<ImportRecord[]> {

@@ -127,6 +127,11 @@ export default function Page() {
   const [allImports, setAllImports] = useState<ImportRecord[]>([]);
   const [siFilter, setSiFilter] = useState<string>(""); // "" all SI · "all"·id
   const [justCreatedId, setJustCreatedId] = useState<string | null>(null);
+  // Wall-clock from starting the import to the generated set landing — i.e.
+  // steps 1–2 (source + intent + choose activities + generate). Review/approve
+  // time is deliberately excluded.
+  const [flowStartedAt, setFlowStartedAt] = useState<number | null>(null);
+  const [buildMs, setBuildMs] = useState<number | null>(null);
 
   useEffect(() => {
     fetchImports().then(setAllImports).catch(() => {});
@@ -242,6 +247,7 @@ export default function Page() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "generation failed");
       setResult(data);
+      setBuildMs(flowStartedAt ? Date.now() - flowStartedAt : null);
       setItemState(
         Object.fromEntries(
           data.items.map((i: RenderedItem) => [i.id, "approved" as ItemState]),
@@ -480,6 +486,7 @@ export default function Page() {
       },
       decisions,
       items: recordItems,
+      buildMs: buildMs ?? undefined,
     };
     saveImport(record);
     setAllImports((prev) => [record, ...prev.filter((r) => r.id !== record.id)]);
@@ -509,12 +516,15 @@ export default function Page() {
     setAnalysis(null);
     setAnalyzedKey("");
     setScreen("configure");
+    setFlowStartedAt(null);
+    setBuildMs(null);
   }
 
   /** One click from the shell straight into Configure. */
   function startFlow() {
     resetFlow();
     setJustCreatedId(null);
+    setFlowStartedAt(Date.now());
     setView("flow");
   }
 
@@ -2821,7 +2831,6 @@ function ImportReceipt({ rec }: { rec: ImportRecord }) {
   const types = rec.intent.contentTypes
     .map((n) => contentType(n)?.label ?? n)
     .join(", ");
-  const minutesSaved = Math.max(o.kept * 7, 5);
   const fb = rec.feedback;
   return (
     <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-900">
@@ -2893,7 +2902,10 @@ function ImportReceipt({ rec }: { rec: ImportRecord }) {
           "5 · Result",
           <>
             {o.kept} {o.kept === 1 ? "activity" : "activities"} in the library as
-            drafts · ~{minutesSaved} min of manual authoring
+            drafts
+            {rec.buildMs != null
+              ? ` · generated in ${fmtDuration(rec.buildMs)} (steps 1–2, review excluded)`
+              : ""}
           </>,
         )}
         {receiptRow(
@@ -3013,7 +3025,11 @@ function Shell(p: {
                 onStart={p.onStartSmartImport}
               />
             ) : (
-              <GenericContentList nav={p.nav} imports={p.imports} />
+              <GenericContentList
+                nav={p.nav}
+                imports={p.imports}
+                goSmartImport={() => p.setNav("smartimport")}
+              />
             )}
           </div>
         </main>
@@ -3022,10 +3038,12 @@ function Shell(p: {
   );
 }
 
-function GenericContentList(p: { nav: ShellNav; imports: ImportRecord[] }) {
-  const [openFolder, setOpenFolder] = useState<null | "examples" | "smartimport">(
-    null,
-  );
+function GenericContentList(p: {
+  nav: ShellNav;
+  imports: ImportRecord[];
+  goSmartImport: () => void;
+}) {
+  const [examplesOpen, setExamplesOpen] = useState(false);
   if (p.nav === "shared" || p.nav === "trash") {
     return (
       <p className="text-sm text-zinc-400">
@@ -3037,48 +3055,22 @@ function GenericContentList(p: { nav: ShellNav; imports: ImportRecord[] }) {
     rec.items.map((it) => ({ rec, it })),
   );
 
-  if (openFolder) {
-    const folderLabel =
-      openFolder === "examples" ? "Examples and templates" : "Smart Import";
+  if (examplesOpen) {
     return (
       <div className="space-y-3">
         <p className="text-xs text-zinc-500">
           <button
-            onClick={() => setOpenFolder(null)}
+            onClick={() => setExamplesOpen(false)}
             className="text-blue-700 hover:underline dark:text-blue-300"
           >
             {navLabel(p.nav)}
           </button>{" "}
-          &raquo; <span className="font-medium">{folderLabel}</span>
+          &raquo; <span className="font-medium">Examples and templates</span>
         </p>
-        <ul className="space-y-1.5 text-xs">
-          {openFolder === "smartimport" && siItems.length === 0 && (
-            <li className="rounded-md border border-dashed border-zinc-300 p-3 text-zinc-400 dark:border-zinc-700">
-              Nothing here yet &mdash; content you generate with Smart Import
-              lands in this folder.
-            </li>
-          )}
-          {openFolder === "smartimport" &&
-            siItems.map(({ rec, it }) => (
-              <li
-                key={`${rec.id}:${it.id}`}
-                className="rounded-md border border-zinc-200 p-2 dark:border-zinc-800"
-              >
-                <p className="truncate font-medium">
-                  {it.title || contentType(it.contentType)?.label}
-                </p>
-                <p className="truncate text-zinc-500">
-                  {contentType(it.contentType)?.label} &middot; from {rec.name}
-                </p>
-              </li>
-            ))}
-          {openFolder === "examples" && (
-            <li className="rounded-md border border-dashed border-zinc-300 p-3 text-zinc-400 dark:border-zinc-700">
-              Organization-shared examples and templates &mdash; not part of the
-              prototype.
-            </li>
-          )}
-        </ul>
+        <p className="rounded-md border border-dashed border-zinc-300 p-3 text-xs text-zinc-400 dark:border-zinc-700">
+          Organization-shared examples and templates &mdash; not part of the
+          prototype.
+        </p>
       </div>
     );
   }
@@ -3091,7 +3083,7 @@ function GenericContentList(p: { nav: ShellNav; imports: ImportRecord[] }) {
       <ul className="space-y-1.5 text-xs">
         <li>
           <button
-            onClick={() => setOpenFolder("examples")}
+            onClick={() => setExamplesOpen(true)}
             className="w-full rounded-md border border-zinc-200 p-2 text-left hover:border-blue-300 dark:border-zinc-800"
           >
             <p className="font-medium">&#128193; Examples and templates</p>
@@ -3100,13 +3092,16 @@ function GenericContentList(p: { nav: ShellNav; imports: ImportRecord[] }) {
         </li>
         <li>
           <button
-            onClick={() => setOpenFolder("smartimport")}
+            onClick={p.goSmartImport}
             className="w-full rounded-md border border-zinc-200 p-2 text-left hover:border-blue-300 dark:border-zinc-800"
           >
-            <p className="font-medium">&#128193; Smart Import</p>
+            <p className="font-medium">
+              &#128193; Smart Import{" "}
+              <span className="font-normal text-zinc-400">&rarr;</span>
+            </p>
             <p className="text-zinc-500">
               {siItems.length} item{siItems.length === 1 ? "" : "s"} generated
-              from source
+              from source &mdash; opens the Smart Import tab
             </p>
           </button>
         </li>
@@ -3122,10 +3117,6 @@ function GenericContentList(p: { nav: ShellNav; imports: ImportRecord[] }) {
           </li>
         ))}
       </ul>
-      <p className="text-[11px] text-zinc-400">
-        Open the &ldquo;Smart Import&rdquo; folder for generated content, or the
-        Smart Import tab in the left nav to work by session.
-      </p>
     </div>
   );
 }
@@ -3197,9 +3188,16 @@ function SmartImportHome(p: {
               from &ldquo;{justCreated.name}&rdquo;
             </p>
             <p className="mt-0.5 text-xs text-emerald-700 dark:text-emerald-300">
-              Done in one pass &mdash; roughly{" "}
-              <b>{Math.max(justCreated.outcome.kept * 7, 5)} min</b> of manual
-              authoring. In your library as drafts, filtered below to this import.
+              {justCreated.buildMs != null ? (
+                <>
+                  Generated in{" "}
+                  <b>{fmtDuration(justCreated.buildMs)}</b> &mdash; setup and
+                  activities, review not counted.{" "}
+                </>
+              ) : (
+                "Done in one pass. "
+              )}
+              In your library as drafts, filtered below to this import.
             </p>
           </div>
           <button
@@ -3491,6 +3489,16 @@ function ExperienceSurvey(p: { onSubmit: (fb: ImportFeedback) => void }) {
       </div>
     </div>
   );
+}
+
+/** Short elapsed-time label, e.g. "48s", "2m 34s", "1h 05m". */
+function fmtDuration(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${String(s % 60).padStart(2, "0")}s`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${String(m % 60).padStart(2, "0")}m`;
 }
 
 function relTime(ts: number): string {
