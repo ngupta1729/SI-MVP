@@ -54,6 +54,17 @@ export interface ImportOutcome {
   discarded: number;
 }
 
+/** The overall-experience pulse asked once, right after a first pass finishes. */
+export interface ImportFeedback {
+  /** Overall experience of this Smart Import pass, 1 (poor) – 5 (great). */
+  rating: number;
+  /** Would you reach for Smart Import again? */
+  again: "yes" | "maybe" | "no" | null;
+  /** Free text — "what would have made this better?" */
+  comment: string;
+  submittedAt: number;
+}
+
 export interface ImportRecord {
   /** === the session importId, shared with the review_event stream. */
   id: string;
@@ -74,6 +85,8 @@ export interface ImportRecord {
   decisions: ImportItemDecision[];
   /** Kept items only, with enough to re-render. */
   items: ImportKeptItem[];
+  /** Overall-experience pulse — set only once the educator answers the survey. */
+  feedback?: ImportFeedback;
 }
 
 export async function fetchImports(): Promise<ImportRecord[]> {

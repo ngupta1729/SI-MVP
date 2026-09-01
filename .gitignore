@@ -53,3 +53,4 @@ next-env.d.ts
 
 # product/UX artifact pages — published as Claude artifacts, kept out of the app repo
 /docs/*.html
+dev*.log

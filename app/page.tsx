@@ -12,6 +12,7 @@ import {
   type ImportRecord,
   type ImportItemDecision,
   type ImportKeptItem,
+  type ImportFeedback,
   fetchImports,
   saveImport,
   intentLabel,
@@ -536,13 +537,6 @@ export default function Page() {
         : [...i.contentTypes, n],
     }));
 
-  const setTypeCount = (n: string, count: number | null) =>
-    setIntent((i) => {
-      const next = { ...(i.contentTypeCounts ?? {}) };
-      if (count == null) delete next[n];
-      else next[n] = count;
-      return { ...i, contentTypeCounts: next };
-    });
 
   if (view === "shell") {
     return (
@@ -603,7 +597,6 @@ export default function Page() {
             analyzing={analyzing}
             recByName={recByName}
             toggleType={toggleType}
-            setTypeCount={setTypeCount}
             generating={generating}
             generate={generate}
             result={result}
@@ -715,7 +708,6 @@ export default function Page() {
               recByName={recByName}
               analysis={shownAnalysis}
               toggle={toggleType}
-              setCount={setTypeCount}
               locked={!!result}
             />
           )}
@@ -1882,12 +1874,9 @@ function Activities(p: {
   recByName: Record<string, Recommendation>;
   analysis: SourceAnalysis | null;
   toggle: (n: string) => void;
-  setCount: (n: string, count: number | null) => void;
-  /** After generate — selection & counts are fixed; refine/remix happen in review. */
+  /** After generate — the activity set is fixed; refine/remix happen in review. */
   locked?: boolean;
 }) {
-  const countFor = (name: string) =>
-    p.intent.contentTypeCounts?.[name] ?? p.recByName[name]?.itemCount ?? null;
   const a = p.analysis;
   const recs = Object.values(p.recByName).filter((r) => r.recommended);
   const recLabels = recs
@@ -1930,7 +1919,6 @@ function Activities(p: {
                     {contentType(r.name)?.label}
                   </b>{" "}
                   — {r.reason}
-                  {countFor(r.name) ? ` · ${countFor(r.name)} items` : ""}
                 </li>
               ))}
             </ul>
@@ -1958,48 +1946,12 @@ function Activities(p: {
                   const tip = [ct.blurb, rec?.reason]
                     .filter(Boolean)
                     .join(" — ");
-                  const count = countFor(ct.name);
                   const tone = checked
                     ? "border-blue-600 bg-blue-600 text-white"
                     : rec?.recommended
                       ? "border-emerald-500 text-emerald-700 dark:text-emerald-300"
                       : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-300";
                   const faded = ct.twin !== "full" ? "opacity-60" : "";
-
-                  // checked + not locked → chip with an inline, editable item count
-                  if (checked && !p.locked) {
-                    return (
-                      <span
-                        key={ct.name}
-                        className={`inline-flex items-stretch overflow-hidden rounded-full border text-xs ${tone} ${faded}`}
-                      >
-                        <button
-                          onClick={() => p.toggle(ct.name)}
-                          title={tip}
-                          className="px-2.5 py-1"
-                        >
-                          {ct.label}
-                        </button>
-                        <input
-                          type="number"
-                          min={1}
-                          max={30}
-                          value={count ?? ""}
-                          onChange={(e) => {
-                            const v = e.target.value.trim();
-                            if (!v) return p.setCount(ct.name, null);
-                            p.setCount(
-                              ct.name,
-                              Math.max(1, Math.min(30, Math.round(Number(v)) || 1)),
-                            );
-                          }}
-                          aria-label={`${ct.label} — number of items`}
-                          title="Number of items to generate for this activity"
-                          className="w-10 border-l border-white/40 bg-white/15 px-1 text-center focus:bg-white/25 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                        />
-                      </span>
-                    );
-                  }
 
                   return (
                     <button
@@ -2019,9 +1971,6 @@ function Activities(p: {
                         <span aria-hidden>★ </span>
                       )}
                       {ct.label}
-                      {checked && count ? (
-                        <span className="opacity-70"> ·{count}</span>
-                      ) : null}
                     </button>
                   );
                 })}
@@ -2033,13 +1982,12 @@ function Activities(p: {
 
       {p.locked ? (
         <p className="text-[10px] text-amber-600">
-          Activity selection and counts are locked after generating. Use
-          Refine / Remix in review, or Start again to change the set.
+          The activity set is locked after generating. Use Refine / Remix in
+          review, or Start again to change it.
         </p>
       ) : (
         <p className="text-[10px] text-zinc-400">
-          Filled = in your set · ★ = recommended · the number is how many items to
-          generate — click it to change · faded = no live preview yet
+          Filled = in your set · ★ = recommended · faded = no live preview yet
         </p>
       )}
     </div>
@@ -2649,7 +2597,6 @@ function Workspace(p: {
   analyzing: boolean;
   recByName: Record<string, Recommendation>;
   toggleType: (n: string) => void;
-  setTypeCount: (n: string, count: number | null) => void;
   generating: boolean;
   generate: () => void;
   result: ApiResult | null;
@@ -2697,7 +2644,6 @@ function Workspace(p: {
           recByName={p.recByName}
           analysis={p.analysis}
           toggle={p.toggleType}
-          setCount={p.setTypeCount}
           locked={!!p.result}
         />
       </div>
@@ -2851,54 +2797,128 @@ function Workspace(p: {
 
 /* ---------------- After Create — the content library, with this import's receipt ---------------- */
 
-/** The persisted import-details receipt, rendered from an ImportRecord. */
+const AGAIN_LABEL: Record<string, string> = {
+  yes: "Would use again",
+  maybe: "Might use again",
+  no: "Wouldn’t use again",
+};
+
+function receiptRow(label: string, node: React.ReactNode) {
+  return (
+    <div key={label} className="contents">
+      <dt className="text-zinc-400">{label}</dt>
+      <dd className="min-w-0">{node}</dd>
+    </div>
+  );
+}
+
+/** Session metadata laid out along the workflow: source → intent → generate →
+ *  review → result → the educator's overall-experience feedback. */
 function ImportReceipt({ rec }: { rec: ImportRecord }) {
   const o = rec.outcome;
   const discarded = rec.decisions.filter((d) => d.discarded);
+  const steers = [...new Set(rec.decisions.flatMap((d) => d.refineSteers ?? []))];
+  const types = rec.intent.contentTypes
+    .map((n) => contentType(n)?.label ?? n)
+    .join(", ");
+  const minutesSaved = Math.max(o.kept * 7, 5);
+  const fb = rec.feedback;
   return (
     <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="font-semibold text-zinc-500">Import · {rec.name}</p>
-      <dl className="mt-1 grid gap-x-3 gap-y-0.5 sm:grid-cols-[5rem_1fr]">
-        <dt className="text-zinc-400">Source</dt>
-        <dd className="truncate">
-          {rec.source.kind === "url"
-            ? rec.source.value
-            : `${rec.source.value.slice(0, 80)}…`}
-          {rec.source.wordCount ? ` (${rec.source.wordCount} words)` : ""}
-        </dd>
-        <dt className="text-zinc-400">Intent</dt>
-        <dd className="truncate">
-          {intentLabel(rec.intent)} · preset: {rec.promptPresetId ?? "scratch"}
-        </dd>
-        <dt className="text-zinc-400">Engine</dt>
-        <dd>
-          {rec.engine}
-          {rec.model ? ` (${rec.model})` : ""}
-        </dd>
-        <dt className="text-zinc-400">Outcome</dt>
-        <dd>
-          {o.generated} generated → {o.kept} kept
-          {o.edited ? `, ${o.edited} edited` : ""}
-          {o.refined ? `, ${o.refined} refined` : ""}
-          {o.remixed ? `, ${o.remixed} remixed` : ""}
-          {o.discarded ? `, ${o.discarded} discarded` : ""}
-        </dd>
+      <p className="font-semibold text-zinc-500">Session · {rec.name}</p>
+      <dl className="mt-1 grid gap-x-3 gap-y-0.5 sm:grid-cols-[6.5rem_1fr]">
+        {receiptRow(
+          "1 · Source",
+          <>
+            <span className="block truncate">
+              {rec.source.kind === "url"
+                ? rec.source.value
+                : `Pasted text — ${rec.source.value.slice(0, 70)}…`}
+              {rec.source.wordCount ? ` (${rec.source.wordCount} words)` : ""}
+            </span>
+            {rec.source.readbackKind && (
+              <span className="text-zinc-400">
+                read back as {rec.source.readbackKind}
+              </span>
+            )}
+          </>,
+        )}
+        {receiptRow(
+          "2 · Intent",
+          <>
+            <span className="block truncate">{intentLabel(rec.intent)}</span>
+            <span className="text-zinc-400">
+              {rec.intent.emphasis} emphasis · {rec.intent.volume} volume ·
+              preset: {rec.promptPresetId ?? "scratch"}
+            </span>
+          </>,
+        )}
+        {receiptRow("Activities", types || "—")}
+        {receiptRow(
+          "3 · Generate",
+          <>
+            {rec.engine}
+            {rec.model ? ` (${rec.model})` : ""} · {o.generated} generated ·{" "}
+            {rec.uiVariant ?? "wizard"} UI
+          </>,
+        )}
+        {receiptRow(
+          "4 · Review",
+          <>
+            {o.kept} kept
+            {o.edited ? `, ${o.edited} edited` : ""}
+            {o.refined ? `, ${o.refined} refined` : ""}
+            {o.remixed ? `, ${o.remixed} remixed` : ""}
+            {o.discarded ? `, ${o.discarded} discarded` : ""}
+            {steers.length > 0 && (
+              <span className="block text-zinc-400">
+                refine steers: {steers.join(", ")}
+              </span>
+            )}
+            {discarded.length > 0 && (
+              <span className="block text-zinc-400">
+                discarded:{" "}
+                {discarded
+                  .map(
+                    (d) =>
+                      `${contentType(d.contentType)?.label ?? d.contentType}` +
+                      (d.discardReason ? ` (${d.discardReason})` : ""),
+                  )
+                  .join(", ")}
+              </span>
+            )}
+          </>,
+        )}
+        {receiptRow(
+          "5 · Result",
+          <>
+            {o.kept} {o.kept === 1 ? "activity" : "activities"} in the library as
+            drafts · ~{minutesSaved} min of manual authoring
+          </>,
+        )}
+        {receiptRow(
+          "Feedback",
+          fb ? (
+            <>
+              <span className="block">
+                {"★".repeat(fb.rating)}
+                {"☆".repeat(Math.max(0, 5 - fb.rating))} ({fb.rating}/5)
+                {fb.again ? ` · ${AGAIN_LABEL[fb.again]}` : ""}
+              </span>
+              {fb.comment.trim() && (
+                <span className="block text-zinc-400">
+                  &ldquo;{fb.comment.trim()}&rdquo;
+                </span>
+              )}
+              <span className="text-zinc-400">
+                given {relTime(fb.submittedAt)}
+              </span>
+            </>
+          ) : (
+            <span className="text-zinc-400">not rated yet</span>
+          ),
+        )}
       </dl>
-      {discarded.length > 0 && (
-        <p className="mt-1 text-zinc-400">
-          Discarded:{" "}
-          {discarded
-            .map(
-              (d) =>
-                `${contentType(d.contentType)?.label ?? d.contentType}` +
-                (d.discardReason ? ` (${d.discardReason})` : ""),
-            )
-            .join(", ")}
-        </p>
-      )}
-      <p className="mt-1 text-zinc-400">
-        Persisted receipt — open it again from any item&rsquo;s <b>from:</b> tag.
-      </p>
     </div>
   );
 }
@@ -3121,8 +3141,15 @@ function SmartImportHome(p: {
 }) {
   const [tab, setTab] = useState<"content" | "sessions">("content");
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [openInfo, setOpenInfo] = useState<string | null>(null);
   const byRecency = [...p.imports].sort((a, b) => b.createdAt - a.createdAt);
   const justCreated = p.imports.find((r) => r.id === p.justCreatedId) ?? null;
+  const submitFeedback = (fb: ImportFeedback) => {
+    if (!justCreated) return;
+    const next = { ...justCreated, feedback: fb };
+    p.setImports((prev) => prev.map((r) => (r.id === next.id ? next : r)));
+    saveImport(next);
+  };
   const filterRec = p.imports.find((r) => r.id === p.filter) ?? null;
   const remaining = Math.max(0, 992 - p.imports.length);
   const contentRows = (filterRec ? [filterRec] : byRecency).flatMap((rec) =>
@@ -3182,6 +3209,10 @@ function SmartImportHome(p: {
             dismiss
           </button>
         </div>
+      )}
+
+      {justCreated && !justCreated.feedback && (
+        <ExperienceSurvey onSubmit={submitFeedback} />
       )}
 
       {p.imports.length === 0 ? (
@@ -3305,41 +3336,159 @@ function SmartImportHome(p: {
           {byRecency.map((rec) => (
             <li
               key={rec.id}
-              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-zinc-200 p-2.5 dark:border-zinc-800"
+              className="rounded-md border border-zinc-200 p-2.5 dark:border-zinc-800"
             >
-              <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-                DONE
-              </span>
-              <b className="text-zinc-700 dark:text-zinc-200">{rec.name}</b>
-              <span className="text-zinc-400">
-                {rec.source.kind === "url" ? "URL" : "text"} &middot;{" "}
-                {rec.items.length}{" "}
-                {rec.items.length === 1 ? "activity" : "activities"} &middot;{" "}
-                {relTime(rec.createdAt)}
-              </span>
-              <button
-                onClick={() => {
-                  p.setFilter(rec.id);
-                  setTab("content");
-                }}
-                className="ml-auto rounded border border-zinc-300 px-2 py-0.5 text-blue-600 dark:border-zinc-700"
-              >
-                See content
-              </button>
-              <button
-                onClick={() =>
-                  p.setImports((prev) => prev.filter((r) => r.id !== rec.id))
-                }
-                title="Remove import"
-                aria-label="Remove import"
-                className="rounded px-1 text-zinc-400 hover:text-red-500"
-              >
-                &times;
-              </button>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                  DONE
+                </span>
+                <b className="text-zinc-700 dark:text-zinc-200">{rec.name}</b>
+                <span className="text-zinc-400">
+                  {rec.source.kind === "url" ? "URL" : "text"} &middot;{" "}
+                  {rec.items.length}{" "}
+                  {rec.items.length === 1 ? "activity" : "activities"} &middot;{" "}
+                  {relTime(rec.createdAt)}
+                  {rec.feedback ? ` · rated ${rec.feedback.rating}/5` : ""}
+                </span>
+                <button
+                  onClick={() =>
+                    setOpenInfo((v) => (v === rec.id ? null : rec.id))
+                  }
+                  aria-expanded={openInfo === rec.id}
+                  aria-label="Session details"
+                  title="Session details"
+                  className={`ml-auto flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-serif italic ${
+                    openInfo === rec.id
+                      ? "border-blue-600 bg-blue-600 text-white"
+                      : "border-zinc-300 text-zinc-500 dark:border-zinc-700"
+                  }`}
+                >
+                  i
+                </button>
+                <button
+                  onClick={() => {
+                    p.setFilter(rec.id);
+                    setTab("content");
+                  }}
+                  className="rounded border border-zinc-300 px-2 py-0.5 text-blue-600 dark:border-zinc-700"
+                >
+                  See content
+                </button>
+                <button
+                  onClick={() =>
+                    p.setImports((prev) => prev.filter((r) => r.id !== rec.id))
+                  }
+                  title="Remove import"
+                  aria-label="Remove import"
+                  className="rounded px-1 text-zinc-400 hover:text-red-500"
+                >
+                  &times;
+                </button>
+              </div>
+              {openInfo === rec.id && (
+                <div className="mt-2">
+                  <ImportReceipt rec={rec} />
+                </div>
+              )}
             </li>
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+const RATING_WORD = ["", "Poor", "Meh", "OK", "Good", "Great"];
+
+/** The overall-experience pulse — shown once, right after a first pass finishes
+ *  (setup → activities → review done). Non-blocking; the content is already saved. */
+function ExperienceSurvey(p: { onSubmit: (fb: ImportFeedback) => void }) {
+  const [rating, setRating] = useState(0);
+  const [again, setAgain] = useState<ImportFeedback["again"]>(null);
+  const [comment, setComment] = useState("");
+  const [state, setState] = useState<"open" | "sent" | "skipped">("open");
+
+  if (state === "skipped") return null;
+  if (state === "sent") {
+    return (
+      <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+        Thanks &mdash; that&rsquo;s on this session&rsquo;s record. Open its{" "}
+        <span className="font-serif italic">i</span> under Sessions to see it.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/30">
+      <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+        How was that first pass?
+      </p>
+      <p className="mt-0.5 text-xs text-blue-700 dark:text-blue-300">
+        You just went through setup, choosing activities and review &mdash; a
+        quick pulse on the whole thing.
+      </p>
+      <div className="mt-2 flex items-center gap-1">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            onClick={() => setRating(n)}
+            aria-label={`${n} out of 5`}
+            className={`h-7 w-7 rounded text-lg leading-none ${
+              n <= rating
+                ? "text-amber-500"
+                : "text-zinc-300 dark:text-zinc-600"
+            }`}
+          >
+            {n <= rating ? "★" : "☆"}
+          </button>
+        ))}
+        <span className="ml-1 text-[11px] text-zinc-500">
+          {rating ? RATING_WORD[rating] : "Rate it"}
+        </span>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+        <span className="self-center text-zinc-500">
+          Reach for Smart Import again?
+        </span>
+        {(["yes", "maybe", "no"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setAgain(v)}
+            className={`rounded-full border px-2.5 py-0.5 capitalize ${
+              again === v
+                ? "border-blue-600 bg-blue-600 text-white"
+                : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+            }`}
+          >
+            {v}
+          </button>
+        ))}
+      </div>
+      <textarea
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        placeholder="What would have made this better? (optional)"
+        rows={2}
+        className="mt-2 w-full rounded border border-zinc-300 p-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+      />
+      <div className="mt-2 flex items-center gap-3">
+        <button
+          disabled={!rating}
+          onClick={() => {
+            p.onSubmit({ rating, again, comment, submittedAt: Date.now() });
+            setState("sent");
+          }}
+          className="rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-40"
+        >
+          Send feedback
+        </button>
+        <button
+          onClick={() => setState("skipped")}
+          className="text-xs text-zinc-500 underline"
+        >
+          Skip
+        </button>
+      </div>
     </div>
   );
 }

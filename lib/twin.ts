@@ -369,8 +369,7 @@ function extractConcepts(text: string, n = 5): string[] {
 }
 
 function mockEngine(text: string, intent: ImportIntent): TwinResult {
-  const conceptPool = extractConcepts(text, 14);
-  const concepts = conceptPool.slice(0, 6);
+  const concepts = extractConcepts(text, 14).slice(0, 6);
   const sentences = (text.match(/[^.!?]{20,}[.!?]/g) ?? []).map((s) => s.trim());
 
   const items: GeneratedItem[] = [];
@@ -378,10 +377,7 @@ function mockEngine(text: string, intent: ImportIntent): TwinResult {
     const def = contentType(typeName);
     if (!def) return;
 
-    // Per-type item count: educator's Screen-2 override, else the full concept set.
-    const want = intent.contentTypeCounts?.[typeName];
-    const cs =
-      want && want > 0 ? conceptPool.slice(0, want) : concepts;
+    const cs = concepts;
     const qaT = cs.map((c, i) => ({
       question: `Which statement about ${c} is correct?`,
       correct: sentences[i]?.slice(0, 140) ?? `${c} is a key idea in this material.`,
@@ -553,17 +549,12 @@ async function generateOneItem(
     intent.authoringMode === "brief"
       ? `Brief — ${briefInstruction(intent)} (volume: light≈4 / standard≈6 / thorough≈10).`
       : `Instruction: "${intent.prompt || "(none — sensible defaults)"}"  volume: ${intent.volume}`;
-  const wanted = intent.contentTypeCounts?.[typeName];
-  const countLine =
-    wanted && wanted > 0
-      ? `\nCOUNT: produce exactly ${wanted} items (questions / cards / words / entries) for this activity — the educator set this.`
-      : "";
   const adjLine = adjustLine(adjustment, intent);
 
   const prompt = `You are H5P.com's Smart Import, producing content.json for ONE activity of type ${def.label} (${typeName}).
 
 ${modeLine}
-${intentLine}${countLine}${adjLine}
+${intentLine}${adjLine}
 
 SHAPE (match exactly): ${TYPE_RULE[typeName] ?? "match the example below"}
 
