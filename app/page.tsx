@@ -818,10 +818,7 @@ export default function Page() {
                       {(["chat", "editor"] as const).map((t) => (
                         <button
                           key={t}
-                          onClick={() => {
-                            setSoloWorkTab(t);
-                            setSoloOpen(t === "editor" ? [false, true] : [true, true]);
-                          }}
+                          onClick={() => setSoloWorkTab(t)}
                           className={`rounded border px-2 py-0.5 text-[11px] ${
                             soloWorkTab === t
                               ? "border-blue-600 font-medium"
