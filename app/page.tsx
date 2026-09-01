@@ -140,6 +140,7 @@ export default function Page() {
   } | null>(null);
   const [confirmSoloExit, setConfirmSoloExit] = useState(false);
   const [soloOpen, setSoloOpen] = useState<boolean[]>([true, true]);
+  const [soloWorkTab, setSoloWorkTab] = useState<"chat" | "editor">("chat");
   // Wall-clock from starting the import to the generated set landing — i.e.
   // steps 1–2 (source + intent + choose activities + generate). Review/approve
   // time is deliberately excluded.
@@ -638,6 +639,7 @@ export default function Page() {
     setItemState({ [it.id]: "approved" });
     setSelected(it.id);
     setSoloOpen([true, true]);
+    setSoloWorkTab("chat");
     setSoloRefine({ recId: rec.id, recName: rec.name, itemId: it.id });
   }
 
@@ -805,27 +807,58 @@ export default function Page() {
               },
               {
                 id: "refine",
-                title: "Refine",
-                node: cur ? (
-                  <RefineChat
-                    key={cur.id}
-                    item={cur}
-                    state={itemState[cur.id]}
-                    turns={transcript[cur.id] ?? []}
-                    append={(turn) =>
-                      setTranscript((t) => ({
-                        ...t,
-                        [cur.id]: [...(t[cur.id] ?? []), turn],
-                      }))
-                    }
-                    onRefine={refineActivity}
-                    onRemix={remixActivity}
-                    onDiscard={discardActivity}
-                    onUndiscard={() => setItem(cur.id, "approved")}
-                  />
-                ) : (
+                title: "Work",
+                node: !cur ? (
                   <div className="h-full p-4 text-xs text-zinc-400">
                     This activity is no longer available.
+                  </div>
+                ) : (
+                  <div className="flex h-full flex-col overflow-hidden">
+                    <div className="flex shrink-0 gap-1 border-b border-zinc-200 p-2 dark:border-zinc-800">
+                      {(["chat", "editor"] as const).map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => {
+                            setSoloWorkTab(t);
+                            setSoloOpen(t === "editor" ? [false, true] : [true, true]);
+                          }}
+                          className={`rounded border px-2 py-0.5 text-[11px] ${
+                            soloWorkTab === t
+                              ? "border-blue-600 font-medium"
+                              : "border-zinc-300 text-zinc-500 dark:border-zinc-700"
+                          }`}
+                        >
+                          {t === "chat" ? "Chat" : "Editor"}
+                        </button>
+                      ))}
+                      <span className="ml-1 self-center text-[10px] text-zinc-400">
+                        {soloWorkTab === "chat"
+                          ? "AI refine · remix · discard"
+                          : "precise manual fixes"}
+                      </span>
+                    </div>
+                    <div className="min-h-0 flex-1 overflow-hidden">
+                      {soloWorkTab === "editor" ? (
+                        <H5PEditorStub item={cur} />
+                      ) : (
+                        <RefineChat
+                          key={cur.id}
+                          item={cur}
+                          state={itemState[cur.id]}
+                          turns={transcript[cur.id] ?? []}
+                          append={(turn) =>
+                            setTranscript((tt) => ({
+                              ...tt,
+                              [cur.id]: [...(tt[cur.id] ?? []), turn],
+                            }))
+                          }
+                          onRefine={refineActivity}
+                          onRemix={remixActivity}
+                          onDiscard={discardActivity}
+                          onUndiscard={() => setItem(cur.id, "approved")}
+                        />
+                      )}
+                    </div>
                   </div>
                 ),
               },
@@ -2774,6 +2807,28 @@ function RefineChat(p: {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Placeholder for the full H5P.com editor. Smart Import hands off to the
+ *  existing editor unchanged — it isn't rebuilt in the prototype; this stands
+ *  in for it in the library Refine view's "Editor" tab. */
+function H5PEditorStub({ item }: { item: RenderedItem }) {
+  const label = contentType(item.contentType)?.label ?? item.contentType;
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+      <div className="max-w-xs rounded-lg border border-dashed border-zinc-300 p-6 dark:border-zinc-700">
+        <p className="text-sm font-medium">H5P editor &mdash; {label}</p>
+        <p className="mt-1.5 text-xs text-zinc-500">
+          The full H5P.com editor for this activity opens here &mdash; every
+          field, media, feedback and behaviour setting. Not rebuilt in the
+          prototype; Smart Import hands off to the existing editor unchanged.
+        </p>
+      </div>
+      <p className="text-[11px] text-zinc-400">
+        Chat for AI refinements &middot; the editor for precise manual fixes.
+      </p>
     </div>
   );
 }
