@@ -128,7 +128,9 @@ export default function Page() {
   const [siFilter, setSiFilter] = useState<string>(""); // "" all SI · "all"·id
   const [justCreatedId, setJustCreatedId] = useState<string | null>(null);
   // Set when the user asks to close the flow but has generated (unsaved) content.
-  const [confirmExit, setConfirmExit] = useState(false);
+  // Show the abandon survey once per session, when someone leaves after a real attempt.
+  const [abandonSurvey, setAbandonSurvey] = useState(false);
+  const [abandonAsked, setAbandonAsked] = useState(false);
   // Refining one already-created library item, outside the create flow —
   // the same Preview + Refine panels (Workspace B), without Setup/Activities.
   const [soloRefine, setSoloRefine] = useState<{
@@ -558,15 +560,47 @@ export default function Page() {
 
   /** Leave the flow without creating anything. */
   function exitFlow() {
-    setConfirmExit(false);
+    setAbandonSurvey(false);
     resetFlow();
     setView("shell");
   }
 
-  /** Close from any stage. Guards only when generated activities would be lost. */
+  /** Which step the user is leaving from — drives the abandon survey's question. */
+  function abandonStep(): "configure" | "activities" | "review" {
+    if (result) return "review";
+    if (uiVariant === "wizard" && screen === "activities") return "activities";
+    return "configure";
+  }
+
+  /** Close from any stage. After a real attempt, ask why on the way out. */
   function requestExitFlow() {
-    if (result) setConfirmExit(true);
+    const engaged =
+      !!result ||
+      (flowStartedAt != null && Date.now() - flowStartedAt > 12000);
+    if (engaged && !abandonAsked) setAbandonSurvey(true);
     else exitFlow();
+  }
+
+  /** Log the abandon feedback (or a plain "left" if skipped) and leave. */
+  function finishAbandon(fb: {
+    reason?: string;
+    putOff?: string;
+    comment?: string;
+  }) {
+    fetch("/api/review-event", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        kind: "abandon",
+        importId,
+        sessionId,
+        uiVariant,
+        step: abandonStep(),
+        ...fb,
+      }),
+    }).catch(() => {});
+    setAbandonAsked(true);
+    exitFlow();
   }
 
   /** Open one already-created library item in the Preview + Refine panels —
@@ -850,25 +884,12 @@ export default function Page() {
           </div>
         )}
 
-        {confirmExit && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm dark:border-amber-900 dark:bg-amber-950/30">
-            <span className="text-amber-800 dark:text-amber-200">
-              Close without creating? The {result?.items.length} generated{" "}
-              {result?.items.length === 1 ? "activity" : "activities"} won&rsquo;t
-              be saved.
-            </span>
-            <div className="flex gap-2">
-              <button onClick={() => setConfirmExit(false)} className={btnGhost}>
-                Keep editing
-              </button>
-              <button
-                onClick={exitFlow}
-                className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
-              >
-                Close
-              </button>
-            </div>
-          </div>
+        {abandonSurvey && (
+          <AbandonSurvey
+            step={abandonStep()}
+            onLeave={finishAbandon}
+            onStay={() => setAbandonSurvey(false)}
+          />
         )}
 
         <div className="min-h-0 flex-1 overflow-hidden">
@@ -992,25 +1013,12 @@ export default function Page() {
           </div>
         )}
 
-        {confirmExit && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-6 py-2.5 text-sm dark:border-amber-900 dark:bg-amber-950/30">
-            <span className="text-amber-800 dark:text-amber-200">
-              Close without creating? The {result?.items.length} generated{" "}
-              {result?.items.length === 1 ? "activity" : "activities"} won&rsquo;t
-              be saved.
-            </span>
-            <div className="flex gap-2">
-              <button onClick={() => setConfirmExit(false)} className={btnGhost}>
-                Keep editing
-              </button>
-              <button
-                onClick={exitFlow}
-                className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
-              >
-                Close
-              </button>
-            </div>
-          </div>
+        {abandonSurvey && (
+          <AbandonSurvey
+            step={abandonStep()}
+            onLeave={finishAbandon}
+            onStay={() => setAbandonSurvey(false)}
+          />
         )}
 
         <div className="px-6 py-6">
@@ -3900,6 +3908,128 @@ function SmartImportHome(p: {
 }
 
 const RATING_WORD = ["", "Poor", "Meh", "OK", "Good", "Great"];
+
+type AbandonStep = "configure" | "activities" | "review";
+const ABANDON_Q: Record<AbandonStep, { q: string; opts: string[] }> = {
+  configure: {
+    q: "Leaving before generating anything — what stopped you?",
+    opts: [
+      "Too much to fill in",
+      "Didn’t have a source ready",
+      "Wasn’t sure what to enter",
+      "Just looking",
+    ],
+  },
+  activities: {
+    q: "Leaving before generating — what stopped you?",
+    opts: [
+      "None of these activity types fit",
+      "Too many options",
+      "Not sure which to pick",
+      "Changed my mind",
+    ],
+  },
+  review: {
+    q: "You generated activities but didn’t create them — why?",
+    opts: [
+      "Quality wasn’t good enough",
+      "Not what I expected",
+      "Wrong for what I need",
+      "Too much to fix",
+      "Just testing",
+    ],
+  },
+};
+
+/** Asked once per session when someone leaves the flow after a real attempt.
+ *  The first question is step-specific; the rest is the same everywhere. */
+function AbandonSurvey(p: {
+  step: AbandonStep;
+  onLeave: (fb: { reason?: string; putOff?: string; comment?: string }) => void;
+  onStay: () => void;
+}) {
+  const [reason, setReason] = useState<string | null>(null);
+  const [putOff, setPutOff] = useState<string | null>(null);
+  const [comment, setComment] = useState("");
+  const cfg = ABANDON_Q[p.step];
+  const pill = (active: boolean) =>
+    `rounded-full border px-2.5 py-0.5 text-xs ${
+      active
+        ? "border-blue-600 bg-blue-600 text-white"
+        : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+    }`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
+        <p className="text-sm font-medium">{cfg.q}</p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {cfg.opts.map((o) => (
+            <button
+              key={o}
+              onClick={() => setReason(reason === o ? null : o)}
+              className={pill(reason === o)}
+            >
+              {o}
+            </button>
+          ))}
+        </div>
+
+        <p className="mt-3 text-xs text-zinc-500">
+          Has this put you off using Smart Import?
+        </p>
+        <div className="mt-1 flex gap-1.5">
+          {["No", "A bit", "Yes"].map((v) => (
+            <button
+              key={v}
+              onClick={() => setPutOff(putOff === v ? null : v)}
+              className={pill(putOff === v)}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+
+        <textarea
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          rows={2}
+          placeholder="Anything else? (optional)"
+          className="mt-3 w-full rounded border border-zinc-300 p-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+        />
+
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <button
+            onClick={p.onStay}
+            className="text-xs text-zinc-500 underline"
+          >
+            Keep editing
+          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => p.onLeave({})}
+              className="rounded-md border border-zinc-300 px-3 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+            >
+              Leave, skip
+            </button>
+            <button
+              onClick={() =>
+                p.onLeave({
+                  reason: reason ?? undefined,
+                  putOff: putOff ?? undefined,
+                  comment: comment.trim() || undefined,
+                })
+              }
+              className="rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white"
+            >
+              Send &amp; leave
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /** The overall-experience pulse — shown once, right after a first pass finishes
  *  (setup → activities → review done). Non-blocking; the content is already saved. */
