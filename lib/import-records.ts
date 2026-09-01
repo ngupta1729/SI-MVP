@@ -58,9 +58,9 @@ export interface ImportOutcome {
 export interface ImportFeedback {
   /** Overall experience of this Smart Import pass, 1 (poor) – 5 (great). */
   rating: number;
-  /** Would you reach for Smart Import again? */
-  again: "yes" | "maybe" | "no" | null;
-  /** Free text — "what would have made this better?" */
+  /** How likely to use Smart Import for their next activity. */
+  again: "likely" | "maybe" | "unlikely" | null;
+  /** Free text — "what would make Smart Import more useful to you?" */
   comment: string;
   submittedAt: number;
 }

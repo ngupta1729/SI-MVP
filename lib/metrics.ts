@@ -184,7 +184,7 @@ export interface ExperienceMetrics {
   ratingAvg: number | null;
   /** Counts by star, index 1..5 (index 0 unused). */
   ratingDist: number[];
-  again: { yes: number; maybe: number; no: number; unanswered: number };
+  again: { likely: number; maybe: number; unlikely: number; unanswered: number };
   comments: Array<{
     text: string;
     rating: number;
@@ -293,12 +293,12 @@ function computeExperience(recs: ImportRecord[]): ExperienceMetrics {
   const ratingDist = [0, 0, 0, 0, 0, 0];
   for (const n of ratings) if (n >= 1 && n <= 5) ratingDist[n]++;
 
-  const again = { yes: 0, maybe: 0, no: 0, unanswered: 0 };
+  const again = { likely: 0, maybe: 0, unlikely: 0, unanswered: 0 };
   for (const r of rated) {
     const a = r.feedback!.again;
-    if (a === "yes") again.yes++;
+    if (a === "likely") again.likely++;
     else if (a === "maybe") again.maybe++;
-    else if (a === "no") again.no++;
+    else if (a === "unlikely") again.unlikely++;
     else again.unanswered++;
   }
 

@@ -2832,9 +2832,9 @@ function Workspace(p: {
 /* ---------------- After Create — the content library, with this import's receipt ---------------- */
 
 const AGAIN_LABEL: Record<string, string> = {
-  yes: "Would use again",
+  likely: "Likely to use again",
   maybe: "Might use again",
-  no: "Wouldn’t use again",
+  unlikely: "Unlikely to use again",
 };
 
 function receiptRow(label: string, node: React.ReactNode) {
@@ -3475,28 +3475,30 @@ function ExperienceSurvey(p: { onSubmit: (fb: ImportFeedback) => void }) {
           {rating ? RATING_WORD[rating] : "Rate it"}
         </span>
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
-        <span className="self-center text-zinc-500">
-          Reach for Smart Import again?
-        </span>
-        {(["yes", "maybe", "no"] as const).map((v) => (
-          <button
-            key={v}
-            onClick={() => setAgain(v)}
-            className={`rounded-full border px-2.5 py-0.5 capitalize ${
-              again === v
-                ? "border-blue-600 bg-blue-600 text-white"
-                : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
-            }`}
-          >
-            {v}
-          </button>
-        ))}
+      <div className="mt-2 text-xs">
+        <p className="text-zinc-500">
+          How likely are you to use Smart Import for your next activity?
+        </p>
+        <div className="mt-1 flex flex-wrap gap-1.5">
+          {(["unlikely", "maybe", "likely"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setAgain(v)}
+              className={`rounded-full border px-2.5 py-0.5 capitalize ${
+                again === v
+                  ? "border-blue-600 bg-blue-600 text-white"
+                  : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
       </div>
       <textarea
         value={comment}
         onChange={(e) => setComment(e.target.value)}
-        placeholder="What would have made this better? (optional)"
+        placeholder="What would make Smart Import more useful to you? (optional)"
         rows={2}
         className="mt-2 w-full rounded border border-zinc-300 p-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900"
       />

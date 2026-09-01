@@ -294,7 +294,7 @@ function QualitySection({ m }: { m: DashboardMetrics }) {
 }
 
 function ExperienceSection({ x }: { x: ExperienceMetrics }) {
-  const answered = x.again.yes + x.again.maybe + x.again.no;
+  const answered = x.again.likely + x.again.maybe + x.again.unlikely;
   return (
     <Section
       title="Experience"
@@ -307,11 +307,11 @@ function ExperienceSection({ x }: { x: ExperienceMetrics }) {
           hint={x.ratingN ? `${x.ratingN} rated` : "no ratings yet"}
         />
         <Stat
-          label="Would use again"
-          value={pct(ratio(x.again.yes, answered))}
+          label="Likely to use again"
+          value={pct(ratio(x.again.likely, answered))}
           hint={
             answered
-              ? `${x.again.yes} yes · ${x.again.maybe} maybe · ${x.again.no} no`
+              ? `${x.again.likely} likely · ${x.again.maybe} maybe · ${x.again.unlikely} unlikely`
               : "not asked yet"
           }
         />
@@ -344,12 +344,14 @@ function ExperienceSection({ x }: { x: ExperienceMetrics }) {
             />
           </div>
           <div className={card}>
-            <p className="mb-2 text-sm font-medium">Use Smart Import again?</p>
+            <p className="mb-2 text-sm font-medium">
+              Likely to use it for the next activity?
+            </p>
             <BarList
               rows={[
-                { label: "Yes", value: x.again.yes },
+                { label: "Likely", value: x.again.likely },
                 { label: "Maybe", value: x.again.maybe },
-                { label: "No", value: x.again.no },
+                { label: "Unlikely", value: x.again.unlikely },
               ]}
             />
           </div>
@@ -359,7 +361,7 @@ function ExperienceSection({ x }: { x: ExperienceMetrics }) {
       {x.comments.length > 0 && (
         <div className={card}>
           <p className="mb-2 text-sm font-medium">
-            What would have made it better
+            What would make Smart Import more useful
           </p>
           <ul className="space-y-2">
             {x.comments.map((c, i) => (
