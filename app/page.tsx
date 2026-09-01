@@ -2908,30 +2908,26 @@ function LibraryView(p: {
   priorImports: ImportRecord[];
 }) {
   const allRecords = [p.current, ...p.priorImports];
+  const byRecency = [...allRecords].sort((a, b) => b.createdAt - a.createdAt);
   const [openReceiptId, setOpenReceiptId] = useState<string | null>(null);
-  // Land on THIS import's content by default; the returning user widens to all.
-  const [scope, setScope] = useState<"current" | "all">("current");
-  const [importFilter, setImportFilter] = useState<string>("all");
-  const shown = allRecords.find((r) => r.id === openReceiptId) ?? null;
+  // One list, one filter. "" = all content · "si" = any Smart Import · else an
+  // import id. Lands filtered to the import just created; the user clears it.
+  const [filter, setFilter] = useState<string>(p.current.id);
 
   const kept = p.current.outcome.kept;
   const savedMin = Math.max(kept * 7, 5); // rough manual-authoring estimate
 
-  const totalItems = allRecords.reduce((n, r) => n + r.items.length, 0);
-  const visibleRecords =
-    scope === "current"
-      ? [p.current]
-      : importFilter === "all"
-        ? allRecords
-        : allRecords.filter((r) => r.id === importFilter);
-  const rows = visibleRecords.flatMap((rec) =>
+  const siRows = byRecency.flatMap((rec) =>
     rec.items.map((it) => ({ rec, it })),
   );
-
-  const seg =
-    "rounded px-2 py-0.5 text-[11px]";
-  const segOn = "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900";
-  const segOff = "text-zinc-500";
+  const filteredSi =
+    filter === "" || filter === "si"
+      ? siRows
+      : siRows.filter((r) => r.rec.id === filter);
+  const showOther = filter === "";
+  const filterRec = allRecords.find((r) => r.id === filter) ?? null;
+  const shownReceipt = allRecords.find((r) => r.id === openReceiptId) ?? null;
+  const count = filteredSi.length + (showOther ? MOCK_LIBRARY_ITEMS.length : 0);
 
   return (
     <div className="space-y-4">
@@ -2942,70 +2938,69 @@ function LibraryView(p: {
         </p>
         <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
           Done in one pass — roughly <b>{savedMin} min</b> of manual authoring.
-          They&rsquo;re in your content library as drafts, tagged to this import
-          (no separate Smart Import folder).
+          They&rsquo;re in your content library as drafts. The list below is
+          filtered to this import.
         </p>
-        <button
-          onClick={() =>
-            setOpenReceiptId(
-              openReceiptId === p.current.id ? null : p.current.id,
-            )
-          }
-          className="mt-1 text-xs underline"
-        >
-          {openReceiptId === p.current.id
-            ? "Hide import details"
-            : "Open import details"}
-        </button>
       </div>
-
-      {shown && <ImportReceipt rec={shown} />}
 
       <div>
         <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
           <span className="font-semibold uppercase tracking-wide text-zinc-400">
             Content library
           </span>
-          <div className="inline-flex rounded-md border border-zinc-300 p-0.5 dark:border-zinc-700">
-            <button
-              onClick={() => setScope("current")}
-              className={`${seg} ${scope === "current" ? segOn : segOff}`}
-            >
-              This import ({p.current.items.length})
-            </button>
-            <button
-              onClick={() => setScope("all")}
-              className={`${seg} ${scope === "all" ? segOn : segOff}`}
-            >
-              All Smart Import ({totalItems})
-            </button>
-          </div>
-          {scope === "all" && allRecords.length > 1 && (
+          <label className="flex items-center gap-1 text-zinc-500">
+            Show
             <select
-              value={importFilter}
-              onChange={(e) => setImportFilter(e.target.value)}
+              value={filter}
+              onChange={(e) => {
+                setFilter(e.target.value);
+                setOpenReceiptId(null);
+              }}
               className="rounded border border-zinc-300 px-1.5 py-0.5 text-[11px] dark:border-zinc-700 dark:bg-zinc-900"
-              aria-label="Filter by import"
             >
-              <option value="all">every import</option>
-              {allRecords.map((r) => (
+              <option value="">All content</option>
+              <option value="si">Smart Import — all</option>
+              {byRecency.map((r) => (
                 <option key={r.id} value={r.id}>
-                  {r.name}
+                  ↳ {r.name}
                 </option>
               ))}
             </select>
-          )}
+          </label>
+          <span className="text-zinc-400">{count} items</span>
         </div>
 
-        <ul className="space-y-1.5">
-          {rows.map(({ rec, it }) => {
+        {filterRec && (
+          <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-[11px] text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
+            <b className="text-zinc-600 dark:text-zinc-300">{filterRec.name}</b>
+            <span>
+              · {filterRec.source.kind === "url" ? "URL" : "text"} source
+            </span>
+            <span>· {relTime(filterRec.createdAt)}</span>
+            <button
+              onClick={() =>
+                setOpenReceiptId(
+                  openReceiptId === filterRec.id ? null : filterRec.id,
+                )
+              }
+              className="ml-auto underline"
+            >
+              {openReceiptId === filterRec.id
+                ? "hide import details"
+                : "import details"}
+            </button>
+          </div>
+        )}
+        {shownReceipt && <ImportReceipt rec={shownReceipt} />}
+
+        <ul className="mt-1 space-y-1.5">
+          {filteredSi.map(({ rec, it }) => {
             const d = rec.decisions.find((x) => x.itemId === it.id);
             const tags: string[] = [];
             if (d?.edited) tags.push("edited");
             if (d && d.refineAttempts > 0)
               tags.push(`refined ×${d.refineAttempts}`);
             if (d && d.remixCount > 0) tags.push("remixed");
-            const showFrom = scope === "all";
             return (
               <li
                 key={`${rec.id}:${it.id}`}
@@ -3017,18 +3012,16 @@ function LibraryView(p: {
                   </p>
                   <p className="truncate text-zinc-500">
                     {contentType(it.contentType)?.label}
-                    {showFrom && (
-                      <>
-                        {" · from "}
-                        <button
-                          onClick={() => setOpenReceiptId(rec.id)}
-                          className="text-blue-600 underline"
-                        >
-                          {rec.name}
-                        </button>{" "}
-                        · {rec.id === p.current.id ? "just now" : relTime(rec.createdAt)}
-                      </>
-                    )}
+                    {" · from "}
+                    <button
+                      onClick={() => {
+                        setFilter(rec.id);
+                        setOpenReceiptId(null);
+                      }}
+                      className="text-blue-600 underline"
+                    >
+                      {rec.name}
+                    </button>
                     {tags.length ? ` · ${tags.join(" · ")}` : ""}
                   </p>
                 </div>
@@ -3038,34 +3031,28 @@ function LibraryView(p: {
               </li>
             );
           })}
-        </ul>
 
-        {scope === "current" && allRecords.length > 1 && (
-          <p className="mt-3 text-[11px] text-zinc-400">
-            Switch to <b>All Smart Import</b> to see your other imports, or filter
-            by import.
-          </p>
-        )}
-      </div>
-
-      {scope === "all" && importFilter === "all" && (
-        <div>
-          <p className="text-[11px] text-zinc-400">— the rest of your library —</p>
-          <ul className="mt-1 space-y-1.5 opacity-40">
-            {MOCK_LIBRARY_ITEMS.map((m) => (
+          {showOther &&
+            MOCK_LIBRARY_ITEMS.map((m) => (
               <li
                 key={m.title}
-                className="rounded-md border border-zinc-200 p-2 text-xs dark:border-zinc-800"
+                className="flex items-center justify-between gap-2 rounded-md border border-zinc-200 p-2 text-xs opacity-60 dark:border-zinc-800"
               >
-                <p className="truncate font-medium">{m.title}</p>
-                <p className="truncate text-zinc-500">
-                  {m.type} · from {m.from} · {m.modified}
-                </p>
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{m.title}</p>
+                  <p className="truncate text-zinc-500">
+                    {m.type} · from {m.from} · {m.modified}
+                  </p>
+                </div>
               </li>
             ))}
-          </ul>
-        </div>
-      )}
+        </ul>
+
+        <p className="mt-3 text-[11px] text-zinc-400">
+          One list — filter by <b>Smart Import</b> or a session. Every generated
+          item links back to its import via <b>from:</b>, any time you return.
+        </p>
+      </div>
     </div>
   );
 }
