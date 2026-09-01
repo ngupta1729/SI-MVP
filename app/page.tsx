@@ -759,6 +759,7 @@ export default function Page() {
                           setEdits((e) => ({ ...e, [cur.id]: v }))
                         }
                         editing={false}
+                        initialView="play"
                       />
                     ) : (
                       <p className="text-sm text-zinc-400">
@@ -2616,7 +2617,9 @@ function RefineChat(p: {
   onDiscard: (id: string, reason: string) => void;
   onUndiscard: () => void;
 }) {
-  const [expand, setExpand] = useState<null | "type" | "discard">(null);
+  const [expand, setExpand] = useState<null | "refine" | "type" | "discard">(
+    null,
+  );
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const busy = p.state === "refining" || p.state === "remixing";
   const discarded = p.state === "discarded";
@@ -2670,7 +2673,7 @@ function RefineChat(p: {
         {busy && <p className="text-zinc-400">Regenerating…</p>}
       </div>
 
-      <div className="border-t border-zinc-200 p-2 dark:border-zinc-800">
+      <div className="max-h-[55%] shrink-0 overflow-y-auto border-t border-zinc-200 p-2 dark:border-zinc-800">
         {discarded ? (
           <button
             onClick={() => {
@@ -2684,32 +2687,45 @@ function RefineChat(p: {
         ) : (
           <>
             <div className="flex flex-wrap gap-1">
-              {REFINE_OPTIONS.map((o) => (
-                <button
-                  key={o.id}
-                  disabled={busy}
-                  onClick={() => run(o.label, () => p.onRefine(p.item.id, o.id))}
-                  className={chip}
-                >
-                  {o.label}
-                </button>
-              ))}
+              <button
+                disabled={busy}
+                onClick={() => setExpand(expand === "refine" ? null : "refine")}
+                className={`${chip} ${expand === "refine" ? "border-blue-600 font-medium" : ""}`}
+              >
+                Refine ▸
+              </button>
               <button
                 disabled={busy}
                 onClick={() => setExpand(expand === "type" ? null : "type")}
-                className={chip}
+                className={`${chip} ${expand === "type" ? "border-blue-600 font-medium" : ""}`}
               >
                 Change type ▸
               </button>
               <button
                 disabled={busy}
                 onClick={() => setExpand(expand === "discard" ? null : "discard")}
-                className={chip}
+                className={`${chip} ${expand === "discard" ? "border-blue-600 font-medium" : ""}`}
               >
                 Discard ▸
               </button>
             </div>
 
+            {expand === "refine" && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {REFINE_OPTIONS.map((o) => (
+                  <button
+                    key={o.id}
+                    disabled={busy}
+                    onClick={() =>
+                      run(o.label, () => p.onRefine(p.item.id, o.id))
+                    }
+                    className={`${chip} bg-white dark:bg-zinc-900`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {expand === "type" && (
               <div className="mt-1 flex flex-wrap gap-1">
                 {REMIX_TARGETS.filter((t) => t.name !== p.item.contentType).map(
@@ -3154,6 +3170,7 @@ function Workspace(p: {
           value={p.edits[cur.id] ?? cur.contentJson}
           onChange={(v) => p.setEdits((e) => ({ ...e, [cur.id]: v }))}
           editing={false}
+          initialView="play"
         />
       ) : (
         <p className="text-sm text-zinc-400">Select an activity to preview it.</p>
@@ -4362,8 +4379,12 @@ function ItemPanel(p: {
   editing: boolean;
   /** Hide the Review/Play switch — used when the caller already owns the mode (workspace Edit tab). */
   hideViewToggle?: boolean;
+  /** Which view to show first (default "review"). */
+  initialView?: "review" | "play";
 }) {
-  const [viewChoice, setViewChoice] = useState<"review" | "play">("review");
+  const [viewChoice, setViewChoice] = useState<"review" | "play">(
+    p.initialView ?? "review",
+  );
   // Editing only exists in the Review view, so force it there while Edit is on.
   const view = p.editing ? "review" : viewChoice;
   const val = (p.value ?? {}) as { choices?: Choice[] };
