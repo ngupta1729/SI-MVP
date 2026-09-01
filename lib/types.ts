@@ -86,8 +86,25 @@ export interface SourceAnalysis {
   suggestedObjectives: string[];
   /** Activity types the engine recommends (pre-checked on Screen 2), 1–3, best first. */
   recommendations: ActivityRecommendation[];
+  /**
+   * The recommended learning arc as an ordered sequence of steps — present →
+   * practise → check. A content type may appear more than once; the same
+   * concept may be revisited. Advisory: it explains the intent behind the
+   * recommendation, it does not drive generation (the checked types do).
+   */
+  learningSequence: SequenceStep[];
   /** "model" when the LLM produced this, "heuristic" for the offline fallback. */
   engine: "model" | "heuristic";
+}
+
+/** One step in the recommended learning arc. */
+export interface SequenceStep {
+  /** H5P machine name; may repeat across steps. */
+  contentType: string;
+  /** What this step is for, in one line — the "why". */
+  purpose: string;
+  /** Which source concepts this step covers. */
+  concepts: string[];
 }
 
 export interface ActivityRecommendation {

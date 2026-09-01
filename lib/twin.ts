@@ -11,6 +11,7 @@ import type {
   GeneratedItem,
   SourceAnalysis,
   ActivityRecommendation,
+  SequenceStep,
 } from "./types";
 import { briefGoal, briefText, briefInstruction } from "./brief";
 import { contentType, CONTENT_TYPES } from "./h5p/contentTypes";
@@ -229,6 +230,86 @@ export function recommendActivities(
   );
 }
 
+/**
+ * The recommended learning arc — an ordered present → practise → check
+ * sequence over the recommended types (a type may repeat), with each step's
+ * concept coverage. Advisory only; it doesn't change what gets generated.
+ */
+export function buildLearningSequence(
+  analysis: SourceAnalysis,
+  intent: ImportIntent,
+  recs: ActivityRecommendation[],
+): SequenceStep[] {
+  const picked = recs.filter((r) => r.recommended).map((r) => r.name);
+  const concepts = (
+    analysis.concepts.length ? analysis.concepts : analysis.themes
+  ).slice(0, 8);
+  if (!picked.length || !concepts.length) return [];
+
+  const promptText = (
+    intent.authoringMode === "prompt" ? intent.prompt : briefText(intent)
+  ).toLowerCase();
+  const wantsVocab = /\b(vocab|terms?|terminology|definition|glossary)\b/.test(
+    promptText,
+  );
+  const wantsTeach =
+    intent.emphasis === "concept_explanation" ||
+    /\b(introduc|teach|explain|present|lesson|overview)\b/.test(promptText);
+  const assess =
+    intent.emphasis === "assessment" ||
+    /\b(exam|quiz|assess|test|graded)\b/.test(promptText);
+
+  const has = (n: string) => picked.includes(n);
+  const firstHalf = concepts.slice(0, Math.ceil(concepts.length / 2));
+  const secondHalf = concepts.slice(Math.ceil(concepts.length / 2));
+
+  const steps: SequenceStep[] = [];
+  const step = (n: string, purpose: string, cs: string[]) => {
+    if (has(n))
+      steps.push({ contentType: n, purpose, concepts: cs.length ? cs : concepts });
+  };
+
+  if (wantsVocab) {
+    step("H5P.Dialogcards:conceptual", "Introduce each term with its meaning — a low-stakes first pass.", concepts);
+    step("H5P.DragText", "Put the terms back into sentences from the source — recall in context.", firstHalf);
+    step("H5P.Crossword", "Retrieve the terms cold, from clues alone.", concepts);
+    step("H5P.SingleChoiceSet", "Quick check that each term stuck.", concepts);
+  } else if (wantsTeach) {
+    step("H5P.Accordion:key-concepts", "Present the concepts in plain language — the learner reads before being asked anything.", concepts);
+    step("H5P.Summary", "Check they can pick the accurate statement about each idea.", firstHalf);
+    step("H5P.SingleChoiceSet", "Recall check across the whole set.", concepts);
+    step("H5P.QuestionSet", "A fuller scored quiz once the ideas are in place.", concepts);
+  } else if (assess) {
+    step("H5P.SingleChoiceSet", "Warm-up recall — one clear fact per question.", firstHalf);
+    step("H5P.Summary", "Move up to understanding — spot the accurate statement among plausible wrong ones.", concepts);
+    step("H5P.QuestionSet", "The scored quiz — mixed questions across every concept.", concepts);
+    step("H5P.SingleChoiceSet", "A second recall pass on the concepts that tend to come up weakest.", secondHalf);
+  } else {
+    step("H5P.SingleChoiceSet", "Recall check — is the core fact there?", concepts);
+    step("H5P.Summary", "Understanding check — can they tell an accurate statement from a plausible wrong one?", concepts);
+  }
+
+  if (!steps.length) {
+    return picked.map((n, i) => ({
+      contentType: n,
+      purpose:
+        recs.find((r) => r.name === n)?.reason ??
+        `${contentType(n)?.label ?? n} for this source.`,
+      concepts: i === 0 ? firstHalf : secondHalf.length ? secondHalf : concepts,
+    }));
+  }
+
+  const covered = new Set(steps.flatMap((s) => s.concepts));
+  const missing = concepts.filter((c) => !covered.has(c));
+  if (missing.length)
+    steps[steps.length - 1].concepts = [
+      ...steps[steps.length - 1].concepts,
+      ...missing,
+    ];
+
+  return steps;
+}
+
 function heuristicAnalysis(text: string, intent: ImportIntent): SourceAnalysis {
   const words = text.split(/\s+/).filter(Boolean);
   const sentences = (text.match(/[^.!?]{15,}[.!?]/g) ?? []).map((s) => s.trim());
@@ -252,9 +333,15 @@ function heuristicAnalysis(text: string, intent: ImportIntent): SourceAnalysis {
     detectedQuestions: (text.match(/\?/g) ?? []).length,
     suggestedObjectives: [],
     recommendations: [],
+    learningSequence: [],
     engine: "heuristic",
   };
-  return { ...base, recommendations: recommendActivities(base, intent) };
+  const recs = recommendActivities(base, intent);
+  return {
+    ...base,
+    recommendations: recs,
+    learningSequence: buildLearningSequence(base, intent, recs),
+  };
 }
 
 export async function analyzeSource(
@@ -305,9 +392,12 @@ Return ONLY JSON:
   "watchOuts": ["<2-3 short neutral phrases; NOT 'don't use this'>"],
   "recommendations": [
     { "name": "<one of the catalogue names above>", "recommended": true|false, "reason": "<ONE sentence that names the SOURCE trait AND the INTENT trait this type responds to — e.g. 'Source explains ideas with checkable facts and you want assessment, so Single Choice Set gives an efficient recall check.' For recommended:false, say what the source lacks.>", "itemCount": <int> }
+  ],
+  "learningSequence": [
+    { "contentType": "<a catalogue name — use ONLY types you marked recommended:true>", "purpose": "<one line: what this step is for, in a teacher's words>", "concepts": ["<which of the concepts above this step covers>"] }
   ]
 }
-Include an entry for every catalogue type listed above.`;
+Include an entry for every catalogue type in "recommendations". For "learningSequence": order the recommended types into a learning arc — present an idea before testing it (present → practise → check). A type MAY appear more than once if the arc calls for it. Across the whole sequence, every concept must be covered by at least one step. 2–5 steps.`;
     const { text: out } = await generateText({
       model: openai(process.env.TWIN_ANALYZE_MODEL || "gpt-4o-mini"),
       prompt,
@@ -342,6 +432,16 @@ Include an entry for every catalogue type listed above.`;
         ? { ...r, recommended: false, reason: `also a fit — add it if you want it` }
         : r;
     });
+    // keep the model's sequence only if it uses recommended types; else rebuild
+    const recSet = new Set(
+      analysis.recommendations.filter((r) => r.recommended).map((r) => r.name),
+    );
+    const modelSeq = (parsed.learningSequence ?? []).filter((s) =>
+      recSet.has(s.contentType),
+    );
+    analysis.learningSequence = modelSeq.length
+      ? modelSeq
+      : buildLearningSequence(analysis, intent, analysis.recommendations);
     return analysis;
   } catch (err) {
     console.error("analyze model call failed, using heuristic:", err);

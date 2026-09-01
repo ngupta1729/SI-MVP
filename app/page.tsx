@@ -2328,46 +2328,99 @@ function Activities(p: {
     .map((r) => contentType(r.name)?.label)
     .filter(Boolean)
     .join(" + ");
-  const intentBit =
-    p.intent.authoringMode === "brief"
-      ? `brief — ${briefGoal(p.intent) || "no goal set"}, ${p.intent.emphasis} emphasis`
-      : p.intent.prompt.trim()
-        ? `“${p.intent.prompt.trim().slice(0, 90)}${p.intent.prompt.trim().length > 90 ? "…" : ""}”`
-        : `${p.intent.emphasis} emphasis, ${p.intent.volume} volume`;
-  const countWhy =
-    recs.length <= 1
-      ? "one activity — the source is compact, or the intent is a quick check"
-      : recs.length >= 3
-        ? "three — the source is long and multi-theme and the intent asks for breadth"
-        : "two — one to check recall, one to check understanding, with minimal overlap";
-
-  const chosenRecs = recs.filter((r) =>
-    p.intent.contentTypes.includes(r.name),
-  );
+  const [principles, setPrinciples] = useState(false);
 
   return (
     <div className="space-y-3">
       {a ? (
         <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="font-medium text-zinc-500">Why these activities</p>
-          <p className="mt-1 text-zinc-600 dark:text-zinc-300">
-            Source {kindVerb(a.kind)} — ~{a.wordCount} words, {a.concepts.length}{" "}
-            key {a.kind === "reference" ? "terms" : "concepts"}
-            {a.themes.length > 1 ? `, ${a.themes.length} themes` : ""}. Intent:{" "}
-            {intentBit}. → <b>{recLabels || "a recall check"}</b>, {countWhy}.
-          </p>
-          {chosenRecs.length > 0 && (
-            <ul className="mt-1.5 space-y-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
-              {chosenRecs.map((r) => (
-                <li key={r.name}>
-                  <b className="text-zinc-600 dark:text-zinc-300">
-                    {contentType(r.name)?.label}
-                  </b>{" "}
-                  — {r.reason}
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-medium text-zinc-600 dark:text-zinc-300">
+              The interactive learning experience for your goal
+            </p>
+            <button
+              onClick={() => setPrinciples((v) => !v)}
+              aria-label="How these are recommended"
+              title="How these are recommended"
+              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border font-serif text-[10px] italic ${
+                principles
+                  ? "border-blue-600 bg-blue-600 text-white"
+                  : "border-zinc-300 text-zinc-500 dark:border-zinc-600"
+              }`}
+            >
+              i
+            </button>
+          </div>
+
+          {principles && (
+            <div className="mt-1.5 rounded border border-zinc-200 bg-white p-2 text-[11px] leading-relaxed text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950">
+              <p className="mb-1 font-medium text-zinc-600 dark:text-zinc-300">
+                How we recommend
+              </p>
+              <ul className="list-disc space-y-0.5 pl-4">
+                <li>
+                  <b>Source shape</b> — explaining ideas, describing a process,
+                  or a list of terms — decides which activity types fit.
+                </li>
+                <li>
+                  <b>Your goal</b> — assessment leans recall + scored; teaching
+                  leans present-then-check; vocabulary leans matching + recall.
+                </li>
+                <li>
+                  <b>Learning arc</b> — steps are ordered so a learner meets an
+                  idea before being tested on it: present &rarr; practise &rarr;
+                  check. A type can appear more than once.
+                </li>
+                <li>
+                  <b>Coverage</b> — every key concept from your source is covered
+                  by at least one step.
+                </li>
+                <li>
+                  <b>Length</b> — how much your source supports, and your Volume
+                  setting, decide how many steps.
+                </li>
+              </ul>
+              <p className="mt-1">Nothing is locked — pick whatever you want below.</p>
+            </div>
+          )}
+
+          {a.learningSequence.length > 0 ? (
+            <ol className="mt-2 space-y-1.5">
+              {a.learningSequence.map((s, i) => (
+                <li key={i} className="flex gap-2">
+                  <span className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[10px] font-medium text-white">
+                    {i + 1}
+                  </span>
+                  <span>
+                    <b className="text-zinc-700 dark:text-zinc-200">
+                      {contentType(s.contentType)?.label ?? s.contentType}
+                    </b>
+                    {" — "}
+                    <span className="text-zinc-600 dark:text-zinc-300">
+                      {s.purpose}
+                    </span>
+                    {s.concepts.length > 0 && (
+                      <span className="mt-0.5 block text-[10px] text-zinc-400">
+                        Covers: {s.concepts.join(" · ")}
+                      </span>
+                    )}
+                  </span>
                 </li>
               ))}
-            </ul>
+            </ol>
+          ) : (
+            <p className="mt-1 text-zinc-600 dark:text-zinc-300">
+              Source {kindVerb(a.kind)} — ~{a.wordCount} words,{" "}
+              {a.concepts.length} key{" "}
+              {a.kind === "reference" ? "terms" : "concepts"}. &rarr;{" "}
+              <b>{recLabels || "a recall check"}</b>.
+            </p>
           )}
+
+          <p className="mt-2 text-[10px] text-zinc-400">
+            A suggestion. Pick the activity types you want below — the same type
+            can cover more than one step.
+          </p>
         </div>
       ) : (
         <p className="text-sm text-zinc-500">
