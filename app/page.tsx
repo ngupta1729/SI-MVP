@@ -2682,9 +2682,11 @@ function RefineChat(p: {
     const it = await fire();
     p.append({
       role: "system",
-      text: it
-        ? `Regenerated — ${countElements(it)}.`
-        : "Couldn't regenerate — try again.",
+      text: !it
+        ? "Couldn't regenerate — try again."
+        : it.changeNote
+          ? `${it.changeNote} · now ${countElements(it)}`
+          : `Regenerated — ${countElements(it)}.`,
     });
   }
 

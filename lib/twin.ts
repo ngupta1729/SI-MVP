@@ -550,6 +550,9 @@ async function generateOneItem(
       ? `Brief — ${briefInstruction(intent)} (volume: light≈4 / standard≈6 / thorough≈10).`
       : `Instruction: "${intent.prompt || "(none — sensible defaults)"}"  volume: ${intent.volume}`;
   const adjLine = adjustLine(adjustment, intent);
+  const changeNoteLine = adjustment
+    ? `,\n  "changeNote": <one plain-language sentence for a teacher describing what you actually changed and how — concrete, not "made it simpler". e.g. "Cut the questions from two sentences to one and replaced words like 'utilise' and 'demonstrate' with 'use' and 'show'." or "Rewrote three questions to ask learners to apply the idea rather than recall a definition.">`
+    : "";
 
   const prompt = `You are H5P.com's Smart Import, producing content.json for ONE activity of type ${def.label} (${typeName}).
 
@@ -572,7 +575,7 @@ Return ONLY JSON:
   "contentJson": <object exactly in the shape above>,
   "questionSignals": [ { "grounding": <exact source sentence this element came from>, "answerKeyNote": <one line: why the answer/statement is right>, "confidence": "high"|"medium"|"low" } ],
   "confidence": "high"|"medium"|"low",
-  "provenance": "${intent.mode === "extract" ? "extracted" : "inferred"}"
+  "provenance": "${intent.mode === "extract" ? "extracted" : "inferred"}"${changeNoteLine}
 }
 "questionSignals": one entry per element you generated, same order.`;
 
@@ -649,5 +652,33 @@ export async function regenerateItem(
   }
   // mock fallback: reuse mockEngine for a single type
   const one = mockEngine(text, { ...intent, contentTypes: [contentTypeName] });
-  return one.items[0] ?? null;
+  const item = one.items[0];
+  if (item) item.changeNote = mockChangeNote(adjustment);
+  return item ?? null;
+}
+
+/** Plain-language "what changed" for the offline mock — the model writes its own. */
+function mockChangeNote(adjustment: string): string {
+  if (adjustment.startsWith("language:"))
+    return `Rewrote every question and answer in ${adjustment.slice("language:".length)}.`;
+  if (adjustment.startsWith("focus:"))
+    return `Re-pointed the questions at "${adjustment.slice(6)}" and dropped the ones that were off it.`;
+  if (adjustment.startsWith("remix:"))
+    return "Rebuilt as a new activity type, covering the same concepts.";
+  const notes: Record<string, string> = {
+    harder:
+      "Reworded the questions to ask learners to apply or compare the ideas instead of recalling them.",
+    easier:
+      "Shortened the stems to one idea each and made the options plainer.",
+    simpler:
+      "Cut long sentences down and swapped technical words for everyday ones.",
+    formal: "Raised the register — fuller phrasing, no contractions or casual asides.",
+    "less-repetitive":
+      "Spread the questions across different parts of the source so none repeat.",
+    clearer: "Kept the answers, but rephrased each question to remove ambiguity.",
+    "different-focus":
+      "Shifted onto concepts the last version barely touched.",
+    retry: "Generated a fresh set from the source.",
+  };
+  return notes[adjustment] ?? "Regenerated from the source.";
 }

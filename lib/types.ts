@@ -131,6 +131,12 @@ export interface GeneratedItem extends PlanItem {
   answerKeyNote?: string;
   confidence?: "high" | "medium" | "low";
   provenance?: "extracted" | "inferred"; // lifted from source vs. reasoned beyond it
+  /**
+   * Plain-language note of what a Refine/Remix actually changed, in the
+   * educator's terms (e.g. "Shortened the questions and swapped 'utilise'
+   * for 'use'."). Set only on a regenerate with an adjustment.
+   */
+  changeNote?: string;
 }
 
 export interface TwinResult {
