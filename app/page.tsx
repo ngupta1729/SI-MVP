@@ -22,6 +22,7 @@ import type {
   BriefFieldType,
   ImportIntent,
   TwinResult,
+  TwinSource,
   SourceAnalysis,
   QuestionSignal,
 } from "@/lib/types";
@@ -143,6 +144,7 @@ export default function Page() {
   const [soloSaveChoice, setSoloSaveChoice] = useState(false);
   const [soloOpen, setSoloOpen] = useState<boolean[]>([true, true]);
   const [soloWorkTab, setSoloWorkTab] = useState<"chat" | "editor">("chat");
+  const [soloPreviewTab, setSoloPreviewTab] = useState<"edit" | "play">("play");
   // Wall-clock from starting the import to the generated set landing — i.e.
   // steps 1–2 (source + intent + choose activities + generate). Review/approve
   // time is deliberately excluded.
@@ -154,6 +156,21 @@ export default function Page() {
   useEffect(() => {
     fetchImports().then(setAllImports).catch(() => {});
   }, []);
+
+  // Browser Back closes the library Refine overlay (it's state, not a route) —
+  // otherwise Back skips it and leaves the page entirely.
+  useEffect(() => {
+    if (!soloRefine) return;
+    window.history.pushState(null, "");
+    const onPop = () => {
+      setSoloRefine(null);
+      setConfirmSoloExit(false);
+      setSoloSaveChoice(false);
+      resetFlow();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [soloRefine]);
 
   const activeSourceKey = `${sourceTab}::${sourceTab === "Wikipedia" ? wikiUrl : text}`;
   // Only ever show the read-back / recommendations computed for the source the
@@ -642,6 +659,7 @@ export default function Page() {
     setSelected(it.id);
     setSoloOpen([true, true]);
     setSoloWorkTab("chat");
+    setSoloPreviewTab("play");
     setSoloRefine({ recId: rec.id, recName: rec.name, itemId: it.id });
   }
 
@@ -846,24 +864,65 @@ export default function Page() {
               {
                 id: "preview",
                 title: "Preview",
-                node: (
-                  <div className="h-full overflow-auto p-3">
-                    {cur ? (
-                      <ItemPanel
-                        key={cur.id}
-                        item={cur}
-                        value={edits[cur.id] ?? cur.contentJson}
-                        onChange={(v) =>
-                          setEdits((e) => ({ ...e, [cur.id]: v }))
-                        }
-                        editing={false}
-                        initialView="play"
-                      />
-                    ) : (
-                      <p className="text-sm text-zinc-400">
-                        This activity is no longer available.
-                      </p>
-                    )}
+                node: !cur ? (
+                  <p className="p-3 text-sm text-zinc-400">
+                    This activity is no longer available.
+                  </p>
+                ) : (
+                  <div className="flex h-full flex-col overflow-hidden">
+                    <div className="flex shrink-0 gap-1 border-b border-zinc-200 p-2 dark:border-zinc-800">
+                      {(["edit", "play"] as const).map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => setSoloPreviewTab(t)}
+                          className={`rounded border px-2 py-0.5 text-[11px] ${
+                            soloPreviewTab === t
+                              ? "border-blue-600 font-medium"
+                              : "border-zinc-300 text-zinc-500 dark:border-zinc-700"
+                          }`}
+                        >
+                          {t === "edit" ? "Edit fields" : "Play"}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="min-h-0 flex-1 overflow-auto">
+                      {soloPreviewTab === "edit" ? (
+                        <RefineFields
+                          key={cur.id}
+                          value={edits[cur.id] ?? cur.contentJson}
+                          onChange={(v) =>
+                            setEdits((e) => ({ ...e, [cur.id]: v }))
+                          }
+                          onLog={(text) =>
+                            setTranscript((tt) => ({
+                              ...tt,
+                              [cur.id]: [
+                                ...(tt[cur.id] ?? []),
+                                { role: "system", text },
+                              ],
+                            }))
+                          }
+                          activityLabel={
+                            contentType(cur.contentType)?.label ??
+                            cur.contentType
+                          }
+                          source={source()}
+                          intent={intent}
+                        />
+                      ) : (
+                        <ItemPanel
+                          key={cur.id}
+                          item={cur}
+                          value={edits[cur.id] ?? cur.contentJson}
+                          onChange={(v) =>
+                            setEdits((e) => ({ ...e, [cur.id]: v }))
+                          }
+                          editing={false}
+                          hideViewToggle
+                          initialView="play"
+                        />
+                      )}
+                    </div>
                   </div>
                 ),
               },
@@ -1048,7 +1107,7 @@ export default function Page() {
                 onClick={finishCreate}
                 className={btnPrimary}
               >
-                Create {keptIds.length}
+                Approve and Create {keptIds.length}
               </button>
             ) : (
               <button
@@ -1222,7 +1281,7 @@ export default function Page() {
                 className={btnPrimary}
                 onClick={finishCreate}
               >
-                Create {keptIds.length}
+                Approve and Create {keptIds.length}
               </button>
             )}
           </div>
@@ -2983,6 +3042,339 @@ function H5PEditorStub({ item }: { item: RenderedItem }) {
       <p className="text-[11px] text-zinc-400">
         Chat for AI refinements &middot; the editor for precise manual fixes.
       </p>
+    </div>
+  );
+}
+
+/* ---------------- Element-level editing: inline fields + ✦ per field ---------------- */
+
+type QView = { stem: string; options: { text: string; correct: boolean }[] };
+type FieldT = { qi: number; kind: "stem" } | { qi: number; kind: "opt"; ai: number };
+
+const wrapP = (s: string) =>
+  `<p>${s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`;
+
+function readQuestions(value: unknown): {
+  shape: "choices" | "questions" | null;
+  qs: QView[];
+} {
+  const v = (value ?? {}) as Record<string, unknown>;
+  if (Array.isArray(v.choices)) {
+    return {
+      shape: "choices",
+      qs: (v.choices as Choice[]).map((c) => ({
+        stem: stripHtml(c.question) || c.question,
+        options: (c.answers ?? []).map((t, i) => ({
+          text: stripHtml(t) || t,
+          correct: i === 0,
+        })),
+      })),
+    };
+  }
+  if (Array.isArray(v.questions)) {
+    return {
+      shape: "questions",
+      qs: (
+        v.questions as {
+          params?: {
+            question?: string;
+            answers?: { text: string; correct?: boolean }[];
+          };
+        }[]
+      ).map((q) => ({
+        stem: toPlainText(q.params?.question ?? ""),
+        options: (q.params?.answers ?? []).map((a) => ({
+          text: toPlainText(a.text),
+          correct: !!a.correct,
+        })),
+      })),
+    };
+  }
+  return { shape: null, qs: [] };
+}
+
+const AI_CHIPS_STEM = ["Harder", "Simpler", "Clearer", "More specific"];
+const AI_CHIPS_OPT = [
+  "Closer distractor",
+  "Simpler",
+  "Less obvious",
+  "Make this the correct answer",
+];
+
+/** Inline field editor for the two question shapes, with a ✦ on every stem and
+ *  option. Direct typing edits the field; ✦ opens a scoped AI rewrite. */
+function RefineFields(p: {
+  value: unknown;
+  onChange: (v: unknown) => void;
+  onLog: (text: string) => void;
+  activityLabel: string;
+  source: TwinSource;
+  intent: ImportIntent;
+}) {
+  const { shape, qs } = readQuestions(p.value);
+  const [open, setOpen] = useState<FieldT | null>(null);
+  const [ask, setAsk] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [proposal, setProposal] = useState<string | null>(null);
+  const [lastAsk, setLastAsk] = useState("");
+
+  if (!shape) {
+    return (
+      <p className="p-4 text-xs text-zinc-400">
+        Field-level editing isn&rsquo;t available for this activity type &mdash;
+        use Chat, or the Editor tab.
+      </p>
+    );
+  }
+
+  const same = (a: FieldT | null, b: FieldT) =>
+    !!a &&
+    a.qi === b.qi &&
+    a.kind === b.kind &&
+    (a.kind !== "opt" || (b.kind === "opt" && a.ai === b.ai));
+
+  function setField(t: FieldT, text: string) {
+    const d = structuredClone(p.value) as Record<string, unknown>;
+    if (shape === "choices") {
+      const arr = d.choices as Choice[];
+      if (t.kind === "stem") arr[t.qi].question = text;
+      else arr[t.qi].answers[t.ai] = text;
+    } else {
+      const arr = d.questions as {
+        params: { question?: string; answers?: { text: string }[] };
+      }[];
+      if (t.kind === "stem") arr[t.qi].params.question = wrapP(text);
+      else arr[t.qi].params.answers![t.ai].text = wrapP(text);
+    }
+    p.onChange(d);
+  }
+
+  function toggleCorrect(qi: number, ai: number) {
+    const d = structuredClone(p.value) as Record<string, unknown>;
+    if (shape === "choices") {
+      // correct = index 0; promote the picked answer
+      const a = d.choices as Choice[];
+      const ans = a[qi].answers;
+      const [picked] = ans.splice(ai, 1);
+      ans.unshift(picked);
+    } else {
+      const arr = d.questions as {
+        params: { answers?: { correct?: boolean }[] };
+      }[];
+      arr[qi].params.answers?.forEach((x, i) => (x.correct = i === ai));
+    }
+    p.onChange(d);
+  }
+
+  async function runAi(t: FieldT, theAsk: string) {
+    const q = qs[t.qi];
+    const current = t.kind === "stem" ? q.stem : q.options[t.ai].text;
+    setBusy(true);
+    setLastAsk(theAsk);
+    try {
+      const res = await fetch("/api/refine-element", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          source: p.source,
+          intent: p.intent,
+          activityLabel: p.activityLabel,
+          question: q.stem,
+          siblings:
+            t.kind === "opt"
+              ? q.options.filter((_, i) => i !== t.ai).map((o) => o.text)
+              : [],
+          target: t.kind === "stem" ? "stem" : "option",
+          current,
+          isCorrect: t.kind === "opt" ? q.options[t.ai].correct : undefined,
+          ask: theAsk,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.value) {
+        setProposal(String(data.value));
+      } else {
+        setProposal(null);
+        p.onLog("Couldn't rewrite that field — try again.");
+      }
+    } catch {
+      setProposal(null);
+      p.onLog("Couldn't rewrite that field — try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function keepProposal(t: FieldT) {
+    if (proposal == null) return;
+    const q = qs[t.qi];
+    const before = t.kind === "stem" ? q.stem : q.options[t.ai].text;
+    setField(t, proposal);
+    p.onLog(
+      `Q${t.qi + 1} ${
+        t.kind === "stem" ? "stem" : `option ${String.fromCharCode(65 + t.ai)}`
+      } · ${lastAsk} — “${before.slice(0, 30)}${
+        before.length > 30 ? "…" : ""
+      }” → “${proposal.slice(0, 30)}${proposal.length > 30 ? "…" : ""}”`,
+    );
+    close();
+  }
+
+  function close() {
+    setOpen(null);
+    setAsk("");
+    setProposal(null);
+  }
+
+  const star = (t: FieldT) => (
+    <button
+      onClick={() => {
+        if (same(open, t)) close();
+        else {
+          setOpen(t);
+          setAsk("");
+          setProposal(null);
+        }
+      }}
+      title="AI rewrite this field"
+      aria-label="AI rewrite this field"
+      className={`shrink-0 rounded px-1 text-xs ${
+        same(open, t)
+          ? "bg-blue-600 text-white"
+          : "text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+      }`}
+    >
+      &#10022;
+    </button>
+  );
+
+  const popover = (t: FieldT) => {
+    if (!same(open, t)) return null;
+    const chips = t.kind === "stem" ? AI_CHIPS_STEM : AI_CHIPS_OPT;
+    return (
+      <div className="mt-1 rounded-md border border-blue-200 bg-blue-50/70 p-2 text-[11px] dark:border-blue-900 dark:bg-blue-950/30">
+        {proposal == null ? (
+          <>
+            <div className="mb-1 flex flex-wrap gap-1">
+              {chips.map((c) => (
+                <button
+                  key={c}
+                  disabled={busy}
+                  onClick={() => runAi(t, c)}
+                  className="rounded-full border border-zinc-300 bg-white px-2 py-0.5 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-900"
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1">
+              <input
+                value={ask}
+                onChange={(e) => setAsk(e.target.value)}
+                placeholder="or describe the change…"
+                className="min-w-0 flex-1 rounded border border-zinc-300 px-1.5 py-0.5 dark:border-zinc-700 dark:bg-zinc-900"
+              />
+              <button
+                disabled={busy || !ask.trim()}
+                onClick={() => runAi(t, ask.trim())}
+                className="rounded bg-blue-600 px-2 py-0.5 font-medium text-white disabled:opacity-40"
+              >
+                {busy ? "…" : "Send"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-zinc-500">Proposed:</p>
+            <p className="my-1 rounded border border-zinc-200 bg-white p-1.5 dark:border-zinc-700 dark:bg-zinc-950">
+              {proposal}
+            </p>
+            <div className="flex gap-1.5">
+              <button
+                onClick={() => keepProposal(t)}
+                className="rounded bg-blue-600 px-2 py-0.5 font-medium text-white"
+              >
+                Keep
+              </button>
+              <button
+                onClick={() => runAi(t, lastAsk)}
+                disabled={busy}
+                className="rounded border border-zinc-300 px-2 py-0.5 disabled:opacity-40 dark:border-zinc-700"
+              >
+                Try again
+              </button>
+              <button
+                onClick={close}
+                className="rounded px-2 py-0.5 text-zinc-500 underline"
+              >
+                Cancel
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  const inp =
+    "min-w-0 flex-1 rounded border border-zinc-300 px-1.5 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900";
+
+  return (
+    <div className="space-y-3 p-3">
+      <p className="text-[11px] text-zinc-400">
+        Type to edit a field directly · <span className="text-blue-500">&#10022;</span>{" "}
+        for an AI rewrite of just that field. Nothing is saved until you choose
+        Save.
+      </p>
+      {qs.map((q, qi) => (
+        <div
+          key={qi}
+          className="rounded-md border border-zinc-200 p-2 dark:border-zinc-800"
+        >
+          <div className="flex items-start gap-1">
+            <span className="mt-1 shrink-0 text-[10px] text-zinc-400">
+              {qi + 1}.
+            </span>
+            <textarea
+              rows={2}
+              value={q.stem}
+              onChange={(e) => setField({ qi, kind: "stem" }, e.target.value)}
+              className={inp}
+            />
+            {star({ qi, kind: "stem" })}
+          </div>
+          {popover({ qi, kind: "stem" })}
+
+          <ul className="mt-1.5 space-y-1">
+            {q.options.map((o, ai) => (
+              <li key={ai}>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => toggleCorrect(qi, ai)}
+                    title={o.correct ? "Correct answer" : "Mark correct"}
+                    className={`shrink-0 rounded px-1 text-[11px] ${
+                      o.correct
+                        ? "bg-emerald-500 text-white"
+                        : "border border-zinc-300 text-zinc-400 dark:border-zinc-700"
+                    }`}
+                  >
+                    {o.correct ? "✓" : "✗"}
+                  </button>
+                  <input
+                    value={o.text}
+                    onChange={(e) =>
+                      setField({ qi, kind: "opt", ai }, e.target.value)
+                    }
+                    className={inp}
+                  />
+                  {star({ qi, kind: "opt", ai })}
+                </div>
+                {popover({ qi, kind: "opt", ai })}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }

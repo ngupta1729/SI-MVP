@@ -757,6 +757,64 @@ export async function regenerateItem(
   return item ?? null;
 }
 
+/** Rewrite one field of one question — a stem or a single answer option — with
+ *  full context (the question, its siblings, the source). Returns the new text. */
+export async function refineElement(o: {
+  source: TwinSource;
+  intent: ImportIntent;
+  activityLabel: string;
+  question: string;
+  siblings: string[];
+  target: "stem" | "option";
+  current: string;
+  isCorrect?: boolean;
+  ask: string;
+}): Promise<string | null> {
+  const text = await resolveSourceText(o.source);
+  if (!hasModel()) {
+    // offline: a light deterministic nudge so the flow is demonstrable
+    const tag =
+      /harder|difficult/i.test(o.ask)
+        ? " — closer call"
+        : /simpl|eas/i.test(o.ask)
+          ? " (plainer)"
+          : /distractor|plausible/i.test(o.ask)
+            ? " — near-miss"
+            : "";
+    return (o.current + tag).slice(0, 200);
+  }
+  const role =
+    o.target === "stem"
+      ? "Rewrite ONLY the question stem. Do not add options or answers."
+      : `Rewrite ONLY this one answer option. It is currently ${
+          o.isCorrect ? "the CORRECT answer" : "a distractor (a wrong option)"
+        } — keep that role unless the ask explicitly says to change it.`;
+  const prompt = `You are refining ONE element of an H5P ${o.activityLabel} question. Stay grounded in the source.
+
+SOURCE (for grounding):
+${text.slice(0, 6000)}
+
+QUESTION: ${o.question}
+${o.target === "option" ? `OTHER OPTIONS: ${o.siblings.filter(Boolean).join("  |  ")}` : ""}
+CURRENT ${o.target === "stem" ? "STEM" : "OPTION"}: ${o.current}
+
+ASK: ${o.ask}
+
+${role} Return ONLY the new text — no quotes, no label, no explanation, a single line.`;
+  try {
+    const { text: out } = await generateText({
+      model: openai(TWIN_MODEL),
+      prompt,
+      temperature: 0.4,
+    });
+    const cleaned = out.trim().replace(/^["'\s]+|["'\s]+$/g, "");
+    return cleaned || null;
+  } catch (err) {
+    console.error("refineElement failed:", err);
+    return null;
+  }
+}
+
 /** Plain-language "what changed" for the offline mock — the model writes its own. */
 function mockChangeNote(adjustment: string): string {
   if (adjustment.startsWith("language:"))
