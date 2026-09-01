@@ -44,7 +44,6 @@ export default async function DashboardPage() {
         <div className="space-y-8">
           <QualitySection m={m} />
           <ExperienceSection x={m.experience} />
-          <RecentImports rows={m.recentImports} />
         </div>
       )}
     </main>
@@ -388,61 +387,3 @@ function ExperienceSection({ x }: { x: ExperienceMetrics }) {
   );
 }
 
-function RecentImports({
-  rows,
-}: {
-  rows: DashboardMetrics["recentImports"];
-}) {
-  return (
-    <Section title="Recent imports" lead="Newest first.">
-      <div className={card}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-left font-normal text-zinc-400">
-                <th className="pb-1 pr-3 font-normal">Import</th>
-                <th className="pb-1 pr-3 font-normal">Date</th>
-                <th className="pb-1 pr-3 font-normal">Engine</th>
-                <th className="pb-1 pr-3 font-normal">Source</th>
-                <th className="pb-1 pr-3 text-right font-normal">Gen→Kept</th>
-                <th className="pb-1 font-normal">Outcome</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr
-                  key={r.id}
-                  className="border-t border-zinc-100 dark:border-zinc-800"
-                >
-                  <td className="py-1 pr-3">
-                    {r.name}
-                    {r.uiVariant && (
-                      <span className="ml-1 text-[10px] text-zinc-400">
-                        {r.uiVariant === "workspace" ? "B" : "A"}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-1 pr-3 text-zinc-500">
-                    {new Date(r.savedAt).toLocaleDateString()}
-                  </td>
-                  <td className="py-1 pr-3 text-zinc-500">
-                    {r.engine}
-                    {r.model ? ` · ${r.model}` : ""}
-                  </td>
-                  <td className="py-1 pr-3 text-zinc-500">
-                    {r.sourceKind}
-                    {r.wordCount ? ` · ${r.wordCount}w` : ""}
-                  </td>
-                  <td className="py-1 pr-3 text-right tabular-nums">
-                    {r.generated}→{r.kept}
-                  </td>
-                  <td className="py-1 text-zinc-500">{r.summary}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </Section>
-  );
-}
