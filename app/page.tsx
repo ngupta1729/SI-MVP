@@ -2396,6 +2396,12 @@ const DISCARD_REASONS = [
 // Remix rebuilds the activity as a different type — only types the twin can render.
 const REMIX_TARGETS = CONTENT_TYPES.filter((c) => c.twin === "full");
 
+const REFINE_ACTIONS = [
+  { key: "refine" as const, label: "Refine", desc: "regenerate with a steer" },
+  { key: "remix" as const, label: "Remix", desc: "rebuild as another type" },
+  { key: "discard" as const, label: "Discard", desc: "remove this activity" },
+];
+
 function Review(p: {
   result: ApiResult;
   itemState: Record<string, ItemState>;
@@ -2655,7 +2661,7 @@ function RefineChat(p: {
   onDiscard: (id: string, reason: string) => void;
   onUndiscard: () => void;
 }) {
-  const [expand, setExpand] = useState<null | "refine" | "type" | "discard">(
+  const [expand, setExpand] = useState<null | "refine" | "remix" | "discard">(
     null,
   );
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -2682,126 +2688,154 @@ function RefineChat(p: {
     });
   }
 
+  const optChip =
+    "rounded-full border border-zinc-300 bg-white px-2 py-0.5 hover:border-blue-500 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-900";
+
   return (
     <div className="flex h-full flex-col">
       <p className="border-b border-zinc-200 px-3 py-2 text-xs font-medium text-zinc-500 dark:border-zinc-800">
         Refine · {contentType(p.item.contentType)?.label}
       </p>
 
-      <div
-        ref={scrollRef}
-        className="min-h-0 flex-1 space-y-2 overflow-auto p-3 text-xs"
-      >
-        {p.turns.length === 0 && (
-          <p className="text-zinc-400">No changes yet — pick an action below.</p>
-        )}
-        {p.turns.map((t, i) => (
-          <div key={i} className={t.role === "user" ? "text-right" : ""}>
-            <span
-              className={`inline-block rounded px-2 py-1 ${
-                t.role === "user"
-                  ? "bg-blue-600 text-white"
-                  : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
-              }`}
-            >
-              {t.text}
-            </span>
-          </div>
-        ))}
-        {busy && <p className="text-zinc-400">Regenerating…</p>}
-      </div>
-
-      <div className="max-h-[55%] shrink-0 overflow-y-auto border-t border-zinc-200 p-2 dark:border-zinc-800">
+      <div className="min-h-0 flex-1 space-y-2 overflow-auto p-3 text-xs">
         {discarded ? (
-          <button
-            onClick={() => {
-              p.append({ role: "user", text: "Undo discard" });
-              p.onUndiscard();
-            }}
-            className={chip}
-          >
-            Undo discard
-          </button>
+          <div>
+            <p className="mb-2 text-zinc-500">
+              This activity is discarded — it won&rsquo;t be saved.
+            </p>
+            <button
+              onClick={() => {
+                p.append({ role: "user", text: "Undo discard" });
+                p.onUndiscard();
+              }}
+              className={chip}
+            >
+              Undo discard
+            </button>
+          </div>
         ) : (
-          <>
-            <div className="flex flex-wrap gap-1">
-              <button
-                disabled={busy}
-                onClick={() => setExpand(expand === "refine" ? null : "refine")}
-                className={`${chip} ${expand === "refine" ? "border-blue-600 font-medium" : ""}`}
-              >
-                Refine ▸
-              </button>
-              <button
-                disabled={busy}
-                onClick={() => setExpand(expand === "type" ? null : "type")}
-                className={`${chip} ${expand === "type" ? "border-blue-600 font-medium" : ""}`}
-              >
-                Change type ▸
-              </button>
-              <button
-                disabled={busy}
-                onClick={() => setExpand(expand === "discard" ? null : "discard")}
-                className={`${chip} ${expand === "discard" ? "border-blue-600 font-medium" : ""}`}
-              >
-                Discard ▸
-              </button>
-            </div>
-
-            {expand === "refine" && (
-              <div className="mt-1 flex flex-wrap gap-1">
-                {REFINE_OPTIONS.map((o) => (
+          <div className="space-y-1.5">
+            {REFINE_ACTIONS.map((a) => {
+              const on = expand === a.key;
+              const danger = a.key === "discard";
+              return (
+                <div key={a.key}>
                   <button
-                    key={o.id}
                     disabled={busy}
-                    onClick={() =>
-                      run(o.label, () => p.onRefine(p.item.id, o.id))
-                    }
-                    className={`${chip} bg-white dark:bg-zinc-900`}
+                    onClick={() => setExpand(on ? null : a.key)}
+                    className={`flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-left disabled:opacity-40 ${
+                      on
+                        ? "border-blue-600 bg-blue-50 dark:bg-blue-950/30"
+                        : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-800"
+                    }`}
                   >
-                    {o.label}
+                    <span>
+                      <span className="font-medium">{a.label}</span>
+                      <span className="ml-1.5 text-zinc-400">{a.desc}</span>
+                    </span>
+                    <span className="shrink-0 text-zinc-400">
+                      {on ? "▾" : "▸"}
+                    </span>
                   </button>
-                ))}
-              </div>
-            )}
-            {expand === "type" && (
-              <div className="mt-1 flex flex-wrap gap-1">
-                {REMIX_TARGETS.filter((t) => t.name !== p.item.contentType).map(
-                  (t) => (
-                    <button
-                      key={t.name}
-                      onClick={() =>
-                        run(`Change type → ${t.label}`, () =>
-                          p.onRemix(p.item.id, t.name),
-                        )
-                      }
-                      className={`${chip} bg-white dark:bg-zinc-900`}
+
+                  {on && (
+                    <div
+                      className={`mt-1 rounded-md border p-2 ${
+                        danger
+                          ? "border-red-200 bg-red-50/60 dark:border-red-900 dark:bg-red-950/20"
+                          : "border-blue-200 bg-blue-50/60 dark:border-blue-900 dark:bg-blue-950/20"
+                      }`}
                     >
-                      {t.label}
-                    </button>
-                  ),
-                )}
+                      <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+                        {a.key === "refine"
+                          ? "What should change?"
+                          : a.key === "remix"
+                            ? "Rebuild as"
+                            : "Discard because…"}
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {a.key === "refine" &&
+                          REFINE_OPTIONS.map((o) => (
+                            <button
+                              key={o.id}
+                              disabled={busy}
+                              onClick={() =>
+                                run(o.label, () => p.onRefine(p.item.id, o.id))
+                              }
+                              className={optChip}
+                            >
+                              {o.label}
+                            </button>
+                          ))}
+                        {a.key === "remix" &&
+                          REMIX_TARGETS.filter(
+                            (t) => t.name !== p.item.contentType,
+                          ).map((t) => (
+                            <button
+                              key={t.name}
+                              disabled={busy}
+                              onClick={() =>
+                                run(`Remix → ${t.label}`, () =>
+                                  p.onRemix(p.item.id, t.name),
+                                )
+                              }
+                              className={optChip}
+                            >
+                              {t.label}
+                            </button>
+                          ))}
+                        {a.key === "discard" &&
+                          DISCARD_REASONS.map((r) => (
+                            <button
+                              key={r}
+                              onClick={() => {
+                                p.append({ role: "user", text: `Discard — ${r}` });
+                                p.append({ role: "system", text: "Discarded." });
+                                setExpand(null);
+                                p.onDiscard(p.item.id, r);
+                              }}
+                              className={`${optChip} hover:!border-red-400`}
+                            >
+                              {r}
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {busy && (
+              <p className="pt-1 text-zinc-400">Regenerating…</p>
+            )}
+
+            {p.turns.length > 0 && (
+              <div className="!mt-3 border-t border-zinc-200 pt-2 dark:border-zinc-800">
+                <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-zinc-400">
+                  Changes
+                </p>
+                <div
+                  ref={scrollRef}
+                  className="max-h-40 space-y-0.5 overflow-auto"
+                >
+                  {p.turns.map((t, i) => (
+                    <p
+                      key={i}
+                      className={
+                        t.role === "user"
+                          ? "text-zinc-700 dark:text-zinc-200"
+                          : "text-zinc-400"
+                      }
+                    >
+                      {t.role === "user" ? "→ " : ""}
+                      {t.text}
+                    </p>
+                  ))}
+                </div>
               </div>
             )}
-            {expand === "discard" && (
-              <div className="mt-1 flex flex-wrap gap-1">
-                {DISCARD_REASONS.map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => {
-                      p.append({ role: "user", text: `Discard — ${r}` });
-                      p.append({ role: "system", text: "Discarded." });
-                      setExpand(null);
-                      p.onDiscard(p.item.id, r);
-                    }}
-                    className={`${chip} bg-white dark:bg-zinc-900`}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
-            )}
-          </>
+          </div>
         )}
       </div>
     </div>
