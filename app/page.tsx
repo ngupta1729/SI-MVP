@@ -3162,9 +3162,9 @@ function Workspace(p: {
   ) : (
     <div className="h-full overflow-auto p-3">
       <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-        <b>Example only</b> — not your content. Shows the shape of a type so
-        it&rsquo;s easier to pick. Your generated activities replace this once
-        you click Generate.
+        <b>Example only</b> — a sample H5P for this type, playable, so you can
+        see what it&rsquo;s like before picking it. Your generated activities
+        replace this once you click Generate.
       </div>
       {p.intent.contentTypes.length === 0 ? (
         <p className="text-sm text-zinc-400">
@@ -4518,72 +4518,29 @@ function ItemPanel(p: {
   );
 }
 
-// A real example content.json ships alongside every "full" content type's
-// render bundle (public/h5p/<host>/content/content.json — the same file the
-// model engine is shown as its format reference). Reused here, client-side,
-// as sample material so a new user can see the *shape* of a type before
-// generating anything.
-const sampleCache = new Map<string, Promise<unknown>>();
-function fetchTypeSample(typeName: string): Promise<unknown> {
-  const host = contentType(typeName)?.renderHost;
-  if (!host) return Promise.resolve(null);
-  if (!sampleCache.has(host)) {
-    sampleCache.set(
-      host,
-      fetch(`/h5p/${host}/content/content.json`)
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null),
-    );
-  }
-  return sampleCache.get(host)!;
-}
-
-/** Read-only example of a content type, pre-generate — clearly marked as a
- *  sample so it's never mistaken for the educator's own content. Callers key
- *  this by `typeName` so switching types remounts it (fresh loading state)
- *  instead of syncing that reset through an effect. */
+/** A live H5P render of a content type's shipped example, shown pre-generate
+ *  so a new user sees what the type actually plays like. Every "full" type
+ *  carries a self-contained bundle at public/h5p/<host>/ (h5p.json +
+ *  content/content.json + libraries) — the permanent per-type sample. The
+ *  player loads it straight from there; no per-item staging needed since the
+ *  content is the bundle's own unmodified example. */
 function TypeSamplePreview({ typeName }: { typeName: string }) {
-  const [sample, setSample] = useState<unknown>(undefined); // undefined = loading
-  useEffect(() => {
-    let alive = true;
-    fetchTypeSample(typeName).then((v) => {
-      if (alive) setSample(v);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [typeName]);
-
   const def = contentType(typeName);
-  if (sample === undefined) {
-    return <p className="text-xs text-zinc-400">Loading example…</p>;
-  }
-  if (sample == null) {
+  const host = def?.renderHost;
+  if (!host || def?.twin !== "full") {
     return (
       <p className="text-xs text-zinc-400">
-        No example available for {def?.label ?? typeName} yet.
+        No live preview for {def?.label ?? typeName} yet — its H5P bundle
+        isn&rsquo;t in the prototype.
       </p>
     );
   }
-  const fakeItem: RenderedItem = {
-    id: `sample:${typeName}`,
-    contentType: typeName,
-    title: def?.label ?? typeName,
-    concepts: [],
-    rationale: "",
-    contentJson: sample,
-    mainLibrary: def?.library ?? "",
-    hostPrepared: false,
-    render: { librariesPath: "", h5pJsonPath: "", h5pJson: "" },
-  };
   return (
-    <ItemPanel
+    <H5PRender
       key={typeName}
-      item={fakeItem}
-      value={sample}
-      onChange={() => {}}
-      editing={false}
-      hideViewToggle
+      h5pJsonPath={`/h5p/${host}`}
+      librariesPath={`/h5p/${host}`}
+      renderKey={typeName}
     />
   );
 }
