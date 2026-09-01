@@ -200,11 +200,7 @@ function QualitySection({ m }: { m: DashboardMetrics }) {
         <Stat
           label="Refined before keeping"
           value={pct(ratio(o.edited + o.refined + o.remixed, o.total))}
-          hint={`${o.edited} edited · ${o.refined} refined · ${o.remixed} remixed${
-            h.medianEditChars == null
-              ? ""
-              : ` · ~${h.medianEditChars} chars/edit`
-          }`}
+          hint={`${o.edited} edited · ${o.refined} refined · ${o.remixed} remixed`}
         />
         <Stat
           label="Discarded"
