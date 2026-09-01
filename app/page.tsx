@@ -28,6 +28,7 @@ import { starterBrief, newBriefField, briefGoal, missingRequired } from "@/lib/b
 import H5PRender from "@/components/H5PRender";
 
 type Screen = "configure" | "activities" | "review" | "library";
+type ShellNav = "my" | "smartimport" | "shared" | "all" | "trash";
 
 // Mock pre-existing library content, to show new items land among everything else.
 const MOCK_LIBRARY_ITEMS = [
@@ -114,13 +115,21 @@ export default function Page() {
   // per-activity refinement transcript, keyed by item id (workspace variant only)
   const [transcript, setTranscript] = useState<Record<string, ChatTurn[]>>({});
 
-  // Post-create: land in the content library, scoped to this import.
-  const [importRecord, setImportRecord] = useState<ImportRecord | null>(null);
-  const [priorImports, setPriorImports] = useState<ImportRecord[]>([]);
   // review-stage decision metadata that isn't otherwise kept in state:
   const [discardReason, setDiscardReason] = useState<Record<string, string>>({});
   const [refineSteers, setRefineSteers] = useState<Record<string, string[]>>({});
   const [remixFrom, setRemixFrom] = useState<Record<string, string>>({});
+
+  // ---- the Manage Content shell — the app's home ----
+  const [view, setView] = useState<"shell" | "flow">("shell");
+  const [shellNav, setShellNav] = useState<ShellNav>("smartimport");
+  const [allImports, setAllImports] = useState<ImportRecord[]>([]);
+  const [siFilter, setSiFilter] = useState<string>(""); // "" all SI · "all"·id
+  const [justCreatedId, setJustCreatedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchImports().then(setAllImports).catch(() => {});
+  }, []);
 
   const activeSourceKey = `${sourceTab}::${sourceTab === "Wikipedia" ? wikiUrl : text}`;
   // Only ever show the read-back / recommendations computed for the source the
@@ -472,21 +481,21 @@ export default function Page() {
       items: recordItems,
     };
     saveImport(record);
-    setImportRecord(record);
-    fetchImports().then((list) =>
-      setPriorImports(list.filter((r) => r.id !== record.id)),
-    );
-    setScreen("library");
+    setAllImports((prev) => [record, ...prev.filter((r) => r.id !== record.id)]);
+    // back to the shell, Smart Import view, filtered to this import
+    setJustCreatedId(record.id);
+    setSiFilter(record.id);
+    setShellNav("smartimport");
+    setView("shell");
   }
 
-  function startAnother() {
+  function resetFlow() {
     setResult(null);
     setItemState({});
     setEdits({});
     setSelected(null);
     setAttempts({});
     setRemixes({});
-    setImportRecord(null);
     setDiscardReason({});
     setRefineSteers({});
     setRemixFrom({});
@@ -499,6 +508,19 @@ export default function Page() {
     setAnalysis(null);
     setAnalyzedKey("");
     setScreen("configure");
+  }
+
+  /** One click from the shell straight into Configure. */
+  function startFlow() {
+    resetFlow();
+    setJustCreatedId(null);
+    setView("flow");
+  }
+
+  /** Leave the flow without creating anything. */
+  function exitFlow() {
+    resetFlow();
+    setView("shell");
   }
 
   const keptIds = result
@@ -521,6 +543,24 @@ export default function Page() {
       else next[n] = count;
       return { ...i, contentTypeCounts: next };
     });
+
+  if (view === "shell") {
+    return (
+      <Shell
+        nav={shellNav}
+        setNav={setShellNav}
+        imports={allImports}
+        setImports={setAllImports}
+        siFilter={siFilter}
+        setSiFilter={setSiFilter}
+        justCreatedId={justCreatedId}
+        clearJustCreated={() => setJustCreatedId(null)}
+        onStartSmartImport={startFlow}
+        uiVariant={uiVariant}
+        setUiVariant={setUiVariant}
+      />
+    );
+  }
 
   if (uiVariant === "workspace") {
     return (
@@ -581,27 +621,22 @@ export default function Page() {
             onRefine={refineActivity}
             onRemix={remixActivity}
             onDiscard={discardActivity}
-            importRecord={importRecord}
-            priorImports={priorImports}
           />
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-zinc-200 px-4 py-2 dark:border-zinc-800">
           <span className="text-xs text-zinc-400">
-            {importRecord
-              ? `${importRecord.outcome.kept} created · in your content library`
-              : result
-                ? `${keptIds.length}/${result.items.length} kept · engine: ${result.engine}`
-                : analyzing
-                  ? "analyzing source…"
-                  : "add a source to begin"}
+            {result
+              ? `${keptIds.length}/${result.items.length} kept · engine: ${result.engine}`
+              : analyzing
+                ? "analyzing source…"
+                : "add a source to begin"}
           </span>
           <div className="flex gap-2">
-            {importRecord ? (
-              <button onClick={startAnother} className={btnPrimary}>
-                Start another import
-              </button>
-            ) : result ? (
+            <button onClick={exitFlow} className={btnGhost}>
+              Cancel
+            </button>
+            {result ? (
               <button
                 disabled={!keptIds.length}
                 onClick={finishCreate}
@@ -701,19 +736,11 @@ export default function Page() {
               onDiscard={discardActivity}
             />
           )}
-          {screen === "library" && importRecord && (
-            <LibraryView
-              current={importRecord}
-              priorImports={priorImports}
-            />
-          )}
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-zinc-200 px-6 py-3 dark:border-zinc-800">
           <span className="text-xs text-zinc-400">
-            {screen === "library" && importRecord
-              ? `${importRecord.outcome.kept} created · in your content library`
-              : screen === "review" && result
+            {screen === "review" && result
               ? `${keptIds.length}/${result.items.length} kept · engine: ${result.engine}`
               : shownAnalysis
                 ? `${shownAnalysis.kind}, ${shownAnalysis.wordCount} words${
@@ -726,54 +753,40 @@ export default function Page() {
                   : "add a source to begin"}
           </span>
           <div className="flex gap-2">
+            <button
+              onClick={screen === "configure" ? exitFlow : () => setScreen(
+                screen === "activities" ? "configure" : "activities",
+              )}
+              className={btnGhost}
+            >
+              {screen === "configure" ? "Cancel" : "Back"}
+            </button>
             {screen === "configure" && (
-              <>
-                <button
-                  onClick={() => setScreen("activities")}
-                  disabled={!sourceReady}
-                  className={btnPrimary}
-                >
-                  Choose activities
-                </button>
-              </>
+              <button
+                onClick={() => setScreen("activities")}
+                disabled={!sourceReady}
+                className={btnPrimary}
+              >
+                Choose activities
+              </button>
             )}
             {screen === "activities" && (
-              <>
-                <button onClick={() => setScreen("configure")} className={btnGhost}>
-                  Back
-                </button>
-                <button
-                  onClick={() => generate()}
-                  disabled={generating || !intent.contentTypes.length}
-                  className={btnPrimary}
-                >
-                  {generating ? "Generating…" : "Generate and review"}
-                </button>
-              </>
+              <button
+                onClick={() => generate()}
+                disabled={generating || !intent.contentTypes.length}
+                className={btnPrimary}
+              >
+                {generating ? "Generating…" : "Generate and review"}
+              </button>
             )}
             {screen === "review" && (
-              <>
-                <button onClick={() => setScreen("activities")} className={btnGhost}>
-                  Back
-                </button>
-                <button
-                  disabled={!keptIds.length}
-                  className={btnPrimary}
-                  onClick={finishCreate}
-                >
-                  Create {keptIds.length}
-                </button>
-              </>
-            )}
-            {screen === "library" && (
-              <>
-                <button onClick={() => setScreen("review")} className={btnGhost}>
-                  Back to review
-                </button>
-                <button onClick={startAnother} className={btnPrimary}>
-                  Start another import
-                </button>
-              </>
+              <button
+                disabled={!keptIds.length}
+                className={btnPrimary}
+                onClick={finishCreate}
+              >
+                Create {keptIds.length}
+              </button>
             )}
           </div>
         </div>
@@ -2656,8 +2669,6 @@ function Workspace(p: {
   onRefine: (id: string, adj: string) => Promise<RenderedItem | null>;
   onRemix: (id: string, toType: string) => Promise<RenderedItem | null>;
   onDiscard: (id: string, reason: string) => void;
-  importRecord: ImportRecord | null;
-  priorImports: ImportRecord[];
 }) {
   const [editSetup, setEditSetup] = useState(false);
 
@@ -2693,17 +2704,6 @@ function Workspace(p: {
     </>
   );
 
-  // (c) after create
-  if (p.importRecord) {
-    return (
-      <div className="h-full overflow-auto p-4">
-        <LibraryView
-          current={p.importRecord}
-          priorImports={p.priorImports}
-        />
-      </div>
-    );
-  }
 
   // (a) before generate — setup panel prominent, others collapsed
   if (!p.result) {
@@ -2903,156 +2903,390 @@ function ImportReceipt({ rec }: { rec: ImportRecord }) {
   );
 }
 
-function LibraryView(p: {
-  current: ImportRecord;
-  priorImports: ImportRecord[];
+function navLabel(n: ShellNav): string {
+  return n === "my"
+    ? "My Content"
+    : n === "smartimport"
+      ? "Smart Import"
+      : n === "shared"
+        ? "Shared with me"
+        : n === "all"
+          ? "All Content"
+          : "Trash";
+}
+
+function Shell(p: {
+  nav: ShellNav;
+  setNav: (n: ShellNav) => void;
+  imports: ImportRecord[];
+  setImports: (f: (prev: ImportRecord[]) => ImportRecord[]) => void;
+  siFilter: string;
+  setSiFilter: (s: string) => void;
+  justCreatedId: string | null;
+  clearJustCreated: () => void;
+  onStartSmartImport: () => void;
+  uiVariant: UiVariant;
+  setUiVariant: (v: UiVariant) => void;
 }) {
-  const allRecords = [p.current, ...p.priorImports];
-  const byRecency = [...allRecords].sort((a, b) => b.createdAt - a.createdAt);
-  const [openReceiptId, setOpenReceiptId] = useState<string | null>(null);
-  // One list, one filter. "" = all content · "si" = any Smart Import · else an
-  // import id. Lands filtered to the import just created; the user clears it.
-  const [filter, setFilter] = useState<string>(p.current.id);
+  const navItems: ShellNav[] = ["my", "smartimport", "shared", "all", "trash"];
+  return (
+    <div className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950">
+      <header className="flex shrink-0 items-center gap-6 bg-zinc-800 px-4 py-2.5 text-sm text-white">
+        <span className="font-bold tracking-tight">H5P</span>
+        <span className="font-medium">Manage Content</span>
+        <span className="text-zinc-400">Manage Organization</span>
+        <span className="ml-auto text-zinc-300">NIKHIL GUPTA</span>
+        <span className="rounded bg-blue-600 px-3 py-1 text-xs font-medium">
+          + Add Content
+        </span>
+        <VariantToggle value={p.uiVariant} onChange={p.setUiVariant} />
+      </header>
 
-  const kept = p.current.outcome.kept;
-  const savedMin = Math.max(kept * 7, 5); // rough manual-authoring estimate
+      <div className="flex min-h-0 flex-1">
+        <aside className="w-56 shrink-0 overflow-auto border-r border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
+          <p className="mb-3 rounded border border-dashed border-zinc-300 py-3 text-center text-xs text-zinc-400 dark:border-zinc-700">
+            Upload Logo
+          </p>
+          <p className="mb-2 text-sm font-semibold">Manage Content</p>
+          <nav className="space-y-0.5 text-sm">
+            {navItems.map((n) => (
+              <button
+                key={n}
+                onClick={() => p.setNav(n)}
+                className={`block w-full rounded px-2 py-1.5 text-left ${
+                  p.nav === n
+                    ? "bg-blue-50 font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                    : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                }`}
+              >
+                {navLabel(n)}
+              </button>
+            ))}
+          </nav>
+        </aside>
 
-  const siRows = byRecency.flatMap((rec) =>
+        <main className="min-w-0 flex-1 overflow-auto">
+          <div className="flex flex-wrap gap-2 border-b border-zinc-200 bg-white px-5 py-3 dark:border-zinc-800 dark:bg-zinc-950">
+            <span className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white">
+              + Add Content
+            </span>
+            <button
+              onClick={p.onStartSmartImport}
+              className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white"
+            >
+              &#10022; Smart Import
+            </button>
+            <span className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-500 dark:border-zinc-700">
+              New Folder
+            </span>
+          </div>
+
+          <div className="p-5">
+            {p.nav === "smartimport" ? (
+              <SmartImportHome
+                imports={p.imports}
+                setImports={p.setImports}
+                filter={p.siFilter}
+                setFilter={p.setSiFilter}
+                justCreatedId={p.justCreatedId}
+                clearJustCreated={p.clearJustCreated}
+                onStart={p.onStartSmartImport}
+              />
+            ) : (
+              <GenericContentList nav={p.nav} imports={p.imports} />
+            )}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function GenericContentList(p: { nav: ShellNav; imports: ImportRecord[] }) {
+  if (p.nav === "shared" || p.nav === "trash") {
+    return (
+      <p className="text-sm text-zinc-400">
+        {navLabel(p.nav)} &mdash; nothing here in the prototype.
+      </p>
+    );
+  }
+  const siItems = p.imports.flatMap((rec) =>
     rec.items.map((it) => ({ rec, it })),
   );
-  const filteredSi =
-    filter === "" || filter === "si"
-      ? siRows
-      : siRows.filter((r) => r.rec.id === filter);
-  const showOther = filter === "";
-  const filterRec = allRecords.find((r) => r.id === filter) ?? null;
-  const shownReceipt = allRecords.find((r) => r.id === openReceiptId) ?? null;
-  const count = filteredSi.length + (showOther ? MOCK_LIBRARY_ITEMS.length : 0);
+  return (
+    <div className="space-y-3">
+      <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+        {navLabel(p.nav)}
+      </p>
+      <ul className="space-y-1.5 text-xs">
+        <li className="rounded-md border border-zinc-200 p-2 dark:border-zinc-800">
+          <p className="font-medium">Examples and templates</p>
+          <p className="text-zinc-500">Shared with the entire organization</p>
+        </li>
+        {siItems.map(({ rec, it }) => (
+          <li
+            key={`${rec.id}:${it.id}`}
+            className="rounded-md border border-zinc-200 p-2 dark:border-zinc-800"
+          >
+            <p className="truncate font-medium">
+              {it.title || contentType(it.contentType)?.label}
+            </p>
+            <p className="truncate text-zinc-500">
+              {contentType(it.contentType)?.label} &middot; Smart Import &middot;{" "}
+              {rec.name}
+            </p>
+          </li>
+        ))}
+        {MOCK_LIBRARY_ITEMS.map((m) => (
+          <li
+            key={m.title}
+            className="rounded-md border border-zinc-200 p-2 opacity-70 dark:border-zinc-800"
+          >
+            <p className="truncate font-medium">{m.title}</p>
+            <p className="truncate text-zinc-500">
+              {m.type} &middot; from {m.from} &middot; {m.modified}
+            </p>
+          </li>
+        ))}
+      </ul>
+      <p className="text-[11px] text-zinc-400">
+        No separate &ldquo;Smart Import&rdquo; folder &mdash; generated content
+        sits in the library, tagged to its import.
+      </p>
+    </div>
+  );
+}
+
+function SmartImportHome(p: {
+  imports: ImportRecord[];
+  setImports: (f: (prev: ImportRecord[]) => ImportRecord[]) => void;
+  filter: string;
+  setFilter: (s: string) => void;
+  justCreatedId: string | null;
+  clearJustCreated: () => void;
+  onStart: () => void;
+}) {
+  const [tab, setTab] = useState<"content" | "sessions">("content");
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const byRecency = [...p.imports].sort((a, b) => b.createdAt - a.createdAt);
+  const justCreated = p.imports.find((r) => r.id === p.justCreatedId) ?? null;
+  const filterRec = p.imports.find((r) => r.id === p.filter) ?? null;
+  const remaining = Math.max(0, 992 - p.imports.length);
+  const contentRows = (filterRec ? [filterRec] : byRecency).flatMap((rec) =>
+    rec.items.map((it) => ({ rec, it })),
+  );
+  const siUrl = (id: string) => `h5p.com/smart-import/${id.slice(0, 8)}`;
 
   return (
     <div className="space-y-4">
-      <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm dark:border-emerald-900 dark:bg-emerald-950/30">
-        <p className="font-medium text-emerald-800 dark:text-emerald-200">
-          ✓ {kept} {kept === 1 ? "activity" : "activities"} created from “
-          {p.current.name}”
-        </p>
-        <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
-          Done in one pass — roughly <b>{savedMin} min</b> of manual authoring.
-          They&rsquo;re in your content library as drafts. The list below is
-          filtered to this import.
-        </p>
-      </div>
-
-      <div>
-        <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
-          <span className="font-semibold uppercase tracking-wide text-zinc-400">
-            Content library
-          </span>
-          <label className="flex items-center gap-1 text-zinc-500">
-            Show
-            <select
-              value={filter}
-              onChange={(e) => {
-                setFilter(e.target.value);
-                setOpenReceiptId(null);
-              }}
-              className="rounded border border-zinc-300 px-1.5 py-0.5 text-[11px] dark:border-zinc-700 dark:bg-zinc-900"
-            >
-              <option value="">All content</option>
-              <option value="si">Smart Import — all</option>
-              {byRecency.map((r) => (
-                <option key={r.id} value={r.id}>
-                  ↳ {r.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <span className="text-zinc-400">{count} items</span>
-        </div>
-
-        {filterRec && (
-          <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-[11px] text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
-            <b className="text-zinc-600 dark:text-zinc-300">{filterRec.name}</b>
-            <span>
-              · {filterRec.source.kind === "url" ? "URL" : "text"} source
-            </span>
-            <span>· {relTime(filterRec.createdAt)}</span>
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="text-lg font-semibold">Smart Import</h2>
+        <span className="text-xs text-zinc-400">
+          Remaining imports:{" "}
+          <b className="text-zinc-600 dark:text-zinc-300">{remaining}</b>
+        </span>
+        <div className="inline-flex rounded-md border border-zinc-300 p-0.5 text-xs dark:border-zinc-700">
+          {(["content", "sessions"] as const).map((t) => (
             <button
-              onClick={() =>
-                setOpenReceiptId(
-                  openReceiptId === filterRec.id ? null : filterRec.id,
-                )
-              }
-              className="ml-auto underline"
+              key={t}
+              onClick={() => setTab(t)}
+              className={`rounded px-2.5 py-0.5 ${
+                tab === t
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  : "text-zinc-500"
+              }`}
             >
-              {openReceiptId === filterRec.id
-                ? "hide import details"
-                : "import details"}
+              {t === "content" ? "Content" : "Sessions"}
             </button>
-          </div>
-        )}
-        {shownReceipt && <ImportReceipt rec={shownReceipt} />}
-
-        <ul className="mt-1 space-y-1.5">
-          {filteredSi.map(({ rec, it }) => {
-            const d = rec.decisions.find((x) => x.itemId === it.id);
-            const tags: string[] = [];
-            if (d?.edited) tags.push("edited");
-            if (d && d.refineAttempts > 0)
-              tags.push(`refined ×${d.refineAttempts}`);
-            if (d && d.remixCount > 0) tags.push("remixed");
-            return (
-              <li
-                key={`${rec.id}:${it.id}`}
-                className="flex items-center justify-between gap-2 rounded-md border border-zinc-200 p-2 text-xs dark:border-zinc-800"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium">
-                    {it.title || contentType(it.contentType)?.label}
-                  </p>
-                  <p className="truncate text-zinc-500">
-                    {contentType(it.contentType)?.label}
-                    {" · from "}
-                    <button
-                      onClick={() => {
-                        setFilter(rec.id);
-                        setOpenReceiptId(null);
-                      }}
-                      className="text-blue-600 underline"
-                    >
-                      {rec.name}
-                    </button>
-                    {tags.length ? ` · ${tags.join(" · ")}` : ""}
-                  </p>
-                </div>
-                <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800">
-                  draft
-                </span>
-              </li>
-            );
-          })}
-
-          {showOther &&
-            MOCK_LIBRARY_ITEMS.map((m) => (
-              <li
-                key={m.title}
-                className="flex items-center justify-between gap-2 rounded-md border border-zinc-200 p-2 text-xs opacity-60 dark:border-zinc-800"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{m.title}</p>
-                  <p className="truncate text-zinc-500">
-                    {m.type} · from {m.from} · {m.modified}
-                  </p>
-                </div>
-              </li>
-            ))}
-        </ul>
-
-        <p className="mt-3 text-[11px] text-zinc-400">
-          One list — filter by <b>Smart Import</b> or a session. Every generated
-          item links back to its import via <b>from:</b>, any time you return.
-        </p>
+          ))}
+        </div>
+        <button
+          onClick={p.onStart}
+          className="ml-auto rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white"
+        >
+          + New Smart Import
+        </button>
       </div>
+
+      {justCreated && (
+        <div className="flex items-start gap-2 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm dark:border-emerald-900 dark:bg-emerald-950/30">
+          <div className="min-w-0 flex-1">
+            <p className="font-medium text-emerald-800 dark:text-emerald-200">
+              &#10003; {justCreated.outcome.kept}{" "}
+              {justCreated.outcome.kept === 1 ? "activity" : "activities"} created
+              from &ldquo;{justCreated.name}&rdquo;
+            </p>
+            <p className="mt-0.5 text-xs text-emerald-700 dark:text-emerald-300">
+              Done in one pass &mdash; roughly{" "}
+              <b>{Math.max(justCreated.outcome.kept * 7, 5)} min</b> of manual
+              authoring. In your library as drafts, filtered below to this import.
+            </p>
+          </div>
+          <button
+            onClick={p.clearJustCreated}
+            className="shrink-0 text-xs text-emerald-700 underline dark:text-emerald-300"
+          >
+            dismiss
+          </button>
+        </div>
+      )}
+
+      {p.imports.length === 0 ? (
+        <div className="rounded-md border border-dashed border-zinc-300 p-6 text-center text-sm text-zinc-500 dark:border-zinc-700">
+          No Smart Import content yet.{" "}
+          <button onClick={p.onStart} className="text-blue-600 underline">
+            Start a Smart Import
+          </button>
+          .
+        </div>
+      ) : tab === "content" ? (
+        <div>
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+            <label className="flex items-center gap-1 text-zinc-500">
+              Show
+              <select
+                value={p.filter}
+                onChange={(e) => {
+                  p.setFilter(e.target.value);
+                  setDetailsOpen(false);
+                }}
+                className="rounded border border-zinc-300 px-1.5 py-0.5 text-[11px] dark:border-zinc-700 dark:bg-zinc-900"
+              >
+                <option value="">All Smart Import content</option>
+                {byRecency.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {"↳ "}
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span className="text-zinc-400">{contentRows.length} items</span>
+          </div>
+
+          {filterRec && (
+            <div className="mb-2 rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-2 text-[11px] dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <b className="text-zinc-600 dark:text-zinc-300">
+                  {filterRec.name}
+                </b>
+                <span className="text-zinc-500">
+                  &middot; {filterRec.source.kind === "url" ? "URL" : "text"}{" "}
+                  source &middot; {relTime(filterRec.createdAt)}
+                </span>
+                <button
+                  onClick={() => setDetailsOpen((v) => !v)}
+                  className="ml-auto text-blue-600 underline"
+                >
+                  {detailsOpen ? "hide details" : "import details"}
+                </button>
+              </div>
+              <p className="mt-1 flex items-center gap-1.5 font-mono text-zinc-400">
+                {siUrl(filterRec.id)}
+                <button
+                  onClick={() => {
+                    try {
+                      navigator.clipboard?.writeText(
+                        "https://" + siUrl(filterRec.id),
+                      );
+                    } catch {
+                      /* ignore */
+                    }
+                  }}
+                  className="rounded border border-zinc-300 px-1 dark:border-zinc-700"
+                >
+                  copy
+                </button>
+              </p>
+            </div>
+          )}
+          {detailsOpen && filterRec && <ImportReceipt rec={filterRec} />}
+
+          <ul className="mt-1 space-y-1.5">
+            {contentRows.map(({ rec, it }) => {
+              const d = rec.decisions.find((x) => x.itemId === it.id);
+              const tags: string[] = [];
+              if (d?.edited) tags.push("edited");
+              if (d && d.refineAttempts > 0)
+                tags.push(`refined ×${d.refineAttempts}`);
+              if (d && d.remixCount > 0) tags.push("remixed");
+              return (
+                <li
+                  key={`${rec.id}:${it.id}`}
+                  className="flex items-center justify-between gap-2 rounded-md border border-zinc-200 p-2 text-xs dark:border-zinc-800"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">
+                      {it.title || contentType(it.contentType)?.label}
+                    </p>
+                    <p className="truncate text-zinc-500">
+                      {contentType(it.contentType)?.label}
+                      {" · from "}
+                      <button
+                        onClick={() => {
+                          p.setFilter(rec.id);
+                          setDetailsOpen(false);
+                        }}
+                        className="text-blue-600 underline"
+                      >
+                        {rec.name}
+                      </button>
+                      {tags.length ? ` · ${tags.join(" · ")}` : ""}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800">
+                    draft
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+
+          <p className="mt-3 text-[11px] text-zinc-400">
+            One list. Filter to a session, or follow any item&rsquo;s{" "}
+            <b>from:</b> link back to its import &mdash; any time you return.
+          </p>
+        </div>
+      ) : (
+        <ul className="space-y-1.5 text-xs">
+          {byRecency.map((rec) => (
+            <li
+              key={rec.id}
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-zinc-200 p-2.5 dark:border-zinc-800"
+            >
+              <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                DONE
+              </span>
+              <b className="text-zinc-700 dark:text-zinc-200">{rec.name}</b>
+              <span className="text-zinc-400">
+                {rec.source.kind === "url" ? "URL" : "text"} &middot;{" "}
+                {rec.items.length}{" "}
+                {rec.items.length === 1 ? "activity" : "activities"} &middot;{" "}
+                {relTime(rec.createdAt)}
+              </span>
+              <button
+                onClick={() => {
+                  p.setFilter(rec.id);
+                  setTab("content");
+                }}
+                className="ml-auto rounded border border-zinc-300 px-2 py-0.5 text-blue-600 dark:border-zinc-700"
+              >
+                See content
+              </button>
+              <button
+                onClick={() =>
+                  p.setImports((prev) => prev.filter((r) => r.id !== rec.id))
+                }
+                title="Remove import"
+                aria-label="Remove import"
+                className="rounded px-1 text-zinc-400 hover:text-red-500"
+              >
+                &times;
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
