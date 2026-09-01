@@ -178,6 +178,27 @@ export interface VariantSplit {
   headline: Headline;
 }
 
+export interface ExperienceMetrics {
+  /** How many finished imports carry a survey answer. */
+  ratingN: number;
+  ratingAvg: number | null;
+  /** Counts by star, index 1..5 (index 0 unused). */
+  ratingDist: number[];
+  again: { yes: number; maybe: number; no: number; unanswered: number };
+  comments: Array<{
+    text: string;
+    rating: number;
+    again: string | null;
+    importName: string;
+    at: string;
+  }>;
+  /** How many finished imports carry step timings. */
+  timedN: number;
+  medianBuildMs: number | null;
+  medianReviewMs: number | null;
+  medianTotalMs: number | null;
+}
+
 export interface DashboardMetrics {
   generatedAt: string;
   empty: boolean;
@@ -188,6 +209,7 @@ export interface DashboardMetrics {
     eventCount: number;
   };
   headline: Headline;
+  experience: ExperienceMetrics;
   variantSplit: VariantSplit[];
   gate: {
     outcome: OutcomeBreakdown;
@@ -262,6 +284,56 @@ function computeHeadline(recs: ImportRecord[]): Headline {
     medianEditChars: median(edited.map((d) => Math.abs(d.charsDelta as number))),
     refineActions: decs.reduce((s, d) => s + (d.refineAttempts ?? 0), 0),
     discards: recs.reduce((s, r) => s + (r.outcome?.discarded ?? 0), 0),
+  };
+}
+
+function computeExperience(recs: ImportRecord[]): ExperienceMetrics {
+  const rated = recs.filter((r) => r.feedback);
+  const ratings = rated.map((r) => r.feedback!.rating).filter((n) => n > 0);
+  const ratingDist = [0, 0, 0, 0, 0, 0];
+  for (const n of ratings) if (n >= 1 && n <= 5) ratingDist[n]++;
+
+  const again = { yes: 0, maybe: 0, no: 0, unanswered: 0 };
+  for (const r of rated) {
+    const a = r.feedback!.again;
+    if (a === "yes") again.yes++;
+    else if (a === "maybe") again.maybe++;
+    else if (a === "no") again.no++;
+    else again.unanswered++;
+  }
+
+  const comments = rated
+    .filter((r) => r.feedback!.comment.trim())
+    .map((r) => ({
+      text: r.feedback!.comment.trim(),
+      rating: r.feedback!.rating,
+      again: r.feedback!.again,
+      importName: r.name,
+      at: new Date(r.feedback!.submittedAt).toISOString(),
+    }))
+    .sort((a, b) => b.at.localeCompare(a.at));
+
+  const builds = recs.map((r) => r.buildMs).filter((n): n is number => n != null);
+  const reviews = recs
+    .map((r) => r.reviewMs)
+    .filter((n): n is number => n != null);
+  const totals = recs
+    .filter((r) => r.buildMs != null || r.reviewMs != null)
+    .map((r) => (r.buildMs ?? 0) + (r.reviewMs ?? 0));
+
+  return {
+    ratingN: ratings.length,
+    ratingAvg: ratings.length
+      ? Math.round((ratings.reduce((s, n) => s + n, 0) / ratings.length) * 10) /
+        10
+      : null,
+    ratingDist,
+    again,
+    comments,
+    timedN: totals.length,
+    medianBuildMs: median(builds),
+    medianReviewMs: median(reviews),
+    medianTotalMs: median(totals),
   };
 }
 
@@ -484,6 +556,7 @@ export function computeMetrics(
       eventCount: events.length,
     },
     headline: computeHeadline(withDec),
+    experience: computeExperience(withDec),
     variantSplit,
     gate: { outcome, byContentType, bySourceKind, byEngine },
     feedback: { refineSteers, discardReasons, attemptLoops },

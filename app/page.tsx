@@ -132,6 +132,8 @@ export default function Page() {
   // time is deliberately excluded.
   const [flowStartedAt, setFlowStartedAt] = useState<number | null>(null);
   const [buildMs, setBuildMs] = useState<number | null>(null);
+  // Timestamp the generated set landed — start of step 3 (review & approve).
+  const [generatedAt, setGeneratedAt] = useState<number | null>(null);
 
   useEffect(() => {
     fetchImports().then(setAllImports).catch(() => {});
@@ -248,6 +250,7 @@ export default function Page() {
       if (!res.ok) throw new Error(data.error ?? "generation failed");
       setResult(data);
       setBuildMs(flowStartedAt ? Date.now() - flowStartedAt : null);
+      setGeneratedAt(Date.now());
       setItemState(
         Object.fromEntries(
           data.items.map((i: RenderedItem) => [i.id, "approved" as ItemState]),
@@ -487,6 +490,7 @@ export default function Page() {
       decisions,
       items: recordItems,
       buildMs: buildMs ?? undefined,
+      reviewMs: generatedAt ? Date.now() - generatedAt : undefined,
     };
     saveImport(record);
     setAllImports((prev) => [record, ...prev.filter((r) => r.id !== record.id)]);
@@ -518,6 +522,7 @@ export default function Page() {
     setScreen("configure");
     setFlowStartedAt(null);
     setBuildMs(null);
+    setGeneratedAt(null);
   }
 
   /** One click from the shell straight into Configure. */
@@ -574,15 +579,7 @@ export default function Page() {
             <span className="text-sm font-semibold">Smart Import</span>
             <span className="ml-2 text-xs text-zinc-400">Workspace</span>
           </div>
-          <div className="flex items-center gap-3">
-            <a
-              href="/dashboard"
-              className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-            >
-              Dashboard
-            </a>
-            <VariantToggle value={uiVariant} onChange={setUiVariant} />
-          </div>
+          <VariantToggle value={uiVariant} onChange={setUiVariant} />
         </div>
 
         {error && (
@@ -670,15 +667,7 @@ export default function Page() {
         <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
           <div className="flex items-start justify-between gap-3">
             <h1 className="text-lg font-semibold">Smart Import</h1>
-            <div className="flex items-center gap-3">
-              <a
-                href="/dashboard"
-                className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-              >
-                Dashboard
-              </a>
-              <VariantToggle value={uiVariant} onChange={setUiVariant} />
-            </div>
+            <VariantToggle value={uiVariant} onChange={setUiVariant} />
           </div>
           <Stepper screen={screen} />
           <p className="mt-1 text-xs text-zinc-400">
@@ -3171,9 +3160,16 @@ function SmartImportHome(p: {
             </button>
           ))}
         </div>
+        <a
+          href="/dashboard"
+          className="ml-auto text-xs text-zinc-400 underline decoration-dotted underline-offset-2 hover:text-zinc-700 dark:hover:text-zinc-200"
+          title="H5P team only — output quality & experience metrics"
+        >
+          Team evals &#8599;
+        </a>
         <button
           onClick={p.onStart}
-          className="ml-auto rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white"
+          className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white"
         >
           + New Smart Import
         </button>

@@ -93,6 +93,11 @@ export interface ImportRecord {
    * approve time is excluded. Absent on records made before this was tracked.
    */
   buildMs?: number;
+  /**
+   * Wall-clock ms spent in step 3 — from the generated set landing to
+   * "Create" (review, edit, refine, remix, discard). Absent on older records.
+   */
+  reviewMs?: number;
 }
 
 export async function fetchImports(): Promise<ImportRecord[]> {
