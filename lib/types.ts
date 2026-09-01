@@ -2,9 +2,27 @@
 
 export type SourceKind = "text" | "url";
 
-/** One educator-defined guided-brief parameter. */
+/** @deprecated superseded by BriefField — kept only so old saved templates parse. */
 export interface BriefParam {
   label: string;
+  value: string;
+}
+
+export type BriefFieldType = "select" | "text" | "number";
+
+/**
+ * One row of a guided brief. The educator designs these in the brief's edit
+ * mode — label, control type, the allowed values of a dropdown, whether it is
+ * required — then the saved brief renders exactly those fields for filling in.
+ */
+export interface BriefField {
+  id: string;
+  label: string;
+  type: BriefFieldType;
+  /** Allowed values — used when `type === "select"`. */
+  options: string[];
+  required: boolean;
+  /** The educator's filled-in value (empty until picked / typed). */
   value: string;
 }
 
@@ -29,21 +47,15 @@ export interface ImportIntent {
   /** null = writing from scratch (editable, improvable); else a preset id (used as-is). */
   promptPresetId: string | null;
 
-  /** Live when authoringMode === "brief". */
-  learningGoal: string;
-  audienceLevel: "beginner" | "intermediate" | "advanced";
+  /**
+   * Live when authoringMode === "brief". Emphasis and Volume stay fixed — the
+   * recommendation engine reads them as structured values. Everything else the
+   * educator says is in `briefFields`, a form they design and can save by name.
+   */
   emphasis: "assessment" | "concept_explanation" | "balanced";
   volume: "light" | "standard" | "thorough";
-  /**
-   * Live when authoringMode === "brief". Educator-defined extra parameters —
-   * label + value pairs appended to the generation instruction. The brief
-   * "format" (the set of labels) is what gets saved as a reusable template.
-   * Phase 2: admins publish brief formats org-wide.
-   */
-  briefExtras?: BriefParam[];
+  briefFields: BriefField[];
 
-  /** Applies in both modes. */
-  language: string;
   /** "generate" new items, or "extract" questions already present in the source. */
   mode: "generate" | "extract";
   /** H5P content-type machine names the educator wants generated. */

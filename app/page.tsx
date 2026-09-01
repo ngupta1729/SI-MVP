@@ -7,7 +7,7 @@ import {
   preset as findPreset,
   type IntentPreset,
 } from "@/lib/intent-presets";
-import { useTemplates, type SavedTemplate } from "@/lib/templates";
+import { useTemplates, type SavedTemplate, type SavedBrief } from "@/lib/templates";
 import {
   type ImportRecord,
   type ImportItemDecision,
@@ -17,12 +17,14 @@ import {
   intentLabel,
 } from "@/lib/import-records";
 import type {
-  BriefParam,
+  BriefField,
+  BriefFieldType,
   ImportIntent,
   TwinResult,
   SourceAnalysis,
   QuestionSignal,
 } from "@/lib/types";
+import { starterBrief, newBriefField, briefGoal, missingRequired } from "@/lib/brief";
 import H5PRender from "@/components/H5PRender";
 
 type Screen = "configure" | "activities" | "review" | "library";
@@ -69,12 +71,9 @@ const DEFAULT_INTENT: ImportIntent = {
   authoringMode: "prompt",
   prompt: "",
   promptPresetId: null,
-  learningGoal: "",
-  audienceLevel: "beginner",
   emphasis: "balanced",
   volume: "standard",
-  briefExtras: [],
-  language: "English",
+  briefFields: starterBrief(),
   mode: "generate",
   contentTypes: [],
 };
@@ -872,6 +871,7 @@ function Configure(p: {
   const [briefLoadedId, setBriefLoadedId] = useState<string | null>(null);
   const [savingBrief, setSavingBrief] = useState(false);
   const [briefSaveName, setBriefSaveName] = useState("");
+  const [briefDesign, setBriefDesign] = useState(false); // brief in edit-the-form mode
   const lastId = lib.lastUsedId;
   const [improving, setImproving] = useState(false);
   const [preImprove, setPreImprove] = useState<string | null>(null);
@@ -927,54 +927,40 @@ function Configure(p: {
   const loadedPromptEdited =
     loaded?.kind === "prompt" && loaded.prompt !== p.intent.prompt;
 
-  /* ---- guided brief: editable parameters + templates ---- */
-  const extras = p.intent.briefExtras ?? [];
-  const addExtra = () =>
-    p.setIntent((it) => ({
-      ...it,
-      briefExtras: [...(it.briefExtras ?? []), { label: "", value: "" }],
-    }));
-  const updateExtra = (i: number, patch: Partial<BriefParam>) =>
-    p.setIntent((it) => ({
-      ...it,
-      briefExtras: (it.briefExtras ?? []).map((r, j) =>
-        j === i ? { ...r, ...patch } : r,
-      ),
-    }));
-  const removeExtra = (i: number) =>
-    p.setIntent((it) => ({
-      ...it,
-      briefExtras: (it.briefExtras ?? []).filter((_, j) => j !== i),
-    }));
+  /* ---- guided brief: a form the educator can reshape and save by name ---- */
+  const fields = p.intent.briefFields ?? [];
+  const setFields = (next: BriefField[]) => set({ briefFields: next });
+  const patchField = (id: string, patch: Partial<BriefField>) =>
+    setFields(fields.map((f) => (f.id === id ? { ...f, ...patch } : f)));
+  const addField = () => setFields([...fields, newBriefField()]);
+  const removeField = (id: string) => setFields(fields.filter((f) => f.id !== id));
+  const moveField = (id: string, dir: -1 | 1) => {
+    const i = fields.findIndex((f) => f.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= fields.length) return;
+    const next = fields.slice();
+    [next[i], next[j]] = [next[j], next[i]];
+    setFields(next);
+  };
   const applyRecommendedBrief = () => {
     setBriefLoadedId(null);
-    set({
-      audienceLevel: "beginner",
-      emphasis: "balanced",
-      volume: "standard",
-      language: "English",
-      briefExtras: [],
-    });
+    setBriefDesign(false);
+    set({ emphasis: "balanced", volume: "standard", briefFields: starterBrief() });
   };
-  const currentBrief = () => ({
-    learningGoal: p.intent.learningGoal,
-    audienceLevel: p.intent.audienceLevel,
+  const currentBrief = (): SavedBrief => ({
+    fields: fields.map((f) => ({ ...f })),
     emphasis: p.intent.emphasis,
     volume: p.intent.volume,
-    language: p.intent.language,
-    extras: extras.filter((r) => r.label.trim()),
   });
   function loadBrief(t: SavedTemplate) {
     const b = t.brief;
     if (!b) return;
+    setBriefDesign(false);
     set({
       authoringMode: "brief",
-      learningGoal: b.learningGoal,
-      audienceLevel: b.audienceLevel,
       emphasis: b.emphasis,
       volume: b.volume,
-      language: b.language,
-      briefExtras: b.extras ?? [],
+      briefFields: b.fields.map((f) => ({ ...f })),
       ...(t.contentTypes?.length ? { contentTypes: t.contentTypes } : {}),
     });
     setBriefLoadedId(t.id);
@@ -983,16 +969,31 @@ function Configure(p: {
   function commitBriefSave() {
     const name = briefSaveName.trim();
     if (!name) return;
-    const id = lib.saveBrief(name, currentBrief(), bundleTypes);
+    // save the field shapes without the current fill-in values
+    const shape: SavedBrief = {
+      ...currentBrief(),
+      fields: currentBrief().fields.map((f) =>
+        f.id === "language" ? f : { ...f, value: "" },
+      ),
+    };
+    const id = lib.saveBrief(name, shape, bundleTypes);
     setBriefLoadedId(id);
+    setBriefDesign(false);
     setSavingBrief(false);
     setBriefSaveName("");
   }
   const briefLoaded = lib.templates.find((t) => t.id === briefLoadedId);
+  const briefShape = (b: SavedBrief) => ({
+    emphasis: b.emphasis,
+    volume: b.volume,
+    fields: b.fields.map((f) => ({
+      label: f.label, type: f.type, options: f.options, required: f.required,
+    })),
+  });
   const briefEdited =
-    briefLoaded?.kind === "brief" &&
-    JSON.stringify(briefLoaded.brief ?? {}) !==
-      JSON.stringify(currentBrief());
+    briefLoaded?.kind === "brief" && !!briefLoaded.brief &&
+    JSON.stringify(briefShape(briefLoaded.brief)) !==
+      JSON.stringify(briefShape(currentBrief()));
 
   return (
     <div className="space-y-6">
@@ -1244,33 +1245,28 @@ function Configure(p: {
                   ★ {t.name}
                 </button>
               ))}
+              <button
+                onClick={() => setBriefDesign((v) => !v)}
+                className={`ml-auto rounded-md border px-2 py-1 ${
+                  briefDesign
+                    ? "border-blue-600 bg-blue-600 text-white"
+                    : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                }`}
+              >
+                {briefDesign ? "Done — back to filling in" : "Customise this brief"}
+              </button>
             </div>
 
+            {briefDesign && (
+              <p className="rounded-md border border-blue-200 bg-blue-50/60 px-3 py-1.5 text-[11px] text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300">
+                Editing the form. Rename a field, switch its control, set the values a
+                dropdown allows, mark it required, add or reorder fields — then save it
+                under a name.
+              </p>
+            )}
+
+            {/* fixed rows — feed the activity recommendations */}
             <div className="divide-y divide-zinc-100 overflow-hidden rounded-md border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-              <BriefRow label="Learning goal">
-                <input
-                  value={p.intent.learningGoal}
-                  onChange={(e) => set({ learningGoal: e.target.value })}
-                  className={briefControl}
-                  placeholder="e.g. Distinguish the three plate-boundary types"
-                />
-              </BriefRow>
-              <BriefRow label="Audience">
-                <select
-                  value={p.intent.audienceLevel}
-                  onChange={(e) =>
-                    set({
-                      audienceLevel: e.target
-                        .value as ImportIntent["audienceLevel"],
-                    })
-                  }
-                  className={briefControl}
-                >
-                  <option value="beginner">Beginner</option>
-                  <option value="intermediate">Intermediate</option>
-                  <option value="advanced">Advanced</option>
-                </select>
-              </BriefRow>
               <BriefRow label="Emphasis">
                 <select
                   value={p.intent.emphasis}
@@ -1297,51 +1293,90 @@ function Configure(p: {
                   <option value="thorough">Thorough (~10)</option>
                 </select>
               </BriefRow>
-              <BriefRow label="Language">
-                <input
-                  value={p.intent.language}
-                  onChange={(e) => set({ language: e.target.value })}
-                  className={briefControl}
-                />
-              </BriefRow>
-
-              {extras.map((row, i) => (
-                <div key={i} className="flex items-center gap-2 px-3 py-1.5">
-                  <input
-                    value={row.label}
-                    placeholder="parameter name"
-                    onChange={(e) => updateExtra(i, { label: e.target.value })}
-                    className="w-32 shrink-0 rounded border border-zinc-300 p-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
-                  />
-                  <input
-                    value={row.value}
-                    placeholder="value the AI should follow"
-                    onChange={(e) => updateExtra(i, { value: e.target.value })}
-                    className={briefControl}
-                  />
-                  <button
-                    onClick={() => removeExtra(i)}
-                    title="Remove parameter"
-                    aria-label="Remove parameter"
-                    className="shrink-0 rounded px-1 text-zinc-400 hover:bg-zinc-100 hover:text-red-500 dark:hover:bg-zinc-800"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-
-              <button
-                onClick={addExtra}
-                className="w-full px-3 py-2 text-left text-xs font-medium text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
-              >
-                + Add parameter
-                {extras.length === 0 && (
-                  <span className="ml-1 font-normal text-zinc-400">
-                    — e.g. Curriculum, Tone, Reading level, Things to avoid
-                  </span>
-                )}
-              </button>
+              <p className="px-3 py-1.5 text-[10px] text-zinc-400">
+                Emphasis and Volume are built in — they feed the activity
+                recommendations. Everything below is yours to design.
+              </p>
             </div>
+
+            {/* the designed fields */}
+            <div className="divide-y divide-zinc-100 overflow-hidden rounded-md border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+              {fields.map((f, i) =>
+                briefDesign ? (
+                  <BriefFieldEditor
+                    key={f.id}
+                    field={f}
+                    first={i === 0}
+                    last={i === fields.length - 1}
+                    onPatch={(patch) => patchField(f.id, patch)}
+                    onMove={(dir) => moveField(f.id, dir)}
+                    onRemove={() => removeField(f.id)}
+                  />
+                ) : (
+                  <BriefRow
+                    key={f.id}
+                    label={(f.label || "Untitled") + (f.required ? " *" : "")}
+                  >
+                    {f.type === "select" ? (
+                      <select
+                        value={f.value}
+                        onChange={(e) => patchField(f.id, { value: e.target.value })}
+                        className={briefControl}
+                      >
+                        <option value="">Choose…</option>
+                        {f.options
+                          .filter((o) => o.trim())
+                          .map((o) => (
+                            <option key={o} value={o}>
+                              {o}
+                            </option>
+                          ))}
+                      </select>
+                    ) : (
+                      <input
+                        type={f.type === "number" ? "number" : "text"}
+                        value={f.value}
+                        onChange={(e) => patchField(f.id, { value: e.target.value })}
+                        className={briefControl}
+                        placeholder={
+                          f.id === "goal"
+                            ? "e.g. Distinguish the three plate-boundary types"
+                            : "value the AI should follow"
+                        }
+                      />
+                    )}
+                  </BriefRow>
+                ),
+              )}
+
+              {fields.length === 0 && !briefDesign && (
+                <p className="px-3 py-3 text-xs text-zinc-400">
+                  This brief has no fields.{" "}
+                  <button
+                    onClick={() => setBriefDesign(true)}
+                    className="underline"
+                  >
+                    Customise it
+                  </button>{" "}
+                  to add some.
+                </p>
+              )}
+
+              {briefDesign && (
+                <button
+                  onClick={addField}
+                  className="w-full px-3 py-2 text-left text-xs font-medium text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+                >
+                  + Add field
+                </button>
+              )}
+            </div>
+
+            {!briefDesign && missingRequired(p.intent).length > 0 && (
+              <p className="text-[11px] text-amber-600">
+                Still needs: {missingRequired(p.intent).join(", ")}
+              </p>
+            )}
 
             <div className="flex flex-wrap items-center gap-2 text-xs">
               {savingBrief ? (
@@ -1360,7 +1395,12 @@ function Configure(p: {
                     <button
                       onClick={() =>
                         lib.update(briefLoaded.id, {
-                          brief: currentBrief(),
+                          brief: {
+                            ...currentBrief(),
+                            fields: currentBrief().fields.map((f) =>
+                              f.id === "language" ? f : { ...f, value: "" },
+                            ),
+                          },
                           contentTypes: bundleTypes,
                         })
                       }
@@ -1495,6 +1535,120 @@ function BriefRow({
     <div className="flex items-center gap-3 px-3 py-1.5">
       <span className="w-28 shrink-0 text-xs text-zinc-500">{label}</span>
       {children}
+    </div>
+  );
+}
+
+/** Design-mode editor for one brief field: label · control type · dropdown values · required. */
+function BriefFieldEditor(p: {
+  field: BriefField;
+  first: boolean;
+  last: boolean;
+  onPatch: (patch: Partial<BriefField>) => void;
+  onMove: (dir: -1 | 1) => void;
+  onRemove: () => void;
+}) {
+  const { field: f } = p;
+  const setOptions = (opts: string[]) => p.onPatch({ options: opts });
+  const iconBtn =
+    "shrink-0 rounded border border-zinc-300 px-1 text-xs leading-none text-zinc-400 hover:border-blue-500 hover:text-blue-600 disabled:opacity-30 dark:border-zinc-700";
+
+  return (
+    <div className="space-y-2 bg-zinc-50/60 px-3 py-2.5 dark:bg-zinc-900/40">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <input
+          value={f.label}
+          placeholder="Field name"
+          onChange={(e) => p.onPatch({ label: e.target.value })}
+          className="min-w-0 flex-1 rounded border border-zinc-300 p-1 text-sm font-medium dark:border-zinc-700 dark:bg-zinc-900"
+        />
+        <div className="inline-flex overflow-hidden rounded border border-zinc-300 text-[11px] dark:border-zinc-700">
+          {(["select", "text", "number"] as BriefFieldType[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => p.onPatch({ type: t })}
+              className={`px-1.5 py-0.5 ${
+                f.type === t
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  : "text-zinc-500"
+              }`}
+            >
+              {t === "select" ? "Dropdown" : t === "text" ? "Text" : "Number"}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => p.onMove(-1)}
+          disabled={p.first}
+          title="Move up"
+          aria-label="Move field up"
+          className={iconBtn}
+        >
+          ▲
+        </button>
+        <button
+          onClick={() => p.onMove(1)}
+          disabled={p.last}
+          title="Move down"
+          aria-label="Move field down"
+          className={iconBtn}
+        >
+          ▼
+        </button>
+        <button
+          onClick={p.onRemove}
+          title="Remove field"
+          aria-label="Remove field"
+          className="shrink-0 rounded px-1 text-zinc-400 hover:bg-zinc-200 hover:text-red-500 dark:hover:bg-zinc-800"
+        >
+          ×
+        </button>
+      </div>
+
+      {f.type === "select" && (
+        <div className="space-y-1 pl-2">
+          <p className="text-[10px] uppercase tracking-wide text-zinc-400">
+            Allowed values
+          </p>
+          {f.options.map((opt, oi) => (
+            <div key={oi} className="flex items-center gap-1">
+              <input
+                value={opt}
+                placeholder="an option"
+                onChange={(e) =>
+                  setOptions(
+                    f.options.map((o, j) => (j === oi ? e.target.value : o)),
+                  )
+                }
+                className="min-w-0 flex-1 rounded border border-zinc-300 p-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+              />
+              <button
+                onClick={() => setOptions(f.options.filter((_, j) => j !== oi))}
+                title="Remove value"
+                aria-label="Remove value"
+                className="shrink-0 rounded px-1 text-zinc-400 hover:text-red-500"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={() => setOptions([...f.options, ""])}
+            className="text-[11px] font-medium text-blue-600"
+          >
+            + value
+          </button>
+        </div>
+      )}
+
+      <label className="flex w-fit items-center gap-1.5 text-[11px] text-zinc-500">
+        <input
+          type="checkbox"
+          checked={f.required}
+          onChange={(e) => p.onPatch({ required: e.target.checked })}
+        />
+        Required
+      </label>
     </div>
   );
 }
@@ -1713,7 +1867,7 @@ function Activities(p: {
     .join(" + ");
   const intentBit =
     p.intent.authoringMode === "brief"
-      ? `brief — ${p.intent.learningGoal || "no goal set"}, ${p.intent.emphasis} emphasis`
+      ? `brief — ${briefGoal(p.intent) || "no goal set"}, ${p.intent.emphasis} emphasis`
       : p.intent.prompt.trim()
         ? `“${p.intent.prompt.trim().slice(0, 90)}${p.intent.prompt.trim().length > 90 ? "…" : ""}”`
         : `${p.intent.emphasis} emphasis, ${p.intent.volume} volume`;
@@ -2521,7 +2675,7 @@ function Workspace(p: {
           </p>
           <p className="truncate">
             {p.intent.authoringMode === "brief"
-              ? `Brief: ${p.intent.learningGoal || "—"}`
+              ? `Brief: ${briefGoal(p.intent) || "—"}`
               : p.intent.prompt || "(defaults)"}
           </p>
           <p>{p.intent.contentTypes.length} activity type(s)</p>

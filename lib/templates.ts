@@ -4,7 +4,14 @@
 // exposed through useSyncExternalStore. System templates live in lib/intent-presets.ts.
 
 import { useCallback, useSyncExternalStore } from "react";
-import type { BriefParam, ImportIntent } from "./types";
+import type { BriefField, ImportIntent } from "./types";
+
+/** A saved guided brief — the designed fields + their default values + emphasis/volume. */
+export interface SavedBrief {
+  fields: BriefField[];
+  emphasis: ImportIntent["emphasis"];
+  volume: ImportIntent["volume"];
+}
 
 export interface SavedTemplate {
   id: string;
@@ -14,13 +21,7 @@ export interface SavedTemplate {
   usedAt?: number;
   prompt?: string;
   mode?: "generate" | "extract";
-  brief?: Pick<
-    ImportIntent,
-    "learningGoal" | "audienceLevel" | "emphasis" | "volume" | "language"
-  > & {
-    /** Educator-defined extra parameters — the reusable "format". */
-    extras?: BriefParam[];
-  };
+  brief?: SavedBrief;
   /** Optional bundled activity selection — makes reuse one step: pick, add source, generate. */
   contentTypes?: string[];
 }
@@ -127,7 +128,7 @@ export function useTemplates() {
   const saveBrief = useCallback(
     (
       name: string,
-      brief: NonNullable<SavedTemplate["brief"]>,
+      brief: SavedBrief,
       contentTypes?: string[],
     ) => {
       const id = crypto.randomUUID();

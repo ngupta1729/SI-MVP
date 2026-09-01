@@ -95,7 +95,10 @@ export function saveImport(record: ImportRecord): void {
 
 /** The receipt's "Intent" line. */
 export function intentLabel(i: ImportIntent): string {
-  return i.authoringMode === "brief"
-    ? `Brief — ${i.learningGoal || "no goal set"} · ${i.audienceLevel} · ${i.emphasis}`
-    : i.prompt || "(defaults)";
+  if (i.authoringMode !== "brief") return i.prompt || "(defaults)";
+  const filled = (i.briefFields ?? [])
+    .filter((f) => f.label.trim() && f.value.trim())
+    .map((f) => `${f.label.trim()}: ${f.value.trim()}`);
+  filled.push(`${i.emphasis} emphasis`, `${i.volume} volume`);
+  return `Brief — ${filled.join(" · ")}`;
 }
