@@ -482,12 +482,16 @@ export default function Page() {
   }
 
   /** Remove one sub-question from a composite activity's contentJson. */
-  function discardQuestionInFlow(itemId: string, qi: number) {
+  function discardQuestionInFlow(itemId: string, qi: number, reason?: string) {
     const item = result?.items.find((i) => i.id === itemId);
     if (!item) return;
     const cur = edits[itemId] ?? item.contentJson;
     setEdits((e) => ({ ...e, [itemId]: dropQuestion(cur, qi) }));
-    logReviewEvent({ action: "discard", itemId, reason: `Q${qi + 1} removed` });
+    logReviewEvent({
+      action: "discard",
+      itemId,
+      reason: `Q${qi + 1} removed${reason ? ` — ${reason}` : ""}`,
+    });
   }
 
   function finishCreate() {
@@ -2635,7 +2639,7 @@ function Review(p: {
   onRemix: (itemId: string, toType: string) => void;
   onDiscard: (itemId: string, reason: string) => void;
   onRefineQuestion: (itemId: string, qi: number, ask: string) => void;
-  onDiscardQuestion: (itemId: string, qi: number) => void;
+  onDiscardQuestion: (itemId: string, qi: number, reason?: string) => void;
   source: TwinSource;
   intent: ImportIntent;
   onLog: (text: string) => void;
@@ -2850,7 +2854,7 @@ function Review(p: {
                   const fire = (reason: string) => {
                     setMenu(null);
                     if (q != null) {
-                      p.onDiscardQuestion(item.id, q);
+                      p.onDiscardQuestion(item.id, q, reason || undefined);
                       setMenuScope("all");
                     } else p.onDiscard(item.id, reason);
                   };
@@ -2881,32 +2885,21 @@ function Review(p: {
                       )}
                       <p className="mb-1 text-zinc-500">
                         {q != null
-                          ? `Remove question ${q + 1} from this activity.`
+                          ? `Remove question ${q + 1} because…`
                           : "Discard because…"}
                       </p>
-                      {q != null ? (
-                        <button
-                          onClick={() => fire("")}
-                          className="rounded border border-red-300 bg-white px-1.5 py-0.5 dark:border-red-800 dark:bg-zinc-900"
-                        >
-                          Remove question {q + 1}
-                        </button>
-                      ) : (
-                        <>
-                          <div className="flex flex-wrap gap-1">
-                            {DISCARD_REASONS.map((r) => (
-                              <button
-                                key={r}
-                                onClick={() => fire(r)}
-                                className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 dark:border-zinc-700 dark:bg-zinc-900"
-                              >
-                                {r}
-                              </button>
-                            ))}
-                          </div>
-                          <MenuFreeText label="Discard" onSubmit={fire} />
-                        </>
-                      )}
+                      <div className="flex flex-wrap gap-1">
+                        {DISCARD_REASONS.map((r) => (
+                          <button
+                            key={r}
+                            onClick={() => fire(r)}
+                            className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 dark:border-zinc-700 dark:bg-zinc-900"
+                          >
+                            {r}
+                          </button>
+                        ))}
+                      </div>
+                      <MenuFreeText label="Discard" onSubmit={fire} />
                     </div>
                   );
                 })()}
