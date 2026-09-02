@@ -2655,6 +2655,9 @@ function Review(p: {
   const openMenu = (
     m: { id: string; kind: "regen" | "remix" | "discard" } | null,
   ) => {
+    // Edit / Refine / Remix / Discard are mutually exclusive — opening a menu
+    // leaves edit mode for that item.
+    if (m && p.itemState[m.id] === "editing") p.setItem(m.id, "approved");
     setMenu(m);
     setMenuScope("all");
   };
@@ -2712,13 +2715,16 @@ function Review(p: {
                 ) : (
                   <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
                     <button
-                      onClick={() =>
-                        p.setItem(
-                          item.id,
-                          st === "editing" ? "approved" : "editing",
-                        )
-                      }
-                      className={`rounded border px-1.5 py-0.5 ${
+                      disabled={st === "refining" || st === "remixing"}
+                      onClick={() => {
+                        if (st === "editing") {
+                          p.setItem(item.id, "approved");
+                        } else {
+                          openMenu(null); // leave any refine/remix/discard menu
+                          p.setItem(item.id, "editing");
+                        }
+                      }}
+                      className={`rounded border px-1.5 py-0.5 disabled:opacity-40 ${
                         st === "editing"
                           ? "border-blue-600 font-medium"
                           : "border-zinc-300 dark:border-zinc-700"
