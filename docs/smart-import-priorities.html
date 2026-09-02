@@ -1,0 +1,592 @@
+<title>Smart Import Priorities</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --paper:#f4f5f7; --surface:#ffffff; --surface-2:#fafbfc;
+    --ink:#1a1d24; --ink-soft:#545a68; --ink-faint:#8a8f9c;
+    --line:#e0e3e9; --line-soft:#ececf0;
+    --accent:#274a7c; --accent-ink:#1d3a63; --accent-bg:#e8eff7;
+    --now:#274a7c;   --now-bg:#e8eff7;
+    --next:#1c6353;  --next-bg:#e0efe9;
+    --later:#6a4a86; --later-bg:#ede7f3;
+    --today:#9a4736; --today-bg:#f6ebe8;
+    --vh:#8a2f22; --h:#9a4736; --m:#7a5c14; --l:#5a6270;
+    --gold:#b07d16;
+    --shadow: 0 1px 2px rgba(20,30,50,.04), 0 6px 20px rgba(20,30,50,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#111218; --surface:#1a1c24; --surface-2:#1f222b;
+      --ink:#e7e9ef; --ink-soft:#a2a8b6; --ink-faint:#797f8e;
+      --line:#2c303a; --line-soft:#23262f;
+      --accent:#86aede; --accent-ink:#a9c6ec; --accent-bg:#1a2536;
+      --now:#86aede; --now-bg:#1a2536;
+      --next:#7ecbb6; --next-bg:#12271f;
+      --later:#c3a7dd; --later-bg:#241a2f;
+      --today:#e0917f; --today-bg:#2c1c17;
+      --vh:#e88a76; --h:#e0917f; --m:#d9be79; --l:#9aa2b0;
+      --gold:#e3b341;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.28);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#111218; --surface:#1a1c24; --surface-2:#1f222b;
+    --ink:#e7e9ef; --ink-soft:#a2a8b6; --ink-faint:#797f8e;
+    --line:#2c303a; --line-soft:#23262f;
+    --accent:#86aede; --accent-ink:#a9c6ec; --accent-bg:#1a2536;
+    --now:#86aede; --now-bg:#1a2536;
+    --next:#7ecbb6; --next-bg:#12271f;
+    --later:#c3a7dd; --later-bg:#241a2f;
+    --today:#e0917f; --today-bg:#2c1c17;
+    --vh:#e88a76; --h:#e0917f; --m:#d9be79; --l:#9aa2b0;
+      --gold:#e3b341;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.28);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: clamp(1.4rem,4vw,3rem) clamp(.9rem,4vw,2.2rem) 5rem; }
+  code { font-family: "IBM Plex Mono", monospace; font-size: .85em; background: var(--surface-2); border: 1px solid var(--line-soft); padding: .04em .3em; border-radius: 3px; }
+
+  .eyebrow { font-family: "IBM Plex Mono", monospace; font-size: .68rem; letter-spacing: .15em; text-transform: uppercase; color: var(--ink-faint); }
+  h1 { font-weight: 700; font-size: clamp(1.7rem,4.5vw,2.4rem); letter-spacing: -0.02em; line-height: 1.08; margin: .45rem 0 .5rem; }
+  .sub { color: var(--ink-soft); max-width: 66ch; margin: 0 0 1.3rem; font-size: .92rem; }
+  .sub b { color: var(--ink); }
+
+
+  .flow { margin: 0 0 1.6rem; }
+  .flow-steps { display: grid; grid-template-columns: 1fr; gap: .5rem; }
+  @media (min-width: 780px) { .flow-steps { grid-template-columns: repeat(4, 1fr); gap: 0; } }
+  .fstep { position: relative; border: 1px solid var(--line); border-top: 3px solid var(--accent); border-radius: 10px; background: var(--surface); padding: .7rem .8rem .75rem; }
+  @media (min-width: 780px) {
+    .fstep { border-radius: 0; }
+    .fstep:first-child { border-top-left-radius: 10px; border-bottom-left-radius: 10px; }
+    .fstep:last-child { border-top-right-radius: 10px; border-bottom-right-radius: 10px; }
+    .fstep + .fstep { border-left: 0; }
+    .fstep + .fstep::before { content: "\203A"; position: absolute; left: -.62rem; top: 50%; transform: translateY(-50%); z-index: 2; width: 1.1rem; height: 1.1rem; display: flex; align-items: center; justify-content: center; font-size: .8rem; color: var(--ink-faint); background: var(--paper); border: 1px solid var(--line); border-radius: 999px; }
+  }
+  .fstep .fn { font-family: "IBM Plex Mono", monospace; font-size: .56rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
+  .fstep .ft { font-weight: 700; font-size: .95rem; letter-spacing: -.01em; margin: .05rem 0 .2rem; }
+  .fstep .fq { font-size: .77rem; color: var(--ink-soft); line-height: 1.35; }
+  .fstep .fg { margin-top: .45rem; font-size: .68rem; line-height: 1.4; color: var(--ink-faint); }
+  .fstep .fg b { color: var(--ink-soft); font-weight: 600; }
+  .flow-note { margin-top: .55rem; font-family: "IBM Plex Mono", monospace; font-size: .66rem; color: var(--ink-faint); }
+  .flow-note b { color: var(--ink-soft); }
+
+  .flow-data { margin-top: .5rem; }
+  .dstep { border-color: var(--today); border-top-color: var(--today); background: var(--today-bg); }
+  .dstep .fn { color: var(--today); }
+  .dstep .dm { font-family: "IBM Plex Mono", monospace; font-size: .74rem; font-weight: 600; color: var(--ink); margin: .05rem 0 .25rem; }
+  .dstep textarea { width: 100%; resize: vertical; font: inherit; font-size: .76rem; line-height: 1.4; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: .35rem .45rem; margin-bottom: .35rem; }
+  .dstep textarea:focus { outline: 2px solid var(--today); outline-offset: 1px; }
+  .dstep .dg { font-size: .66rem; line-height: 1.4; color: var(--ink-faint); }
+  .dstep .dg b { color: var(--ink-soft); font-weight: 600; }
+
+  /* column header */
+  .cols { display: none; }
+  @media (min-width: 900px) {
+    .cols { display: grid; grid-template-columns: 12.5rem 1fr 1fr 1fr; gap: 0 .8rem; padding: 0 .2rem .4rem; }
+    .cols div { font-family: "IBM Plex Mono", monospace; font-size: .64rem; letter-spacing: .09em; text-transform: uppercase; font-weight: 600; }
+    .cols .cn { color: var(--now); } .cols .cx { color: var(--next); } .cols .cl { color: var(--later); }
+  }
+
+  .band { border: 1px solid var(--line); border-radius: 13px; background: var(--surface); box-shadow: var(--shadow); margin-bottom: 1rem; overflow: hidden; }
+  .band-grid { display: grid; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { .band-grid { grid-template-columns: 12.5rem 1fr 1fr 1fr; } }
+
+  .thead {
+    padding: .85rem 1rem; background: var(--accent-bg);
+    border-bottom: 1px solid var(--line);
+  }
+  @media (min-width: 900px) { .thead { border-bottom: 0; border-right: 1px solid var(--line); } }
+  .thead .tn { font-weight: 700; font-size: 1rem; letter-spacing: -0.01em; }
+  .thead .tq { font-size: .77rem; color: var(--ink-soft); margin-top: .12rem; }
+  .thead .tk { display: inline-block; margin-top: .4rem; font-family: "IBM Plex Mono", monospace; font-size: .58rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--today); background: var(--today-bg); border-radius: 999px; padding: .1rem .45rem; }
+
+  .cell { padding: .7rem .9rem; border-top: 1px solid var(--line-soft); }
+  @media (min-width: 900px) { .cell { border-top: 0; border-right: 1px solid var(--line-soft); } .cell:last-child { border-right: 0; } }
+  .cell .ch {
+    display: none; font-family: "IBM Plex Mono", monospace; font-size: .58rem;
+    letter-spacing: .08em; text-transform: uppercase; font-weight: 600; margin-bottom: .45rem;
+  }
+  @media (max-width: 899px) { .cell .ch { display: block; } }
+  .cell.now .ch { color: var(--now); } .cell.next .ch { color: var(--next); } .cell.later .ch { color: var(--later); }
+
+  .cell ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .55rem; }
+  .cell li { font-size: .8rem; line-height: 1.34; }
+  .cell li .lhead {
+    display: block; width: 100%; text-align: left; font: inherit; color: inherit;
+    background: none; border: 0; padding: 0; cursor: default;
+  }
+  .cell li.has-why .lhead { cursor: pointer; }
+  .cell li.has-why .lhead:hover .it { color: var(--accent-ink); }
+  .cell li .wc {
+    display: none; color: var(--ink-faint); font-size: .6rem; margin-right: .25rem;
+    transition: transform .12s ease; vertical-align: .06em;
+  }
+  .cell li.has-why .wc { display: inline-block; }
+  .cell li[data-open="1"] .wc { transform: rotate(90deg); }
+  .cell li .it { font-weight: 400; color: var(--ink); }
+  .cell li .star { color: var(--gold); margin-right: .35rem; font-size: 1.15rem; line-height: 1; vertical-align: -.08em; }
+  .cell li.diff .it { font-weight: 500; }
+  .cell li .mk { display: inline-block; margin-left: .35rem; font-family: "IBM Plex Mono", monospace; font-size: .6rem; font-weight: 600; white-space: nowrap; }
+  .mk .v-VH { color: var(--vh); } .mk .v-H { color: var(--h); } .mk .v-M { color: var(--m); } .mk .v-L { color: var(--l); }
+  .mk .sep { color: var(--ink-faint); }
+  .mk .eff { color: var(--ink-faint); }
+  .cell li .proto {
+    display: inline-block; margin-left: .35rem; font-family: "IBM Plex Mono", monospace;
+    font-size: .56rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--next); background: var(--next-bg); border-radius: 999px; padding: .08rem .38rem;
+    white-space: nowrap; vertical-align: .06em;
+  }
+  .cell li .nt { display: none; color: var(--ink-faint); font-size: .72rem; margin-top: .28rem; padding-left: .85rem; border-left: 1px solid var(--line); }
+  .cell li[data-open="1"] .nt { display: block; }
+  .cell .none { font-size: .76rem; color: var(--ink-faint); font-style: italic; }
+
+  .whytoggle {
+    display: inline-flex; align-items: center; gap: .3rem; font: inherit; font-size: .72rem;
+    color: var(--ink-soft); background: none; border: 1px solid var(--line); border-radius: 6px;
+    padding: .22rem .6rem; cursor: pointer; margin: 0 0 .7rem;
+  }
+  .whytoggle:hover { border-color: var(--accent); color: var(--ink); }
+
+  .bet { margin-top: 1.8rem; border: 1px solid var(--line); border-left: 3px solid var(--today); border-radius: 11px; background: var(--today-bg); padding: .9rem 1.1rem; }
+  .bet h2 { font-size: 1rem; font-weight: 700; margin: 0 0 .5rem; }
+  .bet ol { margin: 0 0 .3rem; padding-left: 1.1rem; }
+  .bet ol li { font-size: .85rem; margin-bottom: .25rem; }
+  .bet ol li b { color: var(--ink); }
+  .bet ol li span { color: var(--ink-soft); }
+  .betnote { width: 100%; resize: vertical; font: inherit; font-size: .82rem; line-height: 1.5; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: .5rem .6rem; }
+  .betnote:focus { outline: 2px solid var(--today); outline-offset: 1px; }
+
+  .vetable { margin-top: 1.8rem; }
+  .vetable h2 { font-family: "IBM Plex Mono", monospace; font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; color: var(--ink-faint); margin: 0 0 .2rem; }
+  .vetable .vt-sub { font-size: .78rem; color: var(--ink-soft); margin: 0 0 .7rem; }
+  .vetable .vt-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); }
+  table.vt { border-collapse: collapse; width: 100%; font-size: .8rem; }
+  table.vt th, table.vt td { text-align: left; padding: .5rem .8rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  table.vt thead th { font-family: "IBM Plex Mono", monospace; font-size: .6rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); background: var(--surface-2); position: sticky; top: 0; }
+  table.vt tbody tr:last-child td { border-bottom: 0; }
+  table.vt .vt-theme { font-family: "IBM Plex Mono", monospace; font-size: .6rem; letter-spacing: .05em; text-transform: uppercase; font-weight: 600; color: var(--ink-soft); white-space: nowrap; }
+  table.vt .vt-item { color: var(--ink); min-width: 15rem; }
+  table.vt .vt-h { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: .58rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; border-radius: 999px; padding: .06rem .45rem; }
+  table.vt .vt-h.now { color: var(--now); background: var(--now-bg); }
+  table.vt .vt-h.next { color: var(--next); background: var(--next-bg); }
+  table.vt .vt-h.later { color: var(--later); background: var(--later-bg); }
+  table.vt input.vt-in { width: 4.2rem; font: inherit; font-family: "IBM Plex Mono", monospace; font-size: .74rem; text-align: center; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: .2rem .3rem; }
+  table.vt input.vt-in:focus { outline: 2px solid var(--accent); outline-offset: 1px; background: var(--surface); }
+
+  .ve { margin-top: 1.4rem; }
+  .ve h3 { font-family: "IBM Plex Mono", monospace; font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; color: var(--ink-faint); margin: 0 0 .6rem; }
+  .ve-grid { display: grid; grid-template-columns: 1fr; gap: .5rem; }
+  @media (min-width: 680px) { .ve-grid { grid-template-columns: 1fr 1fr; } }
+  .ve-q { border: 1px solid var(--line); border-radius: 9px; background: var(--surface); padding: .6rem .65rem; }
+  .ve-q .qh { font-family: "IBM Plex Mono", monospace; font-size: .56rem; letter-spacing: .06em; text-transform: uppercase; font-weight: 600; margin-bottom: .4rem; }
+  .ve-q.hv-le { border-top: 3px solid var(--next); } .ve-q.hv-le .qh { color: var(--next); }
+  .ve-q.hv-he { border-top: 3px solid var(--today); } .ve-q.hv-he .qh { color: var(--today); }
+  .ve-q.lv-le { border-top: 3px solid var(--ink-faint); } .ve-q.lv-le .qh { color: var(--ink-faint); }
+  .ve-q.lv-he { border-top: 3px solid var(--ink-faint); } .ve-q.lv-he .qh { color: var(--ink-faint); }
+  .ve-q ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .3rem; }
+  .ve-q li { font-size: .68rem; line-height: 1.2; border: 1px solid var(--line); border-radius: 6px; padding: .18rem .4rem; background: var(--surface-2); }
+  .ve-q li.now { border-color: var(--now); color: var(--now); background: var(--now-bg); font-weight: 600; }
+  .ve-q li.next { border-style: dashed; color: var(--ink-soft); }
+  .ve-key { margin-top: .55rem; font-family: "IBM Plex Mono", monospace; font-size: .62rem; color: var(--ink-faint); }
+  .ve-key .now { color: var(--now); font-weight: 600; }
+
+  .legendbox { margin-top: 1.4rem; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: .9rem 1.1rem; }
+  .legendbox h2 { font-family: "IBM Plex Mono", monospace; font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; color: var(--ink-faint); margin: 0 0 .6rem; }
+  .legendbox dl { margin: 0; display: grid; gap: .45rem 1.4rem; grid-template-columns: 1fr; }
+  @media (min-width: 620px) { .legendbox dl { grid-template-columns: 1fr 1fr; } }
+  .legendbox .row { display: flex; align-items: baseline; gap: .5rem; font-size: .78rem; }
+  .legendbox .row .t { flex-shrink: 0; min-width: 5.4rem; font-family: "IBM Plex Mono", monospace; font-size: .66rem; font-weight: 600; }
+  .legendbox .row .d { color: var(--ink-soft); }
+  .lg-proto { color: var(--next); background: var(--next-bg); border-radius: 999px; padding: .08rem .4rem; font-size: .56rem; letter-spacing: .04em; text-transform: uppercase; }
+  .lg-v-VH { color: var(--vh); } .lg-v-H { color: var(--h); } .lg-v-M { color: var(--m); } .lg-v-L { color: var(--l); }
+  .lg-kr { color: var(--today); }
+  .lg-star { color: var(--gold); font-size: 1.15rem; }
+
+  .hyp { border: 1px solid var(--line); border-left: 3px solid var(--today); border-radius: 10px; background: var(--today-bg); padding: 1rem 1.2rem; margin: 0 0 1.4rem; font-size: .98rem; color: var(--ink-soft); line-height: 1.6; }
+  .hyp b { color: var(--ink); }
+  .hyp p { margin: 0 0 .5rem; }
+  .hyp p:last-child { margin-bottom: 0; }
+  .hyp .kicker { color: var(--ink); font-weight: 600; }
+  .hyp-k { display: block; font-family: "IBM Plex Mono", monospace; font-size: .58rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; color: var(--today); margin-bottom: .3rem; }
+
+  footer { margin-top: 2.6rem; padding-top: 1.2rem; border-top: 1px solid var(--line); font-family: "IBM Plex Mono", monospace; font-size: .74rem; color: var(--ink-faint); line-height: 1.7; }
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">Smart Import &nbsp;·&nbsp; roadmap &nbsp;·&nbsp; product / exec review</p>
+  <h1>Hypothesis and Priorities for Smart Import</h1>
+
+  <div class="hyp">
+    <span class="hyp-k">Operating hypothesis</span>
+    <p>
+      Smart Import usage is mostly enterprise &mdash; and enterprise doesn&rsquo;t churn
+      <i>because of</i> Smart Import, so tuning it for paid-user retention moves a number
+      that won&rsquo;t move. The lever is <b>trial activation</b> &mdash; converting 14-day
+      trial users to paid.
+    </p>
+    <p>
+      A 14-day trial converts on conviction: <b>&ldquo;this did my real job, at a quality
+      I trust, and I could live in it.&rdquo;</b> That comes from completing the loop once,
+      for real &mdash; own source in, generate, refine what&rsquo;s off, approve, walk away
+      with something they&rsquo;d put in front of learners.
+    </p>
+    <p class="kicker">We are optimising upstream first.</p>
+  </div>
+
+  <div class="flow">
+    <div class="flow-steps">
+      <div class="fstep">
+        <div class="fn">Stage 1</div>
+        <div class="ft">Discover</div>
+        <div class="fq">Does the user open Smart Import and start an import at all?</div>
+      </div>
+      <div class="fstep">
+        <div class="fn">Stage 2</div>
+        <div class="ft">Fit</div>
+        <div class="fq">Can it take the material they actually have, and do the job they need?</div>
+      </div>
+      <div class="fstep">
+        <div class="fn">Stage 3</div>
+        <div class="ft">First win</div>
+        <div class="fq">Is the first output good enough that they keep it and publish it?</div>
+      </div>
+      <div class="fstep">
+        <div class="fn">Stage 4</div>
+        <div class="ft">Repeat</div>
+        <div class="fq">Do they come back and make another?</div>
+      </div>
+    </div>
+
+    <div class="flow-steps flow-data">
+      <div class="fstep dstep">
+        <div class="fn">Data insight</div>
+        <div class="dm">Start rate</div>
+        <textarea data-flowkey="discover" rows="3" placeholder="what the data says about Discover…"></textarea>
+      </div>
+      <div class="fstep dstep">
+        <div class="fn">Data insight</div>
+        <div class="dm">Fit</div>
+        <textarea data-flowkey="fit" rows="3" placeholder="what the data says about Fit…"></textarea>
+      </div>
+      <div class="fstep dstep">
+        <div class="fn">Data insight</div>
+        <div class="dm">First win</div>
+        <textarea data-flowkey="firstwin" rows="3" placeholder="what the data says about First win…"></textarea>
+      </div>
+      <div class="fstep dstep">
+        <div class="fn">Data insight</div>
+        <div class="dm">Repeat</div>
+        <textarea data-flowkey="repeat" rows="3" placeholder="what the data says about Repeat…"></textarea>
+      </div>
+    </div>
+
+  </div>
+
+  <button type="button" class="whytoggle" id="whyAll"><span id="whyIcon">&#9656;</span> Show all rationale</button>
+
+  <div class="cols">
+    <div></div><div class="cn">Now</div><div class="cx">Next</div><div class="cl">Later</div>
+  </div>
+
+  <div id="matrix"></div>
+
+  <div class="bet">
+    <h2>Top 3 to fund this quarter</h2>
+    <textarea class="betnote" data-flowkey="top3" rows="4" placeholder="decide in review — the three bets to fund this quarter…"></textarea>
+
+    <div class="ve">
+      <h3>Value &times; effort &mdash; Now &amp; Next items</h3>
+      <div class="ve-grid">
+        <div class="ve-q hv-le">
+          <div class="qh">High value &middot; Lower effort &mdash; do first</div>
+          <ul>
+            <li class="now">In-product survey (abandon + completion)</li>
+            <li class="now">Team evals dashboard</li>
+            <li class="now">Recommendation engine + read-back</li>
+            <li class="now">Source grounding &mdash; confidence via verify pass</li>
+          </ul>
+        </div>
+        <div class="ve-q hv-he">
+          <div class="qh">High value &middot; High effort &mdash; big bets</div>
+          <ul>
+            <li class="now">PowerPoint as a source</li>
+            <li class="now">Generation latency</li>
+            <li class="now">Review &amp; Approve 1st draft (hardening)</li>
+          </ul>
+        </div>
+
+        <div class="ve-q lv-le">
+          <div class="qh">Lower value &middot; Lower effort &mdash; fill-in</div>
+          <ul>
+            <li class="now">Ready-to-use prompts</li>
+            <li class="now">Question extractor</li>
+            <li class="now">Prompt library</li>
+            <li class="next">Design brief library</li>
+          </ul>
+        </div>
+        <div class="ve-q lv-he">
+          <div class="qh">Lower value now &middot; High effort &mdash; defer / for paid</div>
+          <ul>
+            <li class="now">AI in Editor (sub-question + real editor)</li>
+            <li class="next">Design briefs to capture intent</li>
+            <li class="next">Element-level AI edits (&#10022;)</li>
+            <li class="next">Easy retrieval of SI content</li>
+            <li class="next">Responsible-AI labelling + author-of-record <span style="color:var(--today)">&mdash; compliance-gated</span></li>
+            <li class="next">Image &amp; diagram extraction</li>
+          </ul>
+        </div>
+      </div>
+      <p class="ve-key">
+        <span class="now">Now</span> = filled &nbsp;·&nbsp;
+        <span style="border:1px dashed var(--ink-faint);border-radius:4px;padding:0 .25rem">Next</span> = dashed.
+        <br><b>The value test:</b> if this were missing, would a meaningful share of trials fail to convert? Yes &rarr; high. The survey and evals pass it on leverage &mdash; the board&rsquo;s problem is &ldquo;we don&rsquo;t know where the 70% drop off&rdquo;, and they end the guessing cheaply. Ready-to-use prompts don&rsquo;t &mdash; the default already gives an okay result; they&rsquo;re an improvement, not a gate.
+        <br><b>Effort</b> = build to production, not the prototype. &ldquo;Prototyped&rdquo; hides real work: the Editor tab is a stub, sub-question refine regenerates the whole activity, trust signals aren&rsquo;t verified. The confidence signal is the exception &mdash; a verify pass is one extra LLM call, genuinely cheap (it does add latency).
+        <br>My read &mdash; argue any of it in review.
+      </p>
+    </div>
+  </div>
+
+  <div class="legendbox">
+    <h2>Legend</h2>
+    <dl>
+      <div class="row"><span class="t">Rows</span><span class="d">The trial funnel: <b>Discovery &rarr; Use-case fit &rarr; Publish rate &rarr; Repeat</b> &mdash; each stage is where a share of trial users drops out. <b>Trust &amp; compliance</b> (trust to publish + EU AI Act) and <b>Feedback loop</b> (how we learn what's working) are the two bottom lanes.</span></div>
+      <div class="row"><span class="t">Columns</span><span class="d"><b>Now</b> &mdash; in flight &nbsp;·&nbsp; <b>Next</b> &mdash; the quarter after &nbsp;·&nbsp; <b>Later</b> &mdash; backlogged.</span></div>
+      <div class="row"><span class="t"><span class="lg-v-VH">VH</span> <span class="lg-v-H">H</span> <span class="lg-v-M">M</span> <span class="lg-v-L">L</span></span><span class="d">Value &mdash; expected impact on trial activation. Effort is <b>S / M / L</b> (rough build size). Kept out of the grid to reduce noise; the working priority notes carry both where they matter.</span></div>
+      <div class="row"><span class="t"><span class="lg-proto">in prototype</span></span><span class="d">Demonstrated in the working prototype &mdash; independent of the column; still needs production work to reach a trial user.</span></div>
+      <div class="row"><span class="t"><span class="lg-star">&#9733;</span></span><span class="d">Differentiator &mdash; a capability no competing H5P tooling has; worth funding even from a Later slot for the story it tells buyers.</span></div>
+      <div class="row"><span class="t">Data insight</span><span class="d">The red row under the flow at the top &mdash; a free-text note per stage; type what the data tells us as it comes in. Saved in your browser only.</span></div>
+      <div class="row"><span class="t">&#9656; why</span><span class="d">Click a point to open its rationale &mdash; collapsed by default, for talking through.</span></div>
+    </dl>
+  </div>
+
+  <div class="vetable">
+    <h2>All opportunities &mdash; value &amp; effort</h2>
+    <p class="vt-sub">Every item on the board, flat. <b>Value</b> and <b>Effort</b> are editable &mdash; type your own during the review; saved in your browser only.</p>
+    <div class="vt-scroll">
+      <table class="vt">
+        <thead>
+          <tr><th>Theme &amp; opportunity</th><th>Now / Next / Later</th><th>Value</th><th>Effort</th></tr>
+        </thead>
+        <tbody id="vtbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>
+    H5P Smart Import &mdash; prioritised for trial activation (14-day trial &rarr; paid). Enterprise retention is a weak lever &mdash; enterprise rarely churns because of Smart Import.<br>
+    Companion: <code>specs/smart-import-ux.md</code> &nbsp;·&nbsp; opportunity tree artifact &nbsp;·&nbsp; <code>reports/customer_feedback.md</code><br>
+    Updated 2026-09-01.
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var THEMES = [
+    { id: "discovery", name: "Discovery", q: "Get the ~70% of trials who never touch Smart Import to their first import", gap: true },
+    { id: "jobrange",  name: "Use-case fit", q: "Can it take their real source — the trial-conversion gate" },
+    { id: "publish",   name: "Publish rate", q: "First acceptable creation — the activation moment" },
+    { id: "repeat",    name: "Repeat within the trial", q: "2–3 imports in 14 days = conviction to buy" },
+    { id: "trust",     name: "Trust & compliance", q: "What makes an educator trust the output enough to publish under their name — and what the EU AI Act obliges by Aug 2026", trust: true },
+    { id: "feedback",  name: "Feedback loop", q: "How we learn whether Smart Import is working — the surveys and the eval view under every lane above", inst: true }
+  ];
+
+  // proto = demonstrated in the working prototype (any horizon);  v = value;  e = effort;
+  // nt = the "why" (collapsed by default)
+  var ITEMS = [
+    // ---- Discovery ---- (no items yet — the biggest gap)
+
+    // ---- Use-case fit ----
+    { t: "jobrange", h: "now", it: "PowerPoint as a source", v: "VH", e: "L", nt: "a trial user proves value on THEIR deck or the trial can't sell — this is the conversion gate. Long-lead, so start now." },
+    { t: "jobrange", h: "now", it: "Question extractor — lift existing questions from the source", proto: true, nt: "prototyped for pasted text. A concrete first-import use case for question-bank institutions evaluating in a trial." },
+    { t: "jobrange", h: "next", it: "Image & diagram extraction from the source", v: "M", e: "M", nt: "pull figures, charts and diagrams out of the source into the generated activities — the source often already carries the visual the questions need. Answers the “misses visual info” complaint." },
+    { t: "jobrange", h: "later", it: "Image & diagram generation", v: "M", e: "L", nt: "generate visuals for activities where the source has none. Heavier, and not a trial-conversion blocker." },
+    { t: "jobrange", h: "later", it: "Wider H5P type coverage", v: "M", e: "L", nt: "more of what educators can generate, prioritised by demand × value." },
+    { t: "jobrange", h: "later", it: "Multiple sources in one import", v: "M", e: "M", nt: "combine several documents into one set of activities — a chapter plus its slides plus a handout. Widens what counts as “their source”, but a trial user proves value on a single document first." },
+    { t: "jobrange", h: "later", it: "Fidelity control — how close to the source", v: "L–M", e: "M", nt: "a dial from “stay tight to the wording” to “paraphrase and reason beyond it”. Power-user precision; the sensible default covers the trial case." },
+    { t: "jobrange", h: "later", it: "Create without a source — from a topic or objectives alone", v: "M", e: "L", nt: "generate from a prompt or a list of objectives with no document at all. A different product mode; Smart Import's whole pitch is source-grounded, so this is an adjacent bet, not the trial-conversion path." },
+    { t: "jobrange", h: "later", it: "Course authoring (curriculum brief, objectives map, course set / workspace)", star: true, v: "L", e: "XL", nt: "zero trial relevance; the deepest enterprise-expansion bet. Build last. A genuine differentiator — turning a curriculum into a structured course is something no other H5P tooling attempts — but only worth funding once the trial funnel is converting." },
+
+    // ---- Publish rate ----
+    { t: "publish", h: "now", it: "Ready-to-use prompts — system presets a first-timer picks off the shelf", proto: true, nt: "prototyped: “Exam revision”, “Introduce a topic”, “Check prior knowledge”, “Extract existing questions” — each already written to best practice, picked in one click, no prompt-writing. A first-time trial user gets a good result without knowing how to prompt. Distinct from the personal prompt / brief libraries below — those are the educator saving their own; this is H5P's shelf." },
+    { t: "publish", h: "now", it: "Recommendation engine — the learning sequence for your goal, with the source read-back folded in", proto: true, nt: "on Choose activities. Instead of a bare list of types, it lays out an ordered present → practise → check sequence (a type can repeat), names which source concepts each step covers, and carries an “i” explaining the principles behind the recommendation. This absorbs what a standalone source read-back would have shown on step 1 — the same read of the material, but in the context of what it'll produce, so it's actionable rather than just a heads-up. Cuts the “which of 13 types” paralysis → fewer bad first picks. Prototyped — harden for a less-forgiving first-timer." },
+    { t: "publish", h: "now", it: "Generation latency — the wait after “Generate and review”", v: "H", e: "M–L", nt: "a live problem in the current product, not something the prototype fixes: the wait between clicking Generate and seeing the first output is exactly where a trial user can abandon before ever forming an opinion of quality. Two angles — perceived (streaming / a progress state so the wait doesn't read as broken or stuck) and actual (model choice, caching, parallel generation). Sits right at the activation moment; even the perceived-latency fix likely moves the needle before the harder infra work does." },
+    { t: "publish", h: "now", it: "Review and Approve 1st draft — Refine, Remix or Discard, with live preview", proto: true, v: "H", e: "M", nt: "the trial user experiences the whole loop here: generate → see it play in the real H5P player → check the source grounding (its own Trust item) → Refine / Remix / Discard what's off → approve per item. Prototyped; needs production hardening for a less-forgiving first-timer." },
+    { t: "publish", h: "later", it: "Improve my prompt (rewrite rough text to best practice)", v: "L–M", e: "S", nt: "helps a first-timer who writes a rough prompt get a better result; the guided brief is the better first-run path anyway, and ready-to-use prompts cover the no-writing case — so this is a nice-to-have, not a first-loop lever." },
+    { t: "publish", h: "next", it: "Design briefs to capture learning intent", v: "M", e: "S", nt: "a structured brief the educator shapes and saves — learning goal, audience, curriculum context, the precise levers (count, difficulty). Next, not Now: a good prompt or a preset already captures intent for the common case; the brief is the refinement once the core loop is solid, and it becomes the reusable “format” a returning user picks from." },
+
+    // ---- Repeat within the trial ----
+    { t: "repeat", h: "now", it: "AI in Editor: refine already-created content from the library — activity & sub-question level", proto: true, nt: "prototyped: every Smart Import activity in the library has a Refine button that opens the Preview + Chat/Editor panels. Two grains of AI edit here: (1) whole activity — a steer regenerates every question, or Remix rebuilds it as a different type; (2) sub-question — for a composite like Question Set, click one question in Preview and the steer regenerates just that question, its siblings and their tuning left alone. Deterministic changes (add/remove a question, media, pass %, retry behaviour) go to the Editor tab, which is the full H5P editor and already nests every level. Then save as a new activity or replace the original. Fixing what's off before approval belongs to Review and Approve 1st draft (Publish rate); this is those same tools after approval, so content stays good as the educator's needs shift — a repeat-use lever, not a first-run one." },
+    { t: "repeat", h: "later", it: "Multiple imports from one source — a reusable source library", v: "M–H", e: "S", nt: "keep the uploaded source around so an educator can run it again — a different activity mix, a harder set, a revision version — without re-uploading. Drives the 2nd/3rd import inside 14 days (the conviction signal a buyer uses) and sets up “make another from this” nudges. Later: the first-run loop has to be worth repeating before reuse matters." },
+    { t: "repeat", h: "now", it: "Prompt library — save your own prompts, reuse", proto: true, nt: "prototyped: an educator names and saves a prompt, picks it again next time. The prompt surface is settled, so this is Now — a returning trial user re-running an import gets their wording back in one click." },
+    { t: "repeat", h: "next", it: "Design brief library — save your own briefs, reuse", proto: true, nt: "prototyped: same, for a shaped brief. Next, not Now — it rides on \"Design briefs to capture learning intent\" (Publish / Next) being solid first, and personal reuse mostly pays off on repeat use, which is thin in a 14-day trial." },
+    { t: "trust", h: "now", it: "Human-in-the-loop approval gate (= Review and Approve 1st draft)", proto: true, nt: "the compliance backbone: an educator reviews and approves every generated item before anything is created. This is what underpins the EU AI Act's Art 6(3) argument (the AI does a narrow task under meaningful human review, not a materially-influencing decision) and the Art 50(2) text exception (content that has had human editorial control with a natural person holding editorial responsibility). Prototyped as the Review and Approve step; hardening it is a Publish-rate item, but its role here is regulatory." },
+    { t: "trust", h: "now", it: "Source grounding per item — the source sentence each question came from, plus a confidence flag", proto: true, nt: "prototyped: the line under each generated question — “grounded in: ‘…’ · high confidence” — showing the exact source text it was built from. Lets an educator verify every item against the source without leaving Review; the thing that makes a first draft trustworthy enough to publish under their name. Note: the confidence flag is a stub today — the model self-reports it and defaults to “high”; a real signal would verify each answer against its cited sentence." },
+    { t: "trust", h: "next", it: "AI-generated attribution + metadata", v: "M", e: "M", nt: "an “AI-assisted” marker on Smart Import content and machine-readable metadata that travels with it (generated by Smart Import, model, date, source document, human-reviewed y/n). EU AI Act Art 50(2) requires synthetic content to be marked as artificially generated in a detectable, machine-readable form — the text exception needs human editorial control, which the approval gate provides, but marking anyway is the safe posture. Effort is real: persistent metadata through export, LTI and hub share." },
+    { t: "trust", h: "next", it: "Author-of-record + editorial responsibility record", v: "M", e: "M", nt: "at approval, stamp the educator as author of record — name, timestamp, what they approved / edited / discarded — and surface it in the content's history (“authored by X, reviewed AI-generated draft, date”). Makes the Art 50(2) editorial-responsibility exception and institutional accountability concrete. The session receipt (the ⓘ panel) is the raw material; this makes a persistent, public-facing subset plus the explicit authorship stamp." },
+    { t: "trust", h: "next", it: "Instructions & limitations disclosure to educators", v: "M", e: "S", nt: "in-product guidance on what Smart Import can and can't do, its known failure modes, and how to review output — satisfies the AI-literacy obligation (Art 4, in force since Feb 2025) and the transparency/instructions-for-use expectations for a high-risk system. Low effort: copy plus the “how we recommend” panel already started on Choose activities." },
+    { t: "repeat", h: "next", it: "Easy retrieval of Smart Import content", proto: true, v: "M", e: "M", nt: "prototyped: after Create you land on THIS import's content (not a flat folder of everything), with a toggle to widen + a per-import filter. Next for production: kill the shared “Smart Import” folder, add a “from import” column / filter in Manage Content, and a proper import-detail page. Matters at scale over time, less in a 14-day window — but the acute half (“what did this import make?”) is already covered by Review & Approve + landing scoped." },
+    { t: "repeat", h: "later", it: "Admin-curated org templates — a shared prompt/brief set the whole org uses", v: "H", e: "M", nt: "not built — today's library is per-browser localStorage, personal only. This is org governance: an admin authors and publishes a set of approved prompt/brief templates that everyone in the organisation gets, so an institution can standardise how it uses Smart Import (house question style, difficulty norms, activity mix). Needs account-scoped server storage underneath. Not a trial-user need, and enterprise doesn't churn on Smart Import — an expansion play if seat-growth becomes a goal." },
+    { t: "repeat", h: "later", it: "Element-level AI edits — an ✦ on every option and question field", proto: true, nt: "prototyped: the finest grain. In the editable Preview, each option and each question stem carries a small ✦. Click it → a popover scoped to just that string (chips: harder · simpler · closer distractor · make this the correct answer · free text) → the model rewrites that one field with full context (the question, the key, the sibling options) and you Keep / Retry / Undo. Every change logs into the shared Changes list. This is the right grain for distractor quality — fix one weak option in place instead of regenerating the whole activity. Later: activity and sub-question level cover the common cases; this is a maintenance-over-time refinement, not a trial-conversion lever." },
+    { t: "trust", h: "later", it: "Audit trail / logs for each output — how it was derived from the source", v: "M", e: "M", nt: "a per-import record a compliance reviewer (or the educator) can open to see exactly how the content was produced: every source passage, the question(s) it generated, which parts were used and which skipped, extracted-verbatim vs inferred per item, the prompt/brief, model and date, and the human sign-off. Satisfies the record-keeping / logging obligation for a high-risk system and answers an institution's “show me this wasn't just made up”. Extends the per-question “grounded in” line to a whole-import view. Not a 14-day-trial lever." },
+    { t: "trust", h: "later", it: "Legal classification — high-risk or not under the EU AI Act", e: "S", nt: "the decision that scopes everything else in this lane: does Smart Import fall under Annex III (education — “evaluating learning outcomes”) as a high-risk system, or does the Art 6(3) carve-out apply because the approval gate means it doesn't materially influence a decision without meaningful human review? H5P's counsel makes the call; the approval gate, author-of-record and audit trail are the facts that make the carve-out defensible. Enforcement for high-risk lands Aug 2026." },
+    { t: "repeat", h: "later", it: "AI-recommended content refinements", star: true, v: "H", e: "L", nt: "the AI watches how activities perform — Smart Import-made or hand-authored — and flags which ones to refine and how: rebalance these distractors, split this two-part question, this concept is never missed so raise the difficulty. Turns Smart Import from a one-shot generator into an ongoing quality partner, and closes the loop from performance data back to a concrete edit — which nothing else in H5P does. Later: needs real learner-response data to be any good, and a 14-day trial never generates enough. A retention and expansion play once the trial is converting." },
+
+    // ---- Feedback loop ----
+    { t: "feedback", h: "now", it: "In-product survey — at completion, and on abandoning the flow at any step", proto: true, v: "H", e: "S", nt: "prototyped: a short pulse (rating, likely-to-use-again, one open question) on the post-create screen. To add: fire the same survey — trimmed — when someone closes / discards the flow mid-way, tagged with the step they left from, so you hear from the people who didn't finish, not just the ones who did. Cheap, and the highest-signal feedback you can get without instrumentation." },
+    { t: "feedback", h: "now", it: "Team evals — output-quality & experience dashboard", proto: true, v: "M", e: "S", nt: "prototyped: the H5P-team view that rolls up every import — kept-as-is vs edited vs discarded, by activity type, discard reasons, refine steers — plus the end-of-flow experience survey (rating, would-use-again, verbatim comments) and time per phase. Turns the review/approve choices and the survey into a running read on whether output quality and experience are actually improving." }
+  ];
+
+  var HCOLS = [["now", "Now"], ["next", "Next"], ["later", "Later"]];
+
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt != null) n.textContent = txt;
+    return n;
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function leaf(o) {
+    var li = document.createElement("li");
+    li.className = (o.nt ? "has-why" : "") + (o.star ? " diff" : "");
+    li.setAttribute("data-open", "0");
+    var head = '<button type="button" class="lhead">' +
+      (o.nt ? '<span class="wc">&#9656;</span>' : "") +
+      (o.star ? '<span class="star" title="Differentiator">&#9733;</span>' : "") +
+      '<span class="it">' + esc(o.it) + "</span>";
+    if (o.proto) head += '<span class="proto">in prototype</span>';
+    // value / effort marks are documented in the legend, not shown per item
+    head += "</button>";
+    li.innerHTML = head + (o.nt ? '<div class="nt">' + esc(o.nt) + "</div>" : "");
+    return li;
+  }
+
+  var matrix = document.getElementById("matrix");
+  THEMES.forEach(function (th) {
+    var band = document.createElement("div");
+    band.className = "band";
+    var grid = document.createElement("div");
+    grid.className = "band-grid";
+
+    var head = document.createElement("div");
+    head.className = "thead";
+    head.innerHTML =
+      '<div class="tn">' + esc(th.name) + "</div>" +
+      '<div class="tq">' + esc(th.q) + "</div>" +
+      (th.inst ? '<span class="tk">how we learn what\'s working</span>' : "") +
+      (th.trust ? '<span class="tk">trust to publish · EU AI Act by Aug 2026</span>' : "") +
+      (th.gap ? '<span class="tk" style="color:var(--today);background:var(--today-bg)">highest-value lane · no items yet</span>' : "");
+    grid.appendChild(head);
+
+    HCOLS.forEach(function (hc) {
+      var cell = document.createElement("div");
+      cell.className = "cell " + hc[0];
+      cell.innerHTML = '<div class="ch">' + hc[1] + "</div>";
+      var ul = document.createElement("ul");
+      var list = ITEMS.filter(function (o) { return o.t === th.id && o.h === hc[0]; });
+      if (!list.length) {
+        var n = document.createElement("li");
+        n.className = "none";
+        n.textContent = "—";
+        ul.appendChild(n);
+      } else {
+        list.forEach(function (o) { ul.appendChild(leaf(o)); });
+      }
+      cell.appendChild(ul);
+      grid.appendChild(cell);
+    });
+
+    band.appendChild(grid);
+    matrix.appendChild(band);
+  });
+
+  // accordion: click a point to toggle its rationale
+  matrix.addEventListener("click", function (e) {
+    var head = e.target.closest(".lhead");
+    if (!head) return;
+    var li = head.parentElement;
+    if (!li || li.className.indexOf("has-why") < 0) return;
+    li.setAttribute("data-open", li.getAttribute("data-open") === "1" ? "0" : "1");
+  });
+
+  // show all / hide all rationale
+  var allOpen = false;
+  var whyBtn = document.getElementById("whyAll");
+  var whyIcon = document.getElementById("whyIcon");
+  whyBtn.addEventListener("click", function () {
+    allOpen = !allOpen;
+    matrix.querySelectorAll("li.has-why").forEach(function (li) {
+      li.setAttribute("data-open", allOpen ? "1" : "0");
+    });
+    whyIcon.innerHTML = allOpen ? "&#9662;" : "&#9656;";
+    whyBtn.lastChild.textContent = allOpen ? " Hide all rationale" : " Show all rationale";
+  });
+
+  // ---- flat value / effort table ----
+  var THNAME = {};
+  THEMES.forEach(function (t) { THNAME[t.id] = t.name; });
+  var HLABEL = { now: "Now", next: "Next", later: "Later" };
+  var HORDER = { now: 0, next: 1, later: 2 };
+  var vtbody = document.getElementById("vtbody");
+
+  function veField(key) {
+    var inp = el("input", "vt-in");
+    inp.type = "text";
+    inp.setAttribute("aria-label", key);
+    var saved = null;
+    try { saved = localStorage.getItem(key); } catch (e) {}
+    inp.value = saved != null ? saved : "";
+    inp.addEventListener("input", function () {
+      try { localStorage.setItem(key, inp.value); } catch (e) {}
+    });
+    return inp;
+  }
+
+  var vtRows = ITEMS.slice().sort(function (a, b) {
+    return (HORDER[a.h] - HORDER[b.h]) || (THNAME[a.t] < THNAME[b.t] ? -1 : 1);
+  });
+  vtRows.forEach(function (o) {
+    var tr = document.createElement("tr");
+
+    var c1 = el("td");
+    c1.innerHTML = '<span class="vt-theme">' + esc(THNAME[o.t] || o.t) + '</span><br>' +
+      '<span class="vt-item">' + esc(o.it) + '</span>';
+    tr.appendChild(c1);
+
+    var c2 = el("td");
+    c2.innerHTML = '<span class="vt-h ' + o.h + '">' + (HLABEL[o.h] || o.h) + '</span>';
+    tr.appendChild(c2);
+
+    var base = "sip:ve:" + o.t + "|" + o.it;
+    var c3 = el("td"); c3.appendChild(veField(base + "|v")); tr.appendChild(c3);
+    var c4 = el("td"); c4.appendChild(veField(base + "|e")); tr.appendChild(c4);
+
+    vtbody.appendChild(tr);
+  });
+
+  // editable data-insight notes under the top flow — saved in the browser only
+  document.querySelectorAll("[data-flowkey]").forEach(function (inp) {
+    var key = "sip:flow:" + inp.getAttribute("data-flowkey");
+    try { var v = localStorage.getItem(key); if (v != null) inp.value = v; } catch (e) {}
+    inp.addEventListener("input", function () {
+      try { localStorage.setItem(key, inp.value); } catch (e) {}
+    });
+  });
+
+})();
+</script>
