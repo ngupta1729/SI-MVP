@@ -991,6 +991,7 @@ export default function Page() {
                             setEdits((e) => ({ ...e, [cur.id]: v }))
                           }
                           editing={false}
+                          hideViewToggle
                           initialView="play"
                         />
                       )}
@@ -3025,6 +3026,7 @@ function Review(p: {
                     p.setEdits((e) => ({ ...e, [current.id]: v }))
                   }
                   editing={false}
+                  hideViewToggle
                   initialView="play"
                 />
               )}
