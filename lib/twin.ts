@@ -817,8 +817,16 @@ ${role} Return ONLY the new text — no quotes, no label, no explanation, a sing
   }
 }
 
-/** Regenerate ONE sub-question of a composite activity (Question Set / Single
- *  Choice Set) — new stem + options — leaving its siblings alone. */
+export type SubQType = "multichoice" | "truefalse" | "blanks";
+
+export type SubQData =
+  | { kind: "multichoice"; stem: string; options: { text: string; correct: boolean }[] }
+  | { kind: "truefalse"; statement: string; correct: boolean }
+  | { kind: "blanks"; intro: string; sentence: string };
+
+/** Regenerate ONE sub-question of an H5P Question Set. Same type = refine;
+ *  `toType` set = recast that question as a different sub-question type. The
+ *  siblings are left untouched. */
 export async function refineQuestion(o: {
   source: TwinSource;
   intent: ImportIntent;
@@ -827,11 +835,28 @@ export async function refineQuestion(o: {
   currentOptions: { text: string; correct: boolean }[];
   siblingStems: string[];
   ask: string;
-}): Promise<{ stem: string; options: { text: string; correct: boolean }[] } | null> {
+  toType?: SubQType;
+}): Promise<SubQData | null> {
+  const kind: SubQType = o.toType ?? "multichoice";
   const n = o.currentOptions.length || 4;
+
   if (!hasModel()) {
-    // offline: light deterministic nudge
+    if (kind === "truefalse")
+      return {
+        kind,
+        statement: o.currentStem.replace(/\?$/, "") + " — is this correct?",
+        correct: true,
+      };
+    if (kind === "blanks")
+      return {
+        kind,
+        intro: "Fill the gap.",
+        sentence: `${o.currentStem.replace(/\?$/, "")} is *${
+          o.currentOptions.find((x) => x.correct)?.text ?? "the answer"
+        }*.`,
+      };
     return {
+      kind,
       stem: o.currentStem + " (revised)",
       options: o.currentOptions.map((op, i) => ({
         text: op.text + (i === 0 ? "" : " — plausible"),
@@ -839,23 +864,37 @@ export async function refineQuestion(o: {
       })),
     };
   }
+
   const text = await resolveSourceText(o.source);
-  const prompt = `You are refining ONE question of an H5P ${o.activityLabel}. Stay grounded strictly in the source. Do not touch the other questions.
+  const shapeLine =
+    kind === "truefalse"
+      ? `Return ONLY JSON: { "statement": "<a single declarative statement, not a question>", "correct": true|false }.`
+      : kind === "blanks"
+        ? `Return ONLY JSON: { "intro": "<one short instruction line>", "sentence": "<one sentence with the key term wrapped in asterisks, e.g. 'The capital is *Paris*.'>" }. Exactly one gap.`
+        : `Return ONLY JSON: { "stem": "<the new question>", "options": [ { "text": "<option>", "correct": true|false } ] } with ${n} options, exactly one correct. Distractors must be clearly wrong on a careful read of the source but plausible to a learner who half-knows it, similar in length and form to the correct answer.`;
+  const recast = o.toType
+    ? `Recast this question as a ${
+        kind === "truefalse" ? "TRUE / FALSE" : "FILL-IN-THE-BLANK"
+      } item testing the same idea.`
+    : "Keep it the same type.";
+
+  const prompt = `You are editing ONE question of an H5P ${o.activityLabel}. Stay grounded strictly in the source. Do NOT touch the other questions.
 
 SOURCE:
 ${text.slice(0, 8000)}
 
-OTHER QUESTIONS (leave these alone, don't duplicate them):
+OTHER QUESTIONS (don't duplicate these):
 ${o.siblingStems.filter(Boolean).map((s) => "- " + s).join("\n") || "(none)"}
 
 CURRENT QUESTION: ${o.currentStem}
-CURRENT OPTIONS (correct answer marked *): ${o.currentOptions
+CURRENT OPTIONS (correct marked *): ${o.currentOptions
     .map((op) => (op.correct ? "*" : "") + op.text)
     .join("  |  ")}
 
 ASK: ${o.ask}
+${recast}
 
-Return ONLY JSON: { "stem": "<the new question>", "options": [ { "text": "<option>", "correct": true|false } ] } with ${n} options and exactly one correct. Distractors must be clearly wrong on a careful read of the source, plausible to a learner who half-knows it, and similar in length and form to the correct answer.`;
+${shapeLine}`;
   try {
     const { text: out } = await generateText({
       model: openai(TWIN_MODEL),
@@ -863,12 +902,34 @@ Return ONLY JSON: { "stem": "<the new question>", "options": [ { "text": "<optio
       temperature: 0.4,
     });
     const json = out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1);
-    const parsed = JSON.parse(json) as {
-      stem: string;
-      options: { text: string; correct: boolean }[];
-    };
-    if (!parsed?.stem || !Array.isArray(parsed.options)) return null;
-    return parsed;
+    const parsed = JSON.parse(json) as Record<string, unknown>;
+    if (kind === "truefalse" && typeof parsed.statement === "string")
+      return {
+        kind,
+        statement: parsed.statement,
+        correct: parsed.correct !== false,
+      };
+    if (
+      kind === "blanks" &&
+      typeof parsed.sentence === "string" &&
+      parsed.sentence.includes("*")
+    )
+      return {
+        kind,
+        intro: String(parsed.intro ?? "Fill the gap."),
+        sentence: parsed.sentence,
+      };
+    if (
+      kind === "multichoice" &&
+      typeof parsed.stem === "string" &&
+      Array.isArray(parsed.options)
+    )
+      return {
+        kind,
+        stem: parsed.stem,
+        options: parsed.options as { text: string; correct: boolean }[],
+      };
+    return null;
   } catch (err) {
     console.error("refineQuestion failed:", err);
     return null;

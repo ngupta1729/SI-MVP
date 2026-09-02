@@ -29,6 +29,15 @@ import type {
 import { starterBrief, newBriefField, briefGoal, missingRequired } from "@/lib/brief";
 import H5PRender from "@/components/H5PRender";
 
+/** Kept in sync with lib/twin.ts SubQType — the Question Set sub-question types
+ *  a single question can be recast as. */
+type SubQType = "multichoice" | "truefalse" | "blanks";
+const SUBQ_TARGETS: { type: SubQType; label: string }[] = [
+  { type: "multichoice", label: "Multiple choice" },
+  { type: "truefalse", label: "True / False" },
+  { type: "blanks", label: "Fill in the blank" },
+];
+
 type Screen = "configure" | "activities" | "review" | "library";
 type ShellNav = "my" | "smartimport" | "shared" | "all" | "trash";
 
@@ -436,11 +445,12 @@ export default function Page() {
     logReviewEvent({ action: "discard", itemId, reason });
   }
 
-  /** Refine one sub-question of a composite activity, editing its contentJson. */
+  /** Refine (or recast) one sub-question of a composite activity in place. */
   async function refineQuestionInFlow(
     itemId: string,
     qi: number,
     ask: string,
+    toType?: SubQType,
   ): Promise<boolean> {
     const item = result?.items.find((i) => i.id === itemId);
     if (!item) return false;
@@ -448,7 +458,11 @@ export default function Page() {
     const { qs } = readQuestions(cur);
     if (!qs[qi]) return false;
     setItem(itemId, "refining");
-    logReviewEvent({ action: "refine", itemId, reason: `Q${qi + 1}: ${ask}` });
+    logReviewEvent({
+      action: toType ? "remix" : "refine",
+      itemId,
+      reason: `Q${qi + 1}: ${toType ? `recast → ${toType}` : ask}`,
+    });
     try {
       const res = await fetch("/api/refine-element", {
         method: "POST",
@@ -461,7 +475,8 @@ export default function Page() {
           currentStem: qs[qi].stem,
           currentOptions: qs[qi].options,
           siblingStems: qs.filter((_, i) => i !== qi).map((q) => q.stem),
-          ask,
+          ask: ask || "Improve this question.",
+          toType,
         }),
       });
       const data = await res.json();
@@ -939,7 +954,7 @@ export default function Page() {
                               : "border-zinc-300 text-zinc-500 dark:border-zinc-700"
                           }`}
                         >
-                          {t === "edit" ? "Edit fields" : "Play"}
+                          {t === "edit" ? "Edit fields" : "Preview"}
                         </button>
                       ))}
                     </div>
@@ -976,7 +991,6 @@ export default function Page() {
                             setEdits((e) => ({ ...e, [cur.id]: v }))
                           }
                           editing={false}
-                          hideViewToggle
                           initialView="play"
                         />
                       )}
@@ -2638,7 +2652,12 @@ function Review(p: {
   onRefine: (itemId: string, adjustment: string) => void;
   onRemix: (itemId: string, toType: string) => void;
   onDiscard: (itemId: string, reason: string) => void;
-  onRefineQuestion: (itemId: string, qi: number, ask: string) => void;
+  onRefineQuestion: (
+    itemId: string,
+    qi: number,
+    ask: string,
+    toType?: SubQType,
+  ) => void;
   onDiscardQuestion: (itemId: string, qi: number, reason?: string) => void;
   source: TwinSource;
   intent: ImportIntent;
@@ -2828,30 +2847,75 @@ function Review(p: {
                     </div>
                   );
                 })()}
-                {menu?.id === item.id && menu.kind === "remix" && (
-                  <div className="mt-1 rounded border border-blue-300 bg-blue-50/50 p-1.5 text-[11px] dark:border-blue-900 dark:bg-blue-950/20">
-                    <p className="mb-1 text-zinc-500">
-                      Remix — rebuild this activity as a different type, keeping the
-                      same concepts. Your edits will be lost.
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      {REMIX_TARGETS.filter(
-                        (t) => t.name !== item.contentType,
-                      ).map((t) => (
-                        <button
-                          key={t.name}
-                          onClick={() => {
-                            setMenu(null);
-                            p.onRemix(item.id, t.name);
-                          }}
-                          className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 dark:border-zinc-700 dark:bg-zinc-900"
+                {menu?.id === item.id && menu.kind === "remix" && (() => {
+                  const rq = readQuestions(
+                    p.edits[item.id] ?? item.contentJson,
+                  );
+                  const q = typeof menuScope === "number" ? menuScope : null;
+                  const canRecast = rq.shape === "questions"; // Question Set only
+                  return (
+                    <div className="mt-1 rounded border border-blue-300 bg-blue-50/50 p-1.5 text-[11px] dark:border-blue-900 dark:bg-blue-950/20">
+                      {canRecast && rq.qs.length > 0 && (
+                        <select
+                          value={String(menuScope)}
+                          onChange={(e) =>
+                            setMenuScope(
+                              e.target.value === "all"
+                                ? "all"
+                                : Number(e.target.value),
+                            )
+                          }
+                          className="mb-1.5 w-full rounded border border-zinc-300 bg-white px-1 py-0.5 dark:border-zinc-700 dark:bg-zinc-900"
                         >
-                          {t.label}
-                        </button>
-                      ))}
+                          <option value="all">
+                            Whole activity — rebuild as another type
+                          </option>
+                          {rq.qs.map((qq, i) => (
+                            <option key={i} value={i}>
+                              Q{i + 1}: {qq.stem.slice(0, 44)}
+                              {qq.stem.length > 44 ? "…" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <p className="mb-1 text-zinc-500">
+                        {q != null
+                          ? `Recast question ${q + 1} as a different question type.`
+                          : "Remix — rebuild this activity as a different type, keeping the same concepts. Your edits will be lost."}
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {q != null
+                          ? SUBQ_TARGETS.map((t) => (
+                              <button
+                                key={t.type}
+                                onClick={() => {
+                                  setMenu(null);
+                                  p.onRefineQuestion(item.id, q, "", t.type);
+                                  setMenuScope("all");
+                                }}
+                                className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 dark:border-zinc-700 dark:bg-zinc-900"
+                              >
+                                {t.label}
+                              </button>
+                            ))
+                          : REMIX_TARGETS.filter(
+                              (t) => t.name !== item.contentType,
+                            ).map((t) => (
+                              <button
+                                key={t.name}
+                                onClick={() => {
+                                  setMenu(null);
+                                  p.onRemix(item.id, t.name);
+                                }}
+                                className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 dark:border-zinc-700 dark:bg-zinc-900"
+                              >
+                                {t.label}
+                              </button>
+                            ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
                 {menu?.id === item.id && menu.kind === "discard" && (() => {
                   const qs = readQuestions(
                     p.edits[item.id] ?? item.contentJson,
@@ -2961,7 +3025,7 @@ function Review(p: {
                     p.setEdits((e) => ({ ...e, [current.id]: v }))
                   }
                   editing={false}
-                  hideViewToggle
+                  initialView="play"
                 />
               )}
             </div>
@@ -3029,7 +3093,11 @@ function RefineChat(p: {
     intent: ImportIntent;
   };
 }) {
-  const questions = p.subScope ? readQuestions(p.subScope.value).qs : [];
+  const subRead = p.subScope
+    ? readQuestions(p.subScope.value)
+    : { shape: null as null, qs: [] as QView[] };
+  const questions = subRead.qs;
+  const canRecastQuestion = subRead.shape === "questions"; // Question Set only
   const [scope, setScope] = useState<"all" | number>("all");
   const scopeQ =
     typeof scope === "number" && questions[scope] ? questions[scope] : null;
@@ -3038,7 +3106,7 @@ function RefineChat(p: {
   // hideDiscard drops whole-activity discard (don't delete published content),
   // but discarding one sub-question of an activity you're editing is fine.
   const actions = REFINE_ACTIONS.filter((a) => {
-    if (a.key === "remix" && scopeQ) return false; // remix is whole-activity only
+    if (a.key === "remix" && scopeQ && !canRecastQuestion) return false;
     if (a.key === "discard" && p.hideDiscard && !scopeQ) return false;
     return true;
   });
@@ -3077,7 +3145,11 @@ function RefineChat(p: {
   }
 
   /** Refine or discard just the scoped sub-question, editing contentJson in place. */
-  async function runQuestion(kind: "refine" | "discard", ask: string) {
+  async function runQuestion(
+    kind: "refine" | "discard" | "remix",
+    ask: string,
+    toType?: SubQType,
+  ) {
     const sub = p.subScope;
     if (!sub || typeof scope !== "number" || !scopeQ) return;
     const qi = scope;
@@ -3089,7 +3161,10 @@ function RefineChat(p: {
       p.append({ role: "system", text: `Removed question ${qi + 1}.` });
       return;
     }
-    p.append({ role: "user", text: `Q${qi + 1} — ${ask}` });
+    p.append({
+      role: "user",
+      text: toType ? `Q${qi + 1} — recast as ${toType}` : `Q${qi + 1} — ${ask}`,
+    });
     setSubBusy(true);
     try {
       const res = await fetch("/api/refine-element", {
@@ -3106,13 +3181,19 @@ function RefineChat(p: {
           siblingStems: questions
             .filter((_, i) => i !== qi)
             .map((q) => q.stem),
-          ask,
+          ask: ask || "Improve this question.",
+          toType,
         }),
       });
       const data = await res.json();
       if (res.ok && data.question) {
         sub.onValueChange(patchQuestion(sub.value, qi, data.question));
-        p.append({ role: "system", text: `Regenerated question ${qi + 1}.` });
+        p.append({
+          role: "system",
+          text: toType
+            ? `Recast question ${qi + 1} as ${toType}.`
+            : `Regenerated question ${qi + 1}.`,
+        });
       } else {
         p.append({ role: "system", text: "Couldn't regenerate — try again." });
       }
@@ -3226,7 +3307,9 @@ function RefineChat(p: {
                     >
                       <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
                         {a.key === "remix"
-                          ? "Rebuild as"
+                          ? scopeQ
+                            ? `Recast question ${(scope as number) + 1} as`
+                            : "Rebuild as"
                           : (a.key === "refine" ? "What should change?" : "Discard because…") +
                             (scopeQ ? ` (question ${(scope as number) + 1})` : "")}
                       </p>
@@ -3243,6 +3326,7 @@ function RefineChat(p: {
                             </button>
                           ))}
                         {a.key === "remix" &&
+                          !scopeQ &&
                           REMIX_TARGETS.filter(
                             (t) => t.name !== p.item.contentType,
                           ).map((t) => (
@@ -3253,6 +3337,20 @@ function RefineChat(p: {
                                 run(`Remix → ${t.label}`, () =>
                                   p.onRemix(p.item.id, t.name),
                                 )
+                              }
+                              className={optChip}
+                            >
+                              {t.label}
+                            </button>
+                          ))}
+                        {a.key === "remix" &&
+                          scopeQ &&
+                          SUBQ_TARGETS.map((t) => (
+                            <button
+                              key={t.type}
+                              disabled={busy || subBusy}
+                              onClick={() =>
+                                runQuestion("remix", "", t.type)
                               }
                               className={optChip}
                             >
@@ -3393,18 +3491,30 @@ function readQuestions(value: unknown): {
       shape: "questions",
       qs: (
         v.questions as {
+          library?: string;
           params?: {
             question?: string;
+            text?: string;
+            questions?: string[];
             answers?: { text: string; correct?: boolean }[];
           };
         }[]
-      ).map((q) => ({
-        stem: toPlainText(q.params?.question ?? ""),
-        options: (q.params?.answers ?? []).map((a) => ({
-          text: toPlainText(a.text),
-          correct: !!a.correct,
-        })),
-      })),
+      ).map((q) => {
+        // TrueFalse and MultiChoice both carry params.question; Blanks carries
+        // params.questions[0] (the gapped sentence) with params.text the intro.
+        const raw =
+          q.params?.question ??
+          q.params?.questions?.[0] ??
+          q.params?.text ??
+          "";
+        return {
+          stem: toPlainText(raw),
+          options: (q.params?.answers ?? []).map((a) => ({
+            text: toPlainText(a.text),
+            correct: !!a.correct,
+          })),
+        };
+      }),
     };
   }
   return { shape: null, qs: [] };
@@ -3423,36 +3533,107 @@ function dropQuestion(value: unknown, qi: number): unknown {
   return d;
 }
 
-/** Patch one regenerated sub-question (stem + options) back into contentJson. */
-function patchQuestion(
-  value: unknown,
-  qi: number,
-  q: { stem: string; options: { text: string; correct: boolean }[] },
-): unknown {
+type SubQData =
+  | { kind: "multichoice"; stem: string; options: { text: string; correct: boolean }[] }
+  | { kind: "truefalse"; statement: string; correct: boolean }
+  | { kind: "blanks"; intro: string; sentence: string };
+
+const uuid = () =>
+  typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+
+/** Build an H5P Question Set sub-question wrapper for the given data + type. */
+function buildSubQuestion(q: SubQData): Record<string, unknown> {
+  const base = { subContentId: uuid() };
+  if (q.kind === "truefalse") {
+    return {
+      ...base,
+      library: "H5P.TrueFalse 1.8",
+      metadata: { contentType: "True/False Question", title: "True/False" },
+      params: {
+        question: wrapP(q.statement),
+        correct: q.correct ? "true" : "false",
+        behaviour: { enableRetry: true, enableSolutionsButton: true },
+        l10n: {
+          trueText: "True",
+          falseText: "False",
+          correctText: "Correct!",
+          wrongText: "Incorrect!",
+        },
+      },
+    };
+  }
+  if (q.kind === "blanks") {
+    return {
+      ...base,
+      library: "H5P.Blanks 1.14",
+      metadata: { contentType: "Fill in the Blanks", title: "Fill in the Blanks" },
+      params: {
+        text: wrapP(q.intro),
+        questions: [wrapP(q.sentence)],
+        behaviour: { enableRetry: true, enableSolutionsButton: true, caseSensitive: false },
+      },
+    };
+  }
+  const ordered = [...q.options].sort(
+    (a, b) => Number(b.correct) - Number(a.correct),
+  );
+  return {
+    ...base,
+    library: "H5P.MultiChoice 1.16",
+    metadata: { contentType: "Multiple Choice", title: "Multiple Choice" },
+    params: {
+      question: wrapP(q.stem),
+      answers: ordered.map((o) => ({
+        text: wrapP(o.text),
+        correct: o.correct,
+        tipsAndFeedback: { tip: "", chosenFeedback: "", notChosenFeedback: "" },
+      })),
+      behaviour: { enableRetry: true, enableSolutionsButton: true, singleAnswer: true },
+    },
+  };
+}
+
+/** Patch one regenerated / recast sub-question back into contentJson. */
+function patchQuestion(value: unknown, qi: number, q: SubQData): unknown {
   const d = structuredClone(value) as Record<string, unknown>;
+
+  // Single Choice Set — only the multichoice shape applies (no per-question type).
   if (Array.isArray(d.choices)) {
+    if (q.kind !== "multichoice") return d;
     const arr = d.choices as Choice[];
     const ordered = [...q.options].sort(
       (a, b) => Number(b.correct) - Number(a.correct),
     );
-    arr[qi] = {
-      ...arr[qi],
-      question: q.stem,
-      answers: ordered.map((o) => o.text),
-    };
-  } else if (Array.isArray(d.questions)) {
-    const arr = d.questions as {
-      params?: {
-        question?: string;
-        answers?: { text: string; correct?: boolean }[];
-      };
-    }[];
-    if (!arr[qi].params) arr[qi].params = {};
-    arr[qi].params!.question = wrapP(q.stem);
-    arr[qi].params!.answers = q.options.map((o) => ({
-      text: wrapP(o.text),
-      correct: o.correct,
-    }));
+    arr[qi] = { ...arr[qi], question: q.stem, answers: ordered.map((o) => o.text) };
+    return d;
+  }
+
+  if (Array.isArray(d.questions)) {
+    const arr = d.questions as Record<string, unknown>[];
+    const prevLib = arr[qi]?.library;
+    const rebuilt = buildSubQuestion(q);
+    // in-place refine of a MultiChoice stays minimal; a type change swaps the wrapper
+    if (
+      q.kind === "multichoice" &&
+      typeof prevLib === "string" &&
+      prevLib.startsWith("H5P.MultiChoice")
+    ) {
+      const p2 = (arr[qi].params ?? {}) as Record<string, unknown>;
+      p2.question = wrapP(q.stem);
+      const ordered = [...q.options].sort(
+        (a, b) => Number(b.correct) - Number(a.correct),
+      );
+      p2.answers = ordered.map((o) => ({
+        text: wrapP(o.text),
+        correct: o.correct,
+        tipsAndFeedback: { tip: "", chosenFeedback: "", notChosenFeedback: "" },
+      }));
+      arr[qi] = { ...arr[qi], params: p2 };
+    } else {
+      arr[qi] = rebuilt;
+    }
   }
   return d;
 }

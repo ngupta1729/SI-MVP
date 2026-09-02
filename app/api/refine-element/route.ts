@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { refineElement, refineQuestion } from "@/lib/twin";
+import { refineElement, refineQuestion, type SubQType } from "@/lib/twin";
 import type { ImportIntent, TwinSource } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -23,8 +23,9 @@ export async function POST(req: NextRequest) {
     currentStem?: string;
     currentOptions?: { text: string; correct: boolean }[];
     siblingStems?: string[];
+    toType?: SubQType;
   };
-  if (!body?.ask) {
+  if (!body?.ask && !(body?.target === "question" && body?.toType)) {
     return NextResponse.json({ error: "ask required" }, { status: 400 });
   }
 
@@ -37,6 +38,7 @@ export async function POST(req: NextRequest) {
       currentOptions: body.currentOptions ?? [],
       siblingStems: body.siblingStems ?? [],
       ask: body.ask,
+      toType: body.toType,
     });
     if (!q) return NextResponse.json({ error: "no result" }, { status: 502 });
     return NextResponse.json({ question: q });
