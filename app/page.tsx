@@ -5719,8 +5719,6 @@ function ItemPanel(p: {
     c[ci] = { ...c[ci], ...patch };
     write({ choices: c });
   };
-  const edited = p.value !== p.item.contentJson;
-
   return (
     <div className="space-y-3">
       {!p.hideViewToggle && (
@@ -5751,22 +5749,14 @@ function ItemPanel(p: {
 
       {view === "play" ? (
         p.item.hostPrepared && p.value ? (
-          <>
-            <H5PRender
-              h5pJsonPath={p.item.render.h5pJsonPath}
-              librariesPath={p.item.render.librariesPath}
-              renderKey={p.item.id}
-              renderId={p.item.id}
-              contentJson={p.item.contentJson}
-              h5pJson={p.item.render.h5pJson}
-            />
-            {edited && (
-              <p className="text-[11px] text-amber-600">
-                Play shows the originally generated version — your edits appear in
-                Review.
-              </p>
-            )}
-          </>
+          <H5PRender
+            h5pJsonPath={p.item.render.h5pJsonPath}
+            librariesPath={p.item.render.librariesPath}
+            renderKey={p.item.id}
+            renderId={p.item.id}
+            contentJson={p.value}
+            h5pJson={p.item.render.h5pJson}
+          />
         ) : (
           <div className="rounded-lg border border-dashed border-zinc-300 p-4 text-xs text-zinc-500 dark:border-zinc-700">
             No H5P library bundle for {p.item.contentType} — add a .h5p of this type
