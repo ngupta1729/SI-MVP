@@ -40,9 +40,26 @@ export interface ReviewSummaryEvent {
   uiVariant?: UiVariant;
   at: string;
 }
-export type ReviewEvent = ReviewActionEvent | ReviewSummaryEvent;
+/** Fired when the educator leaves the flow before creating anything. */
+export interface AbandonEvent {
+  kind: "abandon";
+  importId: string;
+  /** Which stage they left from — the survey's first question is step-specific. */
+  step: "configure" | "activities" | "review";
+  /** The picked "what stopped you?" option, if any. */
+  reason?: string;
+  /** "Has this put you off?" — No | A bit | Yes. */
+  putOff?: string;
+  comment?: string;
+  sessionId?: string;
+  uiVariant?: UiVariant;
+  at: string;
+}
+export type ReviewEvent = ReviewActionEvent | ReviewSummaryEvent | AbandonEvent;
 export const isActionEvent = (e: ReviewEvent): e is ReviewActionEvent =>
   "action" in e;
+export const isAbandonEvent = (e: ReviewEvent): e is AbandonEvent =>
+  (e as AbandonEvent).kind === "abandon";
 
 /* ------------------------------- IO ------------------------------- */
 
@@ -197,6 +214,17 @@ export interface ExperienceMetrics {
   medianBuildMs: number | null;
   medianReviewMs: number | null;
   medianTotalMs: number | null;
+  /** Abandon survey — people who left the flow, grouped by the step they left from. */
+  abandon: {
+    total: number;
+    byStep: Array<{
+      step: "configure" | "activities" | "review";
+      count: number;
+      reasons: CountRow[];
+      putOff: { no: number; abit: number; yes: number; unanswered: number };
+      comments: Array<{ text: string; reason: string | null; at: string }>;
+    }>;
+  };
 }
 
 export interface DashboardMetrics {
@@ -287,7 +315,46 @@ function computeHeadline(recs: ImportRecord[]): Headline {
   };
 }
 
-function computeExperience(recs: ImportRecord[]): ExperienceMetrics {
+const ABANDON_STEPS = ["configure", "activities", "review"] as const;
+
+function computeAbandon(
+  events: ReviewEvent[],
+): ExperienceMetrics["abandon"] {
+  const evs = events.filter(isAbandonEvent);
+  const byStep = ABANDON_STEPS.map((step) => {
+    const forStep = evs.filter((e) => e.step === step);
+    const putOff = { no: 0, abit: 0, yes: 0, unanswered: 0 };
+    for (const e of forStep) {
+      const p = (e.putOff ?? "").toLowerCase();
+      if (p === "no") putOff.no++;
+      else if (p === "a bit") putOff.abit++;
+      else if (p === "yes") putOff.yes++;
+      else putOff.unanswered++;
+    }
+    return {
+      step,
+      count: forStep.length,
+      reasons: tally(
+        forStep.map((e) => e.reason).filter((r): r is string => !!r),
+      ),
+      putOff,
+      comments: forStep
+        .filter((e) => e.comment?.trim())
+        .map((e) => ({
+          text: e.comment!.trim(),
+          reason: e.reason ?? null,
+          at: e.at,
+        }))
+        .sort((a, b) => b.at.localeCompare(a.at)),
+    };
+  });
+  return { total: evs.length, byStep };
+}
+
+function computeExperience(
+  recs: ImportRecord[],
+  events: ReviewEvent[],
+): ExperienceMetrics {
   const rated = recs.filter((r) => r.feedback);
   const ratings = rated.map((r) => r.feedback!.rating).filter((n) => n > 0);
   const ratingDist = [0, 0, 0, 0, 0, 0];
@@ -334,6 +401,7 @@ function computeExperience(recs: ImportRecord[]): ExperienceMetrics {
     medianBuildMs: median(builds),
     medianReviewMs: median(reviews),
     medianTotalMs: median(totals),
+    abandon: computeAbandon(events),
   };
 }
 
@@ -556,7 +624,7 @@ export function computeMetrics(
       eventCount: events.length,
     },
     headline: computeHeadline(withDec),
-    experience: computeExperience(withDec),
+    experience: computeExperience(withDec, events),
     variantSplit,
     gate: { outcome, byContentType, bySourceKind, byEngine },
     feedback: { refineSteers, discardReasons, attemptLoops },

@@ -361,7 +361,7 @@ function ExperienceSection({ x }: { x: ExperienceMetrics }) {
       {x.comments.length > 0 && (
         <div className={card}>
           <p className="mb-2 text-sm font-medium">
-            What would make Smart Import more useful
+            Completion survey — what would make Smart Import more useful
           </p>
           <ul className="space-y-2">
             {x.comments.map((c, i) => (
@@ -381,7 +381,93 @@ function ExperienceSection({ x }: { x: ExperienceMetrics }) {
           </ul>
         </div>
       )}
+
+      <AbandonSurveySection a={x.abandon} />
     </Section>
+  );
+}
+
+const ABANDON_LABEL: Record<string, string> = {
+  configure: "Left at Configure",
+  activities: "Left at Choose activities",
+  review: "Left at Review (generated, not created)",
+};
+
+function AbandonSurveySection({
+  a,
+}: {
+  a: ExperienceMetrics["abandon"];
+}) {
+  if (a.total === 0) {
+    return (
+      <div className={card}>
+        <p className="text-sm font-medium">Abandon survey — by step</p>
+        <p className="mt-1 text-xs text-zinc-400">
+          Nobody has answered the leave-the-flow survey yet. It fires when
+          someone closes the flow after a real attempt, tagged with the step.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className={card}>
+      <p className="mb-1 text-sm font-medium">
+        Abandon survey — {a.total} left the flow
+      </p>
+      <p className="mb-3 text-xs text-zinc-400">
+        Where people drop, and why. Each step asks its own question.
+      </p>
+      <div className="grid gap-4 md:grid-cols-3">
+        {a.byStep.map((s) => {
+          const answered = s.putOff.no + s.putOff.abit + s.putOff.yes;
+          return (
+            <div
+              key={s.step}
+              className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+            >
+              <p className="text-xs font-medium">{ABANDON_LABEL[s.step]}</p>
+              <p className="mt-0.5 text-2xl font-semibold tabular-nums">
+                {s.count}
+              </p>
+              {s.reasons.length > 0 && (
+                <div className="mt-2">
+                  <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-zinc-400">
+                    What stopped them
+                  </p>
+                  <BarList
+                    rows={s.reasons.map((r) => ({
+                      label: r.label,
+                      value: r.count,
+                    }))}
+                  />
+                </div>
+              )}
+              {answered > 0 && (
+                <p className="mt-2 text-[11px] text-zinc-500">
+                  Put off Smart Import: {s.putOff.yes} yes · {s.putOff.abit} a
+                  bit · {s.putOff.no} no
+                </p>
+              )}
+              {s.comments.length > 0 && (
+                <ul className="mt-2 space-y-1.5">
+                  {s.comments.slice(0, 5).map((c, i) => (
+                    <li
+                      key={i}
+                      className="border-l-2 border-zinc-200 pl-2 text-[11px] text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                    >
+                      &ldquo;{c.text}&rdquo;
+                      {c.reason && (
+                        <span className="text-zinc-400"> · {c.reason}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
