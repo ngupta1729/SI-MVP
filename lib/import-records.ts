@@ -121,8 +121,7 @@ export function saveImport(record: ImportRecord): void {
 export function intentLabel(i: ImportIntent): string {
   if (i.authoringMode !== "brief") return i.prompt || "(defaults)";
   const filled = (i.briefFields ?? [])
-    .filter((f) => f.label.trim() && f.value.trim())
+    .filter((f) => f.enabled !== false && f.label.trim() && f.value.trim())
     .map((f) => `${f.label.trim()}: ${f.value.trim()}`);
-  filled.push(`${i.emphasis} emphasis`, `${i.volume} volume`);
-  return `Brief — ${filled.join(" · ")}`;
+  return filled.length ? `Brief — ${filled.join(" · ")}` : "Brief — (empty)";
 }

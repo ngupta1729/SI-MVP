@@ -4,13 +4,14 @@
 // exposed through useSyncExternalStore. System templates live in lib/intent-presets.ts.
 
 import { useCallback, useSyncExternalStore } from "react";
-import type { BriefField, ImportIntent } from "./types";
+import type { BriefField } from "./types";
 
-/** A saved guided brief — the designed fields + their default values + emphasis/volume. */
+/** A saved guided brief — the designed fields (with their on/off state and any
+ *  default values). Old saves may also carry emphasis/volume; ignored on load. */
 export interface SavedBrief {
   fields: BriefField[];
-  emphasis: ImportIntent["emphasis"];
-  volume: ImportIntent["volume"];
+  emphasis?: string;
+  volume?: string;
 }
 
 export interface SavedTemplate {

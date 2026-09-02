@@ -12,8 +12,10 @@ export type BriefFieldType = "select" | "text" | "number";
 
 /**
  * One row of a guided brief. The educator designs these in the brief's edit
- * mode — label, control type, the allowed values of a dropdown, whether it is
- * required — then the saved brief renders exactly those fields for filling in.
+ * mode — add / delete field-and-value pairs, rename, switch control type, edit
+ * a dropdown's allowed values, mark required, and toggle `enabled` to decide
+ * which rows actually show when filling the brief in. A saved configuration is
+ * a named template.
  */
 export interface BriefField {
   id: string;
@@ -22,6 +24,8 @@ export interface BriefField {
   /** Allowed values — used when `type === "select"`. */
   options: string[];
   required: boolean;
+  /** Whether this row appears in the fill-in brief (toggled in design mode). */
+  enabled: boolean;
   /** The educator's filled-in value (empty until picked / typed). */
   value: string;
 }
@@ -48,13 +52,19 @@ export interface ImportIntent {
   promptPresetId: string | null;
 
   /**
-   * Live when authoringMode === "brief". Emphasis and Volume stay fixed — the
-   * recommendation engine reads them as structured values. Everything else the
-   * educator says is in `briefFields`, a form they design and can save by name.
+   * Live when authoringMode === "brief". A form the educator designs (add /
+   * delete / toggle rows) and can save by name. Starts with Learning goal,
+   * Audience and Difficulty level.
+   */
+  briefFields: BriefField[];
+
+  /**
+   * Fixed recommendation-engine inputs, no longer surfaced in the UI — kept at
+   * their defaults so the engine keeps working. Difficulty and audience now
+   * flow in as brief text instead.
    */
   emphasis: "assessment" | "concept_explanation" | "balanced";
   volume: "light" | "standard" | "thorough";
-  briefFields: BriefField[];
 
   /** "generate" new items, or "extract" questions already present in the source. */
   mode: "generate" | "extract";
