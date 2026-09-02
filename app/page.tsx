@@ -152,8 +152,9 @@ export default function Page() {
   // Shown when the user hits "Save" in the library Refine view — new activity vs replace.
   const [soloSaveChoice, setSoloSaveChoice] = useState(false);
   const [soloOpen, setSoloOpen] = useState<boolean[]>([true, true]);
-  const [soloWorkTab, setSoloWorkTab] = useState<"chat" | "editor">("chat");
-  const [soloPreviewTab, setSoloPreviewTab] = useState<"edit" | "play">("play");
+  const [soloWorkTab, setSoloWorkTab] = useState<"chat" | "fields" | "editor">(
+    "chat",
+  );
   // Wall-clock from starting the import to the generated set landing — i.e.
   // steps 1–2 (source + intent + choose activities + generate). Review/approve
   // time is deliberately excluded.
@@ -732,7 +733,6 @@ export default function Page() {
     setSelected(it.id);
     setSoloOpen([true, true]);
     setSoloWorkTab("chat");
-    setSoloPreviewTab("play");
     setSoloRefine({ recId: rec.id, recName: rec.name, itemId: it.id });
   }
 
@@ -942,60 +942,15 @@ export default function Page() {
                     This activity is no longer available.
                   </p>
                 ) : (
-                  <div className="flex h-full flex-col overflow-hidden">
-                    <div className="flex shrink-0 gap-1 border-b border-zinc-200 p-2 dark:border-zinc-800">
-                      {(["edit", "play"] as const).map((t) => (
-                        <button
-                          key={t}
-                          onClick={() => setSoloPreviewTab(t)}
-                          className={`rounded border px-2 py-0.5 text-[11px] ${
-                            soloPreviewTab === t
-                              ? "border-blue-600 font-medium"
-                              : "border-zinc-300 text-zinc-500 dark:border-zinc-700"
-                          }`}
-                        >
-                          {t === "edit" ? "Edit fields" : "Preview"}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="min-h-0 flex-1 overflow-auto">
-                      {soloPreviewTab === "edit" ? (
-                        <RefineFields
-                          key={cur.id}
-                          value={edits[cur.id] ?? cur.contentJson}
-                          onChange={(v) =>
-                            setEdits((e) => ({ ...e, [cur.id]: v }))
-                          }
-                          onLog={(text) =>
-                            setTranscript((tt) => ({
-                              ...tt,
-                              [cur.id]: [
-                                ...(tt[cur.id] ?? []),
-                                { role: "system", text },
-                              ],
-                            }))
-                          }
-                          activityLabel={
-                            contentType(cur.contentType)?.label ??
-                            cur.contentType
-                          }
-                          source={source()}
-                          intent={intent}
-                        />
-                      ) : (
-                        <ItemPanel
-                          key={cur.id}
-                          item={cur}
-                          value={edits[cur.id] ?? cur.contentJson}
-                          onChange={(v) =>
-                            setEdits((e) => ({ ...e, [cur.id]: v }))
-                          }
-                          editing={false}
-                          hideViewToggle
-                          initialView="play"
-                        />
-                      )}
-                    </div>
+                  <div className="h-full overflow-auto p-3">
+                    <ItemPanel
+                      key={cur.id}
+                      item={cur}
+                      value={edits[cur.id] ?? cur.contentJson}
+                      onChange={(v) => setEdits((e) => ({ ...e, [cur.id]: v }))}
+                      editing={false}
+                      initialView="play"
+                    />
                   </div>
                 ),
               },
@@ -1008,8 +963,8 @@ export default function Page() {
                   </div>
                 ) : (
                   <div className="flex h-full flex-col overflow-hidden">
-                    <div className="flex shrink-0 gap-1 border-b border-zinc-200 p-2 dark:border-zinc-800">
-                      {(["chat", "editor"] as const).map((t) => (
+                    <div className="flex shrink-0 flex-wrap gap-1 border-b border-zinc-200 p-2 dark:border-zinc-800">
+                      {(["chat", "fields", "editor"] as const).map((t) => (
                         <button
                           key={t}
                           onClick={() => setSoloWorkTab(t)}
@@ -1019,18 +974,62 @@ export default function Page() {
                               : "border-zinc-300 text-zinc-500 dark:border-zinc-700"
                           }`}
                         >
-                          {t === "chat" ? "Chat" : "Editor"}
+                          {t === "chat"
+                            ? "Chat"
+                            : t === "fields"
+                              ? "Edit fields"
+                              : "Editor"}
                         </button>
                       ))}
                       <span className="ml-1 self-center text-[10px] text-zinc-400">
                         {soloWorkTab === "chat"
                           ? "AI refine · remix · discard"
-                          : "precise manual fixes"}
+                          : soloWorkTab === "fields"
+                            ? "edit each question directly"
+                            : "the full H5P editor"}
                       </span>
                     </div>
-                    <div className="min-h-0 flex-1 overflow-hidden">
+                    <div className="min-h-0 flex-1 overflow-auto">
                       {soloWorkTab === "editor" ? (
                         <H5PEditorStub item={cur} />
+                      ) : soloWorkTab === "fields" ? (
+                        isFieldEditable(edits[cur.id] ?? cur.contentJson) ? (
+                          <RefineFields
+                            key={cur.id}
+                            value={edits[cur.id] ?? cur.contentJson}
+                            onChange={(v) =>
+                              setEdits((e) => ({ ...e, [cur.id]: v }))
+                            }
+                            onLog={(text) =>
+                              setTranscript((tt) => ({
+                                ...tt,
+                                [cur.id]: [
+                                  ...(tt[cur.id] ?? []),
+                                  { role: "system", text },
+                                ],
+                              }))
+                            }
+                            activityLabel={
+                              contentType(cur.contentType)?.label ??
+                              cur.contentType
+                            }
+                            source={source()}
+                            intent={intent}
+                          />
+                        ) : (
+                          <div className="p-3">
+                            <ItemPanel
+                              key={cur.id}
+                              item={cur}
+                              value={edits[cur.id] ?? cur.contentJson}
+                              onChange={(v) =>
+                                setEdits((e) => ({ ...e, [cur.id]: v }))
+                              }
+                              editing
+                              hideViewToggle
+                            />
+                          </div>
+                        )
                       ) : (
                         <RefineChat
                           key={cur.id}
@@ -2669,7 +2668,6 @@ function Review(p: {
     id: string;
     kind: "regen" | "remix" | "discard";
   } | null>(null);
-  const [editView, setEditView] = useState<"fields" | "preview">("fields");
   /** "all" or a question index — the scope of the open regen/discard menu. */
   const [menuScope, setMenuScope] = useState<"all" | number>("all");
   const openMenu = (
@@ -2984,60 +2982,40 @@ function Review(p: {
         <div className="space-y-3">
           {!current ? (
             <p className="text-sm text-zinc-400">Select an item.</p>
-          ) : p.itemState[current.id] === "editing" &&
+          ) : p.itemState[current.id] === "editing" ? (
             isFieldEditable(p.edits[current.id] ?? current.contentJson) ? (
-            <div>
-              <div className="mb-2 flex gap-1 text-[11px]">
-                {(["fields", "preview"] as const).map((v) => (
-                  <button
-                    key={v}
-                    onClick={() => setEditView(v)}
-                    className={`rounded border px-2 py-0.5 ${
-                      editView === v
-                        ? "border-blue-600 font-medium"
-                        : "border-zinc-300 text-zinc-500 dark:border-zinc-700"
-                    }`}
-                  >
-                    {v === "fields" ? "Edit fields" : "Preview"}
-                  </button>
-                ))}
-              </div>
-              {editView === "fields" ? (
-                <RefineFields
-                  key={current.id}
-                  value={p.edits[current.id] ?? current.contentJson}
-                  onChange={(v) =>
-                    p.setEdits((e) => ({ ...e, [current.id]: v }))
-                  }
-                  onLog={p.onLog}
-                  activityLabel={
-                    contentType(current.contentType)?.label ??
-                    current.contentType
-                  }
-                  source={p.source}
-                  intent={p.intent}
-                />
-              ) : (
-                <ItemPanel
-                  key={current.id}
-                  item={current}
-                  value={p.edits[current.id] ?? current.contentJson}
-                  onChange={(v) =>
-                    p.setEdits((e) => ({ ...e, [current.id]: v }))
-                  }
-                  editing={false}
-                  hideViewToggle
-                  initialView="play"
-                />
-              )}
-            </div>
+              <RefineFields
+                key={current.id}
+                value={p.edits[current.id] ?? current.contentJson}
+                onChange={(v) =>
+                  p.setEdits((e) => ({ ...e, [current.id]: v }))
+                }
+                onLog={p.onLog}
+                activityLabel={
+                  contentType(current.contentType)?.label ??
+                  current.contentType
+                }
+                source={p.source}
+                intent={p.intent}
+              />
+            ) : (
+              <ItemPanel
+                key={current.id}
+                item={current}
+                value={p.edits[current.id] ?? current.contentJson}
+                onChange={(v) =>
+                  p.setEdits((e) => ({ ...e, [current.id]: v }))
+                }
+                editing
+              />
+            )
           ) : (
             <ItemPanel
               key={current.id}
               item={current}
               value={p.edits[current.id] ?? current.contentJson}
               onChange={(v) => p.setEdits((e) => ({ ...e, [current.id]: v }))}
-              editing={p.itemState[current.id] === "editing"}
+              editing={false}
             />
           )}
         </div>
