@@ -2937,32 +2937,45 @@ function Review(p: {
           {!current ? (
             <p className="text-sm text-zinc-400">Select an item.</p>
           ) : p.itemState[current.id] === "editing" ? (
-            isFieldEditable(p.edits[current.id] ?? current.contentJson) ? (
-              <RefineFields
-                key={current.id}
-                value={p.edits[current.id] ?? current.contentJson}
-                onChange={(v) =>
-                  p.setEdits((e) => ({ ...e, [current.id]: v }))
-                }
-                onLog={p.onLog}
-                activityLabel={
-                  contentType(current.contentType)?.label ??
-                  current.contentType
-                }
-                source={p.source}
-                intent={p.intent}
-              />
-            ) : (
-              <ItemPanel
-                key={current.id}
-                item={current}
-                value={p.edits[current.id] ?? current.contentJson}
-                onChange={(v) =>
-                  p.setEdits((e) => ({ ...e, [current.id]: v }))
-                }
-                editing
-              />
-            )
+            <div className="space-y-2">
+              <p className="text-[11px] text-zinc-400">
+                Editing &mdash; change any field directly below
+                {isFieldEditable(p.edits[current.id] ?? current.contentJson)
+                  ? ", or ✦ for an AI rewrite of one field"
+                  : ""}
+                . Done editing to see it play.
+              </p>
+              {isFieldEditable(
+                p.edits[current.id] ?? current.contentJson,
+              ) ? (
+                <RefineFields
+                  key={current.id}
+                  value={p.edits[current.id] ?? current.contentJson}
+                  onChange={(v) =>
+                    p.setEdits((e) => ({ ...e, [current.id]: v }))
+                  }
+                  onLog={p.onLog}
+                  activityLabel={
+                    contentType(current.contentType)?.label ??
+                    current.contentType
+                  }
+                  source={p.source}
+                  intent={p.intent}
+                  hideIntro
+                />
+              ) : (
+                <ItemPanel
+                  key={current.id}
+                  item={current}
+                  value={p.edits[current.id] ?? current.contentJson}
+                  onChange={(v) =>
+                    p.setEdits((e) => ({ ...e, [current.id]: v }))
+                  }
+                  editing
+                  hideViewToggle
+                />
+              )}
+            </div>
           ) : (
             <ItemPanel
               key={current.id}
@@ -3590,6 +3603,8 @@ function RefineFields(p: {
   activityLabel: string;
   source: TwinSource;
   intent: ImportIntent;
+  /** The caller shows its own editing hint above this. */
+  hideIntro?: boolean;
 }) {
   const { shape, qs } = readQuestions(p.value);
   const [open, setOpen] = useState<FieldT | null>(null);
@@ -3801,11 +3816,13 @@ function RefineFields(p: {
 
   return (
     <div className="space-y-3 p-3">
-      <p className="text-[11px] text-zinc-400">
-        Type to edit a field directly · <span className="text-blue-500">&#10022;</span>{" "}
-        for an AI rewrite of just that field. Nothing is saved until you choose
-        Save.
-      </p>
+      {!p.hideIntro && (
+        <p className="text-[11px] text-zinc-400">
+          Type to edit a field directly ·{" "}
+          <span className="text-blue-500">&#10022;</span> for an AI rewrite of
+          just that field. Nothing is saved until you choose Save.
+        </p>
+      )}
       {qs.map((q, qi) => (
         <div
           key={qi}
