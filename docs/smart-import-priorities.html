@@ -194,6 +194,8 @@
   .ve-q.hv-he { border-top: 3px solid var(--today); } .ve-q.hv-he .qh { color: var(--today); }
   .ve-q.lv-le { border-top: 3px solid var(--ink-faint); } .ve-q.lv-le .qh { color: var(--ink-faint); }
   .ve-q.lv-he { border-top: 3px solid var(--ink-faint); } .ve-q.lv-he .qh { color: var(--ink-faint); }
+  .ve-note { width: 100%; resize: vertical; font: inherit; font-size: .72rem; line-height: 1.45; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: .35rem .45rem; }
+  .ve-note:focus { outline: 2px solid var(--accent); outline-offset: 1px; background: var(--surface); }
   .ve-q ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .3rem; }
   .ve-q li { font-size: .68rem; line-height: 1.2; border: 1px solid var(--line); border-radius: 6px; padding: .18rem .4rem; background: var(--surface-2); }
   .ve-q li.now { border-color: var(--now); color: var(--now); background: var(--now-bg); font-weight: 600; }
@@ -306,53 +308,29 @@
     <textarea class="betnote" data-flowkey="top3" rows="4" placeholder="decide in review — the three bets to fund this quarter…"></textarea>
 
     <div class="ve">
-      <h3>Value &times; effort &mdash; Now &amp; Next items</h3>
+      <h3>Value &times; effort</h3>
       <div class="ve-grid">
         <div class="ve-q hv-le">
           <div class="qh">High value &middot; Lower effort &mdash; do first</div>
-          <ul>
-            <li class="now">In-product survey (abandon + completion)</li>
-            <li class="now">Team evals dashboard</li>
-            <li class="now">Recommendation engine + read-back</li>
-            <li class="now">Source grounding &mdash; confidence via verify pass</li>
-          </ul>
+          <textarea class="ve-note" data-flowkey="ve-hvle" rows="4" placeholder="items&hellip;"></textarea>
         </div>
         <div class="ve-q hv-he">
           <div class="qh">High value &middot; High effort &mdash; big bets</div>
-          <ul>
-            <li class="now">PowerPoint as a source</li>
-            <li class="now">Generation latency</li>
-            <li class="now">Review &amp; Approve 1st draft (hardening)</li>
-          </ul>
+          <textarea class="ve-note" data-flowkey="ve-hvhe" rows="4" placeholder="items&hellip;"></textarea>
         </div>
-
         <div class="ve-q lv-le">
           <div class="qh">Lower value &middot; Lower effort &mdash; fill-in</div>
-          <ul>
-            <li class="now">Ready-to-use prompts</li>
-            <li class="now">Question extractor</li>
-            <li class="now">Prompt library</li>
-            <li class="next">Design brief library</li>
-          </ul>
+          <textarea class="ve-note" data-flowkey="ve-lvle" rows="4" placeholder="items&hellip;"></textarea>
         </div>
         <div class="ve-q lv-he">
           <div class="qh">Lower value now &middot; High effort &mdash; defer / for paid</div>
-          <ul>
-            <li class="now">AI in Editor (sub-question + real editor)</li>
-            <li class="next">Design briefs to capture intent</li>
-            <li class="next">Element-level AI edits (&#10022;)</li>
-            <li class="next">Easy retrieval of SI content</li>
-            <li class="next">Responsible-AI labelling + author-of-record <span style="color:var(--today)">&mdash; compliance-gated</span></li>
-            <li class="next">Image &amp; diagram extraction</li>
-          </ul>
+          <textarea class="ve-note" data-flowkey="ve-lvhe" rows="4" placeholder="items&hellip;"></textarea>
         </div>
       </div>
       <p class="ve-key">
-        <span class="now">Now</span> = filled &nbsp;·&nbsp;
-        <span style="border:1px dashed var(--ink-faint);border-radius:4px;padding:0 .25rem">Next</span> = dashed.
-        <br><b>The value test:</b> if this were missing, would a meaningful share of trials fail to convert? Yes &rarr; high. The survey and evals pass it on leverage &mdash; the board&rsquo;s problem is &ldquo;we don&rsquo;t know where the 70% drop off&rdquo;, and they end the guessing cheaply. Ready-to-use prompts don&rsquo;t &mdash; the default already gives an okay result; they&rsquo;re an improvement, not a gate.
-        <br><b>Effort</b> = build to production, not the prototype. &ldquo;Prototyped&rdquo; hides real work: the Editor tab is a stub, sub-question refine regenerates the whole activity, trust signals aren&rsquo;t verified. The confidence signal is the exception &mdash; a verify pass is one extra LLM call, genuinely cheap (it does add latency).
-        <br>My read &mdash; argue any of it in review.
+        <b>The value test:</b> if this were missing, would a meaningful share of trials fail to convert? Yes &rarr; high.
+        &nbsp;·&nbsp; <b>Effort</b> = build to production, not the prototype.
+        &nbsp;·&nbsp; Fill in during the review; saved in your browser only.
       </p>
     </div>
   </div>
