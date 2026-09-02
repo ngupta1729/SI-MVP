@@ -983,7 +983,7 @@ export default function Page() {
                       ))}
                       <span className="ml-1 self-center text-[10px] text-zinc-400">
                         {soloWorkTab === "chat"
-                          ? "AI refine · remix · discard"
+                          ? "AI refine · remix"
                           : "the full H5P editor — every field, by hand"}
                       </span>
                     </div>
@@ -3049,11 +3049,11 @@ function RefineChat(p: {
     typeof scope === "number" && questions[scope] ? questions[scope] : null;
   const [subBusy, setSubBusy] = useState(false);
 
-  // hideDiscard drops whole-activity discard (don't delete published content),
-  // but discarding one sub-question of an activity you're editing is fine.
+  // hideDiscard drops discard entirely in the Modify workflow — you don't delete
+  // an already-created activity, or a question inside one, from here.
   const actions = REFINE_ACTIONS.filter((a) => {
     if (a.key === "remix" && scopeQ && !canRecastQuestion) return false;
-    if (a.key === "discard" && p.hideDiscard && !scopeQ) return false;
+    if (a.key === "discard" && p.hideDiscard) return false;
     return true;
   });
   const [expand, setExpand] = useState<null | "refine" | "remix" | "discard">(
