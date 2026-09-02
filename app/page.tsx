@@ -152,9 +152,7 @@ export default function Page() {
   // Shown when the user hits "Save" in the library Refine view — new activity vs replace.
   const [soloSaveChoice, setSoloSaveChoice] = useState(false);
   const [soloOpen, setSoloOpen] = useState<boolean[]>([true, true]);
-  const [soloWorkTab, setSoloWorkTab] = useState<"chat" | "fields" | "editor">(
-    "chat",
-  );
+  const [soloWorkTab, setSoloWorkTab] = useState<"chat" | "editor">("chat");
   // Wall-clock from starting the import to the generated set landing — i.e.
   // steps 1–2 (source + intent + choose activities + generate). Review/approve
   // time is deliberately excluded.
@@ -825,7 +823,7 @@ export default function Page() {
         <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
           <div className="min-w-0">
             <span className="text-sm font-semibold">
-              Refine · {cur ? contentType(cur.contentType)?.label : ""}
+              Modify · {cur ? contentType(cur.contentType)?.label : ""}
             </span>
             <span className="ml-2 truncate text-xs text-zinc-400">
               from {soloRefine.recName}
@@ -964,7 +962,7 @@ export default function Page() {
                 ) : (
                   <div className="flex h-full flex-col overflow-hidden">
                     <div className="flex shrink-0 flex-wrap gap-1 border-b border-zinc-200 p-2 dark:border-zinc-800">
-                      {(["chat", "fields", "editor"] as const).map((t) => (
+                      {(["chat", "editor"] as const).map((t) => (
                         <button
                           key={t}
                           onClick={() => setSoloWorkTab(t)}
@@ -974,62 +972,18 @@ export default function Page() {
                               : "border-zinc-300 text-zinc-500 dark:border-zinc-700"
                           }`}
                         >
-                          {t === "chat"
-                            ? "Chat"
-                            : t === "fields"
-                              ? "Edit fields"
-                              : "Editor"}
+                          {t === "chat" ? "Chat" : "Editor"}
                         </button>
                       ))}
                       <span className="ml-1 self-center text-[10px] text-zinc-400">
                         {soloWorkTab === "chat"
                           ? "AI refine · remix · discard"
-                          : soloWorkTab === "fields"
-                            ? "edit each question directly"
-                            : "the full H5P editor"}
+                          : "the full H5P editor — every field, by hand"}
                       </span>
                     </div>
                     <div className="min-h-0 flex-1 overflow-auto">
                       {soloWorkTab === "editor" ? (
                         <H5PEditorStub item={cur} />
-                      ) : soloWorkTab === "fields" ? (
-                        isFieldEditable(edits[cur.id] ?? cur.contentJson) ? (
-                          <RefineFields
-                            key={cur.id}
-                            value={edits[cur.id] ?? cur.contentJson}
-                            onChange={(v) =>
-                              setEdits((e) => ({ ...e, [cur.id]: v }))
-                            }
-                            onLog={(text) =>
-                              setTranscript((tt) => ({
-                                ...tt,
-                                [cur.id]: [
-                                  ...(tt[cur.id] ?? []),
-                                  { role: "system", text },
-                                ],
-                              }))
-                            }
-                            activityLabel={
-                              contentType(cur.contentType)?.label ??
-                              cur.contentType
-                            }
-                            source={source()}
-                            intent={intent}
-                          />
-                        ) : (
-                          <div className="p-3">
-                            <ItemPanel
-                              key={cur.id}
-                              item={cur}
-                              value={edits[cur.id] ?? cur.contentJson}
-                              onChange={(v) =>
-                                setEdits((e) => ({ ...e, [cur.id]: v }))
-                              }
-                              editing
-                              hideViewToggle
-                            />
-                          </div>
-                        )
                       ) : (
                         <RefineChat
                           key={cur.id}
@@ -3426,16 +3380,17 @@ function H5PEditorStub({ item }: { item: RenderedItem }) {
   const label = contentType(item.contentType)?.label ?? item.contentType;
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-      <div className="max-w-xs rounded-lg border border-dashed border-zinc-300 p-6 dark:border-zinc-700">
+      <div className="max-w-sm rounded-lg border border-dashed border-zinc-300 p-6 dark:border-zinc-700">
         <p className="text-sm font-medium">H5P editor &mdash; {label}</p>
         <p className="mt-1.5 text-xs text-zinc-500">
           The full H5P.com editor for this activity opens here &mdash; every
-          field, media, feedback and behaviour setting. Not rebuilt in the
-          prototype; Smart Import hands off to the existing editor unchanged.
+          question, option, media, feedback and behaviour setting, edited by
+          hand. Not rebuilt in the prototype; Smart Import hands off to the
+          existing editor unchanged.
         </p>
       </div>
       <p className="text-[11px] text-zinc-400">
-        Chat for AI refinements &middot; the editor for precise manual fixes.
+        Chat for AI changes &middot; the editor for precise manual ones.
       </p>
     </div>
   );
@@ -4986,7 +4941,7 @@ function SmartImportHome(p: {
                       onClick={() => p.onRefineItem(rec, it.id)}
                       className="rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] text-zinc-600 hover:border-blue-500 hover:text-blue-600 dark:border-zinc-700 dark:text-zinc-300"
                     >
-                      Refine
+                      Modify
                     </button>
                     <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800">
                       draft
