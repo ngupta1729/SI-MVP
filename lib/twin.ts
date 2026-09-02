@@ -817,6 +817,64 @@ ${role} Return ONLY the new text — no quotes, no label, no explanation, a sing
   }
 }
 
+/** Regenerate ONE sub-question of a composite activity (Question Set / Single
+ *  Choice Set) — new stem + options — leaving its siblings alone. */
+export async function refineQuestion(o: {
+  source: TwinSource;
+  intent: ImportIntent;
+  activityLabel: string;
+  currentStem: string;
+  currentOptions: { text: string; correct: boolean }[];
+  siblingStems: string[];
+  ask: string;
+}): Promise<{ stem: string; options: { text: string; correct: boolean }[] } | null> {
+  const n = o.currentOptions.length || 4;
+  if (!hasModel()) {
+    // offline: light deterministic nudge
+    return {
+      stem: o.currentStem + " (revised)",
+      options: o.currentOptions.map((op, i) => ({
+        text: op.text + (i === 0 ? "" : " — plausible"),
+        correct: op.correct,
+      })),
+    };
+  }
+  const text = await resolveSourceText(o.source);
+  const prompt = `You are refining ONE question of an H5P ${o.activityLabel}. Stay grounded strictly in the source. Do not touch the other questions.
+
+SOURCE:
+${text.slice(0, 8000)}
+
+OTHER QUESTIONS (leave these alone, don't duplicate them):
+${o.siblingStems.filter(Boolean).map((s) => "- " + s).join("\n") || "(none)"}
+
+CURRENT QUESTION: ${o.currentStem}
+CURRENT OPTIONS (correct answer marked *): ${o.currentOptions
+    .map((op) => (op.correct ? "*" : "") + op.text)
+    .join("  |  ")}
+
+ASK: ${o.ask}
+
+Return ONLY JSON: { "stem": "<the new question>", "options": [ { "text": "<option>", "correct": true|false } ] } with ${n} options and exactly one correct. Distractors must be clearly wrong on a careful read of the source, plausible to a learner who half-knows it, and similar in length and form to the correct answer.`;
+  try {
+    const { text: out } = await generateText({
+      model: openai(TWIN_MODEL),
+      prompt,
+      temperature: 0.4,
+    });
+    const json = out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1);
+    const parsed = JSON.parse(json) as {
+      stem: string;
+      options: { text: string; correct: boolean }[];
+    };
+    if (!parsed?.stem || !Array.isArray(parsed.options)) return null;
+    return parsed;
+  } catch (err) {
+    console.error("refineQuestion failed:", err);
+    return null;
+  }
+}
+
 /** Plain-language "what changed" for the offline mock — the model writes its own. */
 function mockChangeNote(adjustment: string): string {
   if (adjustment.startsWith("language:"))

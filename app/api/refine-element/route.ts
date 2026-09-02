@@ -1,27 +1,61 @@
 import { NextRequest, NextResponse } from "next/server";
-import { refineElement } from "@/lib/twin";
+import { refineElement, refineQuestion } from "@/lib/twin";
 import type { ImportIntent, TwinSource } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-/** Rewrite one field of one question — a stem or a single answer option. */
+/** Rewrite one field of one question (stem / option), or regenerate a whole
+ *  sub-question of a composite activity. */
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as {
+    target: "stem" | "option" | "question";
     source: TwinSource;
     intent: ImportIntent;
     activityLabel: string;
-    question: string;
-    siblings: string[];
-    target: "stem" | "option";
-    current: string;
-    isCorrect?: boolean;
     ask: string;
+    // stem/option
+    question?: string;
+    siblings?: string[];
+    current?: string;
+    isCorrect?: boolean;
+    // question
+    currentStem?: string;
+    currentOptions?: { text: string; correct: boolean }[];
+    siblingStems?: string[];
   };
-  if (!body?.ask || body.current == null) {
-    return NextResponse.json({ error: "ask and current required" }, { status: 400 });
+  if (!body?.ask) {
+    return NextResponse.json({ error: "ask required" }, { status: 400 });
   }
-  const value = await refineElement(body);
+
+  if (body.target === "question") {
+    const q = await refineQuestion({
+      source: body.source,
+      intent: body.intent,
+      activityLabel: body.activityLabel,
+      currentStem: body.currentStem ?? "",
+      currentOptions: body.currentOptions ?? [],
+      siblingStems: body.siblingStems ?? [],
+      ask: body.ask,
+    });
+    if (!q) return NextResponse.json({ error: "no result" }, { status: 502 });
+    return NextResponse.json({ question: q });
+  }
+
+  if (body.current == null) {
+    return NextResponse.json({ error: "current required" }, { status: 400 });
+  }
+  const value = await refineElement({
+    source: body.source,
+    intent: body.intent,
+    activityLabel: body.activityLabel,
+    question: body.question ?? "",
+    siblings: body.siblings ?? [],
+    target: body.target,
+    current: body.current,
+    isCorrect: body.isCorrect,
+    ask: body.ask,
+  });
   if (value == null) {
     return NextResponse.json({ error: "no result" }, { status: 502 });
   }

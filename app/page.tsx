@@ -436,6 +436,60 @@ export default function Page() {
     logReviewEvent({ action: "discard", itemId, reason });
   }
 
+  /** Refine one sub-question of a composite activity, editing its contentJson. */
+  async function refineQuestionInFlow(
+    itemId: string,
+    qi: number,
+    ask: string,
+  ): Promise<boolean> {
+    const item = result?.items.find((i) => i.id === itemId);
+    if (!item) return false;
+    const cur = edits[itemId] ?? item.contentJson;
+    const { qs } = readQuestions(cur);
+    if (!qs[qi]) return false;
+    setItem(itemId, "refining");
+    logReviewEvent({ action: "refine", itemId, reason: `Q${qi + 1}: ${ask}` });
+    try {
+      const res = await fetch("/api/refine-element", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          target: "question",
+          source: source(),
+          intent,
+          activityLabel: contentType(item.contentType)?.label ?? item.contentType,
+          currentStem: qs[qi].stem,
+          currentOptions: qs[qi].options,
+          siblingStems: qs.filter((_, i) => i !== qi).map((q) => q.stem),
+          ask,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.question) {
+        setEdits((e) => ({
+          ...e,
+          [itemId]: patchQuestion(cur, qi, data.question),
+        }));
+        setItem(itemId, "approved");
+        return true;
+      }
+    } catch {
+      /* fall through */
+    }
+    setItem(itemId, "approved");
+    setError("Couldn't regenerate that question — try again.");
+    return false;
+  }
+
+  /** Remove one sub-question from a composite activity's contentJson. */
+  function discardQuestionInFlow(itemId: string, qi: number) {
+    const item = result?.items.find((i) => i.id === itemId);
+    if (!item) return;
+    const cur = edits[itemId] ?? item.contentJson;
+    setEdits((e) => ({ ...e, [itemId]: dropQuestion(cur, qi) }));
+    logReviewEvent({ action: "discard", itemId, reason: `Q${qi + 1} removed` });
+  }
+
   function finishCreate() {
     if (!result) return;
     // edit events: diff each edited item against its original
@@ -975,6 +1029,17 @@ export default function Page() {
                           onDiscard={discardActivity}
                           onUndiscard={() => setItem(cur.id, "approved")}
                           hideDiscard
+                          subScope={
+                            isFieldEditable(edits[cur.id] ?? cur.contentJson)
+                              ? {
+                                  value: edits[cur.id] ?? cur.contentJson,
+                                  onValueChange: (v) =>
+                                    setEdits((e) => ({ ...e, [cur.id]: v })),
+                                  source: source(),
+                                  intent,
+                                }
+                              : undefined
+                          }
                         />
                       )}
                     </div>
@@ -1215,6 +1280,8 @@ export default function Page() {
               onRefine={refineActivity}
               onRemix={remixActivity}
               onDiscard={discardActivity}
+              onRefineQuestion={refineQuestionInFlow}
+              onDiscardQuestion={discardQuestionInFlow}
               source={source()}
               intent={intent}
               onLog={(text) =>
@@ -2567,6 +2634,8 @@ function Review(p: {
   onRefine: (itemId: string, adjustment: string) => void;
   onRemix: (itemId: string, toType: string) => void;
   onDiscard: (itemId: string, reason: string) => void;
+  onRefineQuestion: (itemId: string, qi: number, ask: string) => void;
+  onDiscardQuestion: (itemId: string, qi: number) => void;
   source: TwinSource;
   intent: ImportIntent;
   onLog: (text: string) => void;
@@ -2577,6 +2646,14 @@ function Review(p: {
     kind: "regen" | "remix" | "discard";
   } | null>(null);
   const [editView, setEditView] = useState<"fields" | "preview">("fields");
+  /** "all" or a question index — the scope of the open regen/discard menu. */
+  const [menuScope, setMenuScope] = useState<"all" | number>("all");
+  const openMenu = (
+    m: { id: string; kind: "regen" | "remix" | "discard" } | null,
+  ) => {
+    setMenu(m);
+    setMenuScope("all");
+  };
 
   return (
     <div className="space-y-4">
@@ -2648,7 +2725,7 @@ function Review(p: {
                     <button
                       disabled={st === "refining" || st === "remixing"}
                       onClick={() =>
-                        setMenu(
+                        openMenu(
                           menu?.id === item.id && menu.kind === "regen"
                             ? null
                             : { id: item.id, kind: "regen" },
@@ -2661,7 +2738,7 @@ function Review(p: {
                     <button
                       disabled={st === "refining" || st === "remixing"}
                       onClick={() =>
-                        setMenu(
+                        openMenu(
                           menu?.id === item.id && menu.kind === "remix"
                             ? null
                             : { id: item.id, kind: "remix" },
@@ -2673,7 +2750,7 @@ function Review(p: {
                     </button>
                     <button
                       onClick={() =>
-                        setMenu(
+                        openMenu(
                           menu?.id === item.id && menu.kind === "discard"
                             ? null
                             : { id: item.id, kind: "discard" },
@@ -2686,35 +2763,61 @@ function Review(p: {
                   </div>
                 )}
 
-                {menu?.id === item.id && menu.kind === "regen" && (
-                  <div className="mt-1 rounded border border-blue-300 bg-blue-50/50 p-1.5 text-[11px] dark:border-blue-900 dark:bg-blue-950/20">
-                    <p className="mb-1 text-zinc-500">
-                      Refine this activity — regenerates all questions, including
-                      your edits. What should change?
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      {REFINE_OPTIONS.map((o) => (
-                        <button
-                          key={o.id}
-                          onClick={() => {
-                            setMenu(null);
-                            p.onRefine(item.id, o.id);
-                          }}
-                          className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 dark:border-zinc-700 dark:bg-zinc-900"
+                {menu?.id === item.id && menu.kind === "regen" && (() => {
+                  const qs = readQuestions(
+                    p.edits[item.id] ?? item.contentJson,
+                  ).qs;
+                  const q = typeof menuScope === "number" ? menuScope : null;
+                  const fire = (ask: string) => {
+                    setMenu(null);
+                    if (q != null) p.onRefineQuestion(item.id, q, ask);
+                    else p.onRefine(item.id, ask);
+                  };
+                  return (
+                    <div className="mt-1 rounded border border-blue-300 bg-blue-50/50 p-1.5 text-[11px] dark:border-blue-900 dark:bg-blue-950/20">
+                      {qs.length > 0 && (
+                        <select
+                          value={String(menuScope)}
+                          onChange={(e) =>
+                            setMenuScope(
+                              e.target.value === "all"
+                                ? "all"
+                                : Number(e.target.value),
+                            )
+                          }
+                          className="mb-1.5 w-full rounded border border-zinc-300 bg-white px-1 py-0.5 dark:border-zinc-700 dark:bg-zinc-900"
                         >
-                          {o.label}
-                        </button>
-                      ))}
+                          <option value="all">
+                            Whole activity — all {qs.length} questions
+                          </option>
+                          {qs.map((qq, i) => (
+                            <option key={i} value={i}>
+                              Q{i + 1}: {qq.stem.slice(0, 44)}
+                              {qq.stem.length > 44 ? "…" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <p className="mb-1 text-zinc-500">
+                        {q != null
+                          ? `Regenerate question ${q + 1}. What should change?`
+                          : "Refine this activity — regenerates all questions, including your edits. What should change?"}
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {REFINE_OPTIONS.map((o) => (
+                          <button
+                            key={o.id}
+                            onClick={() => fire(q != null ? o.label : o.id)}
+                            className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 dark:border-zinc-700 dark:bg-zinc-900"
+                          >
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                      <MenuFreeText label="Apply" onSubmit={fire} />
                     </div>
-                    <MenuFreeText
-                      label="Apply"
-                      onSubmit={(txt) => {
-                        setMenu(null);
-                        p.onRefine(item.id, txt);
-                      }}
-                    />
-                  </div>
-                )}
+                  );
+                })()}
                 {menu?.id === item.id && menu.kind === "remix" && (
                   <div className="mt-1 rounded border border-blue-300 bg-blue-50/50 p-1.5 text-[11px] dark:border-blue-900 dark:bg-blue-950/20">
                     <p className="mb-1 text-zinc-500">
@@ -2739,32 +2842,74 @@ function Review(p: {
                     </div>
                   </div>
                 )}
-                {menu?.id === item.id && menu.kind === "discard" && (
-                  <div className="mt-1 rounded border border-red-300 bg-red-50/50 p-1.5 text-[11px] dark:border-red-900 dark:bg-red-950/20">
-                    <p className="mb-1 text-zinc-500">Discard because…</p>
-                    <div className="flex flex-wrap gap-1">
-                      {DISCARD_REASONS.map((r) => (
-                        <button
-                          key={r}
-                          onClick={() => {
-                            setMenu(null);
-                            p.onDiscard(item.id, r);
-                          }}
-                          className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 dark:border-zinc-700 dark:bg-zinc-900"
+                {menu?.id === item.id && menu.kind === "discard" && (() => {
+                  const qs = readQuestions(
+                    p.edits[item.id] ?? item.contentJson,
+                  ).qs;
+                  const q = typeof menuScope === "number" ? menuScope : null;
+                  const fire = (reason: string) => {
+                    setMenu(null);
+                    if (q != null) {
+                      p.onDiscardQuestion(item.id, q);
+                      setMenuScope("all");
+                    } else p.onDiscard(item.id, reason);
+                  };
+                  return (
+                    <div className="mt-1 rounded border border-red-300 bg-red-50/50 p-1.5 text-[11px] dark:border-red-900 dark:bg-red-950/20">
+                      {qs.length > 0 && (
+                        <select
+                          value={String(menuScope)}
+                          onChange={(e) =>
+                            setMenuScope(
+                              e.target.value === "all"
+                                ? "all"
+                                : Number(e.target.value),
+                            )
+                          }
+                          className="mb-1.5 w-full rounded border border-zinc-300 bg-white px-1 py-0.5 dark:border-zinc-700 dark:bg-zinc-900"
                         >
-                          {r}
+                          <option value="all">
+                            Whole activity — discard it
+                          </option>
+                          {qs.map((qq, i) => (
+                            <option key={i} value={i}>
+                              Q{i + 1}: {qq.stem.slice(0, 44)}
+                              {qq.stem.length > 44 ? "…" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <p className="mb-1 text-zinc-500">
+                        {q != null
+                          ? `Remove question ${q + 1} from this activity.`
+                          : "Discard because…"}
+                      </p>
+                      {q != null ? (
+                        <button
+                          onClick={() => fire("")}
+                          className="rounded border border-red-300 bg-white px-1.5 py-0.5 dark:border-red-800 dark:bg-zinc-900"
+                        >
+                          Remove question {q + 1}
                         </button>
-                      ))}
+                      ) : (
+                        <>
+                          <div className="flex flex-wrap gap-1">
+                            {DISCARD_REASONS.map((r) => (
+                              <button
+                                key={r}
+                                onClick={() => fire(r)}
+                                className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 dark:border-zinc-700 dark:bg-zinc-900"
+                              >
+                                {r}
+                              </button>
+                            ))}
+                          </div>
+                          <MenuFreeText label="Discard" onSubmit={fire} />
+                        </>
+                      )}
                     </div>
-                    <MenuFreeText
-                      label="Discard"
-                      onSubmit={(txt) => {
-                        setMenu(null);
-                        p.onDiscard(item.id, txt);
-                      }}
-                    />
-                  </div>
-                )}
+                  );
+                })()}
                 </>
                 )}
               </li>
@@ -2877,10 +3022,27 @@ function RefineChat(p: {
   onUndiscard: () => void;
   /** Library-refine: discarding already-published content doesn't belong here. */
   hideDiscard?: boolean;
+  /** Present for composite types — enables the "whole activity ⇄ one question" scope. */
+  subScope?: {
+    value: unknown;
+    onValueChange: (v: unknown) => void;
+    source: TwinSource;
+    intent: ImportIntent;
+  };
 }) {
-  const actions = p.hideDiscard
-    ? REFINE_ACTIONS.filter((a) => a.key !== "discard")
-    : REFINE_ACTIONS;
+  const questions = p.subScope ? readQuestions(p.subScope.value).qs : [];
+  const [scope, setScope] = useState<"all" | number>("all");
+  const scopeQ =
+    typeof scope === "number" && questions[scope] ? questions[scope] : null;
+  const [subBusy, setSubBusy] = useState(false);
+
+  // hideDiscard drops whole-activity discard (don't delete published content),
+  // but discarding one sub-question of an activity you're editing is fine.
+  const actions = REFINE_ACTIONS.filter((a) => {
+    if (a.key === "remix" && scopeQ) return false; // remix is whole-activity only
+    if (a.key === "discard" && p.hideDiscard && !scopeQ) return false;
+    return true;
+  });
   const [expand, setExpand] = useState<null | "refine" | "remix" | "discard">(
     null,
   );
@@ -2915,6 +3077,53 @@ function RefineChat(p: {
     });
   }
 
+  /** Refine or discard just the scoped sub-question, editing contentJson in place. */
+  async function runQuestion(kind: "refine" | "discard", ask: string) {
+    const sub = p.subScope;
+    if (!sub || typeof scope !== "number" || !scopeQ) return;
+    const qi = scope;
+    openPanel(null);
+    if (kind === "discard") {
+      p.append({ role: "user", text: `Q${qi + 1} — discard: ${ask}` });
+      sub.onValueChange(dropQuestion(sub.value, qi));
+      setScope("all");
+      p.append({ role: "system", text: `Removed question ${qi + 1}.` });
+      return;
+    }
+    p.append({ role: "user", text: `Q${qi + 1} — ${ask}` });
+    setSubBusy(true);
+    try {
+      const res = await fetch("/api/refine-element", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          target: "question",
+          source: sub.source,
+          intent: sub.intent,
+          activityLabel:
+            contentType(p.item.contentType)?.label ?? p.item.contentType,
+          currentStem: scopeQ.stem,
+          currentOptions: scopeQ.options,
+          siblingStems: questions
+            .filter((_, i) => i !== qi)
+            .map((q) => q.stem),
+          ask,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.question) {
+        sub.onValueChange(patchQuestion(sub.value, qi, data.question));
+        p.append({ role: "system", text: `Regenerated question ${qi + 1}.` });
+      } else {
+        p.append({ role: "system", text: "Couldn't regenerate — try again." });
+      }
+    } catch {
+      p.append({ role: "system", text: "Couldn't regenerate — try again." });
+    } finally {
+      setSubBusy(false);
+    }
+  }
+
   const optChip =
     "rounded-full border border-zinc-300 bg-white px-2 py-0.5 hover:border-blue-500 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-900";
 
@@ -2942,13 +3151,56 @@ function RefineChat(p: {
           </div>
         ) : (
           <div className="space-y-1.5">
+            {questions.length > 0 && (
+              <div className="mb-1.5 flex items-center gap-1.5 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 dark:border-zinc-800 dark:bg-zinc-900">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">
+                  Apply to
+                </span>
+                <select
+                  value={String(scope)}
+                  onChange={(e) => {
+                    openPanel(null);
+                    setScope(
+                      e.target.value === "all"
+                        ? "all"
+                        : Number(e.target.value),
+                    );
+                  }}
+                  className="min-w-0 flex-1 rounded border border-zinc-300 bg-white px-1 py-0.5 text-[11px] dark:border-zinc-700 dark:bg-zinc-900"
+                >
+                  <option value="all">
+                    Whole activity — all {questions.length} questions
+                  </option>
+                  {questions.map((q, i) => (
+                    <option key={i} value={i}>
+                      Q{i + 1}: {q.stem.slice(0, 48)}
+                      {q.stem.length > 48 ? "…" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             {actions.map((a) => {
               const on = expand === a.key;
               const danger = a.key === "discard";
+              const doRefine = (steer: string) => {
+                if (scopeQ) runQuestion("refine", steer);
+                else run(steer, () => p.onRefine(p.item.id, steer));
+              };
+              const doDiscard = (reason: string) => {
+                if (scopeQ) {
+                  runQuestion("discard", reason);
+                  return;
+                }
+                p.append({ role: "user", text: `Discard — ${reason}` });
+                p.append({ role: "system", text: "Discarded." });
+                openPanel(null);
+                p.onDiscard(p.item.id, reason);
+              };
               return (
                 <div key={a.key}>
                   <button
-                    disabled={busy}
+                    disabled={busy || subBusy}
                     onClick={() => openPanel(on ? null : a.key)}
                     className={`flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-left disabled:opacity-40 ${
                       on
@@ -2974,21 +3226,18 @@ function RefineChat(p: {
                       }`}
                     >
                       <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-                        {a.key === "refine"
-                          ? "What should change?"
-                          : a.key === "remix"
-                            ? "Rebuild as"
-                            : "Discard because…"}
+                        {a.key === "remix"
+                          ? "Rebuild as"
+                          : (a.key === "refine" ? "What should change?" : "Discard because…") +
+                            (scopeQ ? ` (question ${(scope as number) + 1})` : "")}
                       </p>
                       <div className="flex flex-wrap gap-1">
                         {a.key === "refine" &&
                           REFINE_OPTIONS.map((o) => (
                             <button
                               key={o.id}
-                              disabled={busy}
-                              onClick={() =>
-                                run(o.label, () => p.onRefine(p.item.id, o.id))
-                              }
+                              disabled={busy || subBusy}
+                              onClick={() => doRefine(scopeQ ? o.label : o.id)}
                               className={optChip}
                             >
                               {o.label}
@@ -3015,12 +3264,7 @@ function RefineChat(p: {
                           DISCARD_REASONS.map((r) => (
                             <button
                               key={r}
-                              onClick={() => {
-                                p.append({ role: "user", text: `Discard — ${r}` });
-                                p.append({ role: "system", text: "Discarded." });
-                                openPanel(null);
-                                p.onDiscard(p.item.id, r);
-                              }}
+                              onClick={() => doDiscard(r)}
                               className={`${optChip} hover:!border-red-400`}
                             >
                               {r}
@@ -3032,42 +3276,24 @@ function RefineChat(p: {
                         <div className="mt-2 flex gap-1">
                           <input
                             value={free}
-                            disabled={busy}
+                            disabled={busy || subBusy}
                             onChange={(e) => setFree(e.target.value)}
                             onKeyDown={(e) => {
                               if (e.key !== "Enter" || !free.trim()) return;
-                              const txt = free.trim();
-                              if (a.key === "refine")
-                                run(txt, () => p.onRefine(p.item.id, txt));
-                              else {
-                                p.append({
-                                  role: "user",
-                                  text: `Discard — ${txt}`,
-                                });
-                                p.append({ role: "system", text: "Discarded." });
-                                openPanel(null);
-                                p.onDiscard(p.item.id, txt);
-                              }
+                              (a.key === "refine" ? doRefine : doDiscard)(
+                                free.trim(),
+                              );
                             }}
                             placeholder="describe the change"
                             className="min-w-0 flex-1 rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-[11px] dark:border-zinc-700 dark:bg-zinc-900"
                           />
                           <button
-                            disabled={busy || !free.trim()}
-                            onClick={() => {
-                              const txt = free.trim();
-                              if (a.key === "refine")
-                                run(txt, () => p.onRefine(p.item.id, txt));
-                              else {
-                                p.append({
-                                  role: "user",
-                                  text: `Discard — ${txt}`,
-                                });
-                                p.append({ role: "system", text: "Discarded." });
-                                openPanel(null);
-                                p.onDiscard(p.item.id, txt);
-                              }
-                            }}
+                            disabled={busy || subBusy || !free.trim()}
+                            onClick={() =>
+                              (a.key === "refine" ? doRefine : doDiscard)(
+                                free.trim(),
+                              )
+                            }
                             className={`${optChip} ${a.key === "discard" ? "hover:!border-red-400" : ""}`}
                           >
                             {a.key === "refine" ? "Apply" : "Discard"}
@@ -3080,7 +3306,7 @@ function RefineChat(p: {
               );
             })}
 
-            {busy && (
+            {(busy || subBusy) && (
               <p className="pt-1 text-zinc-400">Regenerating…</p>
             )}
 
@@ -3188,6 +3414,48 @@ function readQuestions(value: unknown): {
 /** True when RefineFields can drive this activity — the composite question shapes. */
 function isFieldEditable(value: unknown): boolean {
   return readQuestions(value).shape !== null;
+}
+
+/** Remove one sub-question from a composite activity's contentJson. */
+function dropQuestion(value: unknown, qi: number): unknown {
+  const d = structuredClone(value) as Record<string, unknown>;
+  if (Array.isArray(d.choices)) (d.choices as unknown[]).splice(qi, 1);
+  else if (Array.isArray(d.questions)) (d.questions as unknown[]).splice(qi, 1);
+  return d;
+}
+
+/** Patch one regenerated sub-question (stem + options) back into contentJson. */
+function patchQuestion(
+  value: unknown,
+  qi: number,
+  q: { stem: string; options: { text: string; correct: boolean }[] },
+): unknown {
+  const d = structuredClone(value) as Record<string, unknown>;
+  if (Array.isArray(d.choices)) {
+    const arr = d.choices as Choice[];
+    const ordered = [...q.options].sort(
+      (a, b) => Number(b.correct) - Number(a.correct),
+    );
+    arr[qi] = {
+      ...arr[qi],
+      question: q.stem,
+      answers: ordered.map((o) => o.text),
+    };
+  } else if (Array.isArray(d.questions)) {
+    const arr = d.questions as {
+      params?: {
+        question?: string;
+        answers?: { text: string; correct?: boolean }[];
+      };
+    }[];
+    if (!arr[qi].params) arr[qi].params = {};
+    arr[qi].params!.question = wrapP(q.stem);
+    arr[qi].params!.answers = q.options.map((o) => ({
+      text: wrapP(o.text),
+      correct: o.correct,
+    }));
+  }
+  return d;
 }
 
 const AI_CHIPS_STEM = ["Harder", "Simpler", "Clearer", "More specific"];
@@ -3997,6 +4265,17 @@ function Workspace(p: {
             onRemix={p.onRemix}
             onDiscard={p.onDiscard}
             onUndiscard={() => p.setItem(cur.id, "approved")}
+            subScope={
+              isFieldEditable(p.edits[cur.id] ?? cur.contentJson)
+                ? {
+                    value: p.edits[cur.id] ?? cur.contentJson,
+                    onValueChange: (v) =>
+                      p.setEdits((e) => ({ ...e, [cur.id]: v })),
+                    source: p.source,
+                    intent: p.intent,
+                  }
+                : undefined
+            }
           />
         )}
       </div>
