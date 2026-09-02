@@ -1056,6 +1056,7 @@ export default function Page() {
             setWikiUrl={setWikiUrl}
             intent={intent}
             setIntent={setIntent}
+            source={source()}
             analysis={shownAnalysis}
             recByName={recByName}
             toggleType={toggleType}
@@ -1214,6 +1215,18 @@ export default function Page() {
               onRefine={refineActivity}
               onRemix={remixActivity}
               onDiscard={discardActivity}
+              source={source()}
+              intent={intent}
+              onLog={(text) =>
+                current &&
+                setTranscript((t) => ({
+                  ...t,
+                  [current.id]: [
+                    ...(t[current.id] ?? []),
+                    { role: "system", text },
+                  ],
+                }))
+              }
             />
           )}
         </div>
@@ -2527,12 +2540,16 @@ function Review(p: {
   onRefine: (itemId: string, adjustment: string) => void;
   onRemix: (itemId: string, toType: string) => void;
   onDiscard: (itemId: string, reason: string) => void;
+  source: TwinSource;
+  intent: ImportIntent;
+  onLog: (text: string) => void;
 }) {
   const { result, current } = p;
   const [menu, setMenu] = useState<{
     id: string;
     kind: "regen" | "remix" | "discard";
   } | null>(null);
+  const [editView, setEditView] = useState<"fields" | "preview">("fields");
 
   return (
     <div className="space-y-4">
@@ -2715,7 +2732,55 @@ function Review(p: {
         </ul>
 
         <div className="space-y-3">
-          {current ? (
+          {!current ? (
+            <p className="text-sm text-zinc-400">Select an item.</p>
+          ) : p.itemState[current.id] === "editing" &&
+            isFieldEditable(p.edits[current.id] ?? current.contentJson) ? (
+            <div>
+              <div className="mb-2 flex gap-1 text-[11px]">
+                {(["fields", "preview"] as const).map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => setEditView(v)}
+                    className={`rounded border px-2 py-0.5 ${
+                      editView === v
+                        ? "border-blue-600 font-medium"
+                        : "border-zinc-300 text-zinc-500 dark:border-zinc-700"
+                    }`}
+                  >
+                    {v === "fields" ? "Edit fields" : "Preview"}
+                  </button>
+                ))}
+              </div>
+              {editView === "fields" ? (
+                <RefineFields
+                  key={current.id}
+                  value={p.edits[current.id] ?? current.contentJson}
+                  onChange={(v) =>
+                    p.setEdits((e) => ({ ...e, [current.id]: v }))
+                  }
+                  onLog={p.onLog}
+                  activityLabel={
+                    contentType(current.contentType)?.label ??
+                    current.contentType
+                  }
+                  source={p.source}
+                  intent={p.intent}
+                />
+              ) : (
+                <ItemPanel
+                  key={current.id}
+                  item={current}
+                  value={p.edits[current.id] ?? current.contentJson}
+                  onChange={(v) =>
+                    p.setEdits((e) => ({ ...e, [current.id]: v }))
+                  }
+                  editing={false}
+                  hideViewToggle
+                />
+              )}
+            </div>
+          ) : (
             <ItemPanel
               key={current.id}
               item={current}
@@ -2723,8 +2788,6 @@ function Review(p: {
               onChange={(v) => p.setEdits((e) => ({ ...e, [current.id]: v }))}
               editing={p.itemState[current.id] === "editing"}
             />
-          ) : (
-            <p className="text-sm text-zinc-400">Select an item.</p>
           )}
         </div>
       </div>
@@ -3027,6 +3090,11 @@ function readQuestions(value: unknown): {
     };
   }
   return { shape: null, qs: [] };
+}
+
+/** True when RefineFields can drive this activity — the composite question shapes. */
+function isFieldEditable(value: unknown): boolean {
+  return readQuestions(value).shape !== null;
 }
 
 const AI_CHIPS_STEM = ["Harder", "Simpler", "Clearer", "More specific"];
@@ -3509,6 +3577,7 @@ function Workspace(p: {
   setWikiUrl: (s: string) => void;
   intent: ImportIntent;
   setIntent: (f: (i: ImportIntent) => ImportIntent) => void;
+  source: TwinSource;
   analysis: SourceAnalysis | null;
   recByName: Record<string, Recommendation>;
   toggleType: (n: string) => void;
@@ -3771,7 +3840,7 @@ function Workspace(p: {
                 : "border-zinc-300 text-zinc-500 dark:border-zinc-700"
             }`}
           >
-            {t === "refine" ? "Refine" : "Edit text"}
+            {t === "refine" ? "Refine" : "Edit fields"}
           </button>
         ))}
       </div>
@@ -3783,15 +3852,41 @@ function Workspace(p: {
               : "Refine and edit tools appear here once you generate."}
           </p>
         ) : panel3Tab === "edit" ? (
-          <div className="h-full overflow-auto p-3">
-            <ItemPanel
-              key={cur.id}
-              item={cur}
-              value={p.edits[cur.id] ?? cur.contentJson}
-              onChange={(v) => p.setEdits((e) => ({ ...e, [cur.id]: v }))}
-              editing
-              hideViewToggle
-            />
+          <div className="h-full overflow-auto">
+            {isFieldEditable(p.edits[cur.id] ?? cur.contentJson) ? (
+              <RefineFields
+                key={cur.id}
+                value={p.edits[cur.id] ?? cur.contentJson}
+                onChange={(v) => p.setEdits((e) => ({ ...e, [cur.id]: v }))}
+                onLog={(text) =>
+                  p.setTranscript((t) => ({
+                    ...t,
+                    [cur.id]: [
+                      ...(t[cur.id] ?? []),
+                      { role: "system", text },
+                    ],
+                  }))
+                }
+                activityLabel={
+                  contentType(cur.contentType)?.label ?? cur.contentType
+                }
+                source={p.source}
+                intent={p.intent}
+              />
+            ) : (
+              <div className="p-3">
+                <ItemPanel
+                  key={cur.id}
+                  item={cur}
+                  value={p.edits[cur.id] ?? cur.contentJson}
+                  onChange={(v) =>
+                    p.setEdits((e) => ({ ...e, [cur.id]: v }))
+                  }
+                  editing
+                  hideViewToggle
+                />
+              </div>
+            )}
           </div>
         ) : (
           <RefineChat
