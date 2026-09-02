@@ -4801,8 +4801,17 @@ function SmartImportHome(p: {
           ))}
         </div>
         <a
-          href="/dashboard"
+          href="/smart-import-priorities.html"
+          target="_blank"
+          rel="noopener"
           className="ml-auto text-xs text-zinc-400 underline decoration-dotted underline-offset-2 hover:text-zinc-700 dark:hover:text-zinc-200"
+          title="H5P team only — hypothesis & roadmap"
+        >
+          Roadmap &#8599;
+        </a>
+        <a
+          href="/dashboard"
+          className="text-xs text-zinc-400 underline decoration-dotted underline-offset-2 hover:text-zinc-700 dark:hover:text-zinc-200"
           title="H5P team only — output quality & experience metrics"
         >
           Team evals &#8599;
