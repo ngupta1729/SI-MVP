@@ -609,7 +609,9 @@ function adjustLine(adjustment: string | undefined, intent: ImportIntent): strin
     }. Draw every item from the source; suit the new type's format.`;
   }
   const d = REGEN_ADJUSTMENTS[adjustment];
-  return d ? `\n\nADJUSTMENT (regeneration): ${d}` : "";
+  if (d) return `\n\nADJUSTMENT (regeneration): ${d}`;
+  // free text the educator typed — pass it through as a literal instruction
+  return `\n\nADJUSTMENT (regeneration): ${adjustment.trim()}`;
 }
 
 /** Review-stage regenerate adjustments → a directive appended to the generation prompt. */
@@ -838,5 +840,8 @@ function mockChangeNote(adjustment: string): string {
       "Shifted onto concepts the last version barely touched.",
     retry: "Generated a fresh set from the source.",
   };
-  return notes[adjustment] ?? "Regenerated from the source.";
+  return (
+    notes[adjustment] ??
+    `Regenerated to your note: "${adjustment.slice(0, 80)}".`
+  );
 }

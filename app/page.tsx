@@ -2520,6 +2520,33 @@ const DISCARD_REASONS = [
 // Remix rebuilds the activity as a different type — only types the twin can render.
 const REMIX_TARGETS = CONTENT_TYPES.filter((c) => c.twin === "full");
 
+/** Free-text row shown under the chip options in Refine and Discard menus. */
+function MenuFreeText(p: { label: string; onSubmit: (text: string) => void }) {
+  const [text, setText] = useState("");
+  const go = () => {
+    const t = text.trim();
+    if (t) p.onSubmit(t);
+  };
+  return (
+    <div className="mt-1.5 flex gap-1">
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && go()}
+        placeholder="describe the change"
+        className="min-w-0 flex-1 rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-[11px] dark:border-zinc-700 dark:bg-zinc-900"
+      />
+      <button
+        disabled={!text.trim()}
+        onClick={go}
+        className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-[11px] disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-900"
+      >
+        {p.label}
+      </button>
+    </div>
+  );
+}
+
 const REFINE_ACTIONS = [
   { key: "refine" as const, label: "Refine", desc: "regenerate with a steer" },
   { key: "remix" as const, label: "Remix", desc: "rebuild as another type" },
@@ -2679,6 +2706,13 @@ function Review(p: {
                         </button>
                       ))}
                     </div>
+                    <MenuFreeText
+                      label="Apply"
+                      onSubmit={(txt) => {
+                        setMenu(null);
+                        p.onRefine(item.id, txt);
+                      }}
+                    />
                   </div>
                 )}
                 {menu?.id === item.id && menu.kind === "remix" && (
@@ -2722,6 +2756,13 @@ function Review(p: {
                         </button>
                       ))}
                     </div>
+                    <MenuFreeText
+                      label="Discard"
+                      onSubmit={(txt) => {
+                        setMenu(null);
+                        p.onDiscard(item.id, txt);
+                      }}
+                    />
                   </div>
                 )}
                 </>
@@ -2843,6 +2884,11 @@ function RefineChat(p: {
   const [expand, setExpand] = useState<null | "refine" | "remix" | "discard">(
     null,
   );
+  const [free, setFree] = useState("");
+  const openPanel = (k: "refine" | "remix" | "discard" | null) => {
+    setExpand(k);
+    setFree("");
+  };
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const busy = p.state === "refining" || p.state === "remixing";
   const discarded = p.state === "discarded";
@@ -2857,7 +2903,7 @@ function RefineChat(p: {
     fire: () => Promise<RenderedItem | null>,
   ) {
     p.append({ role: "user", text: userText });
-    setExpand(null);
+    openPanel(null);
     const it = await fire();
     p.append({
       role: "system",
@@ -2903,7 +2949,7 @@ function RefineChat(p: {
                 <div key={a.key}>
                   <button
                     disabled={busy}
-                    onClick={() => setExpand(on ? null : a.key)}
+                    onClick={() => openPanel(on ? null : a.key)}
                     className={`flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-left disabled:opacity-40 ${
                       on
                         ? "border-blue-600 bg-blue-50 dark:bg-blue-950/30"
@@ -2972,7 +3018,7 @@ function RefineChat(p: {
                               onClick={() => {
                                 p.append({ role: "user", text: `Discard — ${r}` });
                                 p.append({ role: "system", text: "Discarded." });
-                                setExpand(null);
+                                openPanel(null);
                                 p.onDiscard(p.item.id, r);
                               }}
                               className={`${optChip} hover:!border-red-400`}
@@ -2981,6 +3027,53 @@ function RefineChat(p: {
                             </button>
                           ))}
                       </div>
+
+                      {(a.key === "refine" || a.key === "discard") && (
+                        <div className="mt-2 flex gap-1">
+                          <input
+                            value={free}
+                            disabled={busy}
+                            onChange={(e) => setFree(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key !== "Enter" || !free.trim()) return;
+                              const txt = free.trim();
+                              if (a.key === "refine")
+                                run(txt, () => p.onRefine(p.item.id, txt));
+                              else {
+                                p.append({
+                                  role: "user",
+                                  text: `Discard — ${txt}`,
+                                });
+                                p.append({ role: "system", text: "Discarded." });
+                                openPanel(null);
+                                p.onDiscard(p.item.id, txt);
+                              }
+                            }}
+                            placeholder="describe the change"
+                            className="min-w-0 flex-1 rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-[11px] dark:border-zinc-700 dark:bg-zinc-900"
+                          />
+                          <button
+                            disabled={busy || !free.trim()}
+                            onClick={() => {
+                              const txt = free.trim();
+                              if (a.key === "refine")
+                                run(txt, () => p.onRefine(p.item.id, txt));
+                              else {
+                                p.append({
+                                  role: "user",
+                                  text: `Discard — ${txt}`,
+                                });
+                                p.append({ role: "system", text: "Discarded." });
+                                openPanel(null);
+                                p.onDiscard(p.item.id, txt);
+                              }
+                            }}
+                            className={`${optChip} ${a.key === "discard" ? "hover:!border-red-400" : ""}`}
+                          >
+                            {a.key === "refine" ? "Apply" : "Discard"}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
