@@ -108,23 +108,12 @@ const GUIDED_SOURCE = {
 };
 
 function guidedIntent(): ImportIntent {
-  const briefFields = starterBrief().map((f) =>
-    f.id === "goal"
-      ? {
-          ...f,
-          value:
-            "Explain the four stages of the water cycle and how energy from the Sun drives it",
-        }
-      : f.id === "audience"
-        ? { ...f, value: "Beginner" }
-        : f.id === "difficulty"
-          ? { ...f, value: "Moderate" }
-          : f,
-  );
   return {
     ...DEFAULT_INTENT,
-    authoringMode: "brief",
-    briefFields,
+    authoringMode: "prompt",
+    promptPresetId: null,
+    prompt:
+      "Create a short recall quiz for Grade 6 students on the water cycle. Focus on the four stages — evaporation, condensation, precipitation, and collection — and the Sun's role as the energy source. Keep the language simple, and have each question check one idea.",
     contentTypes: [],
   };
 }
@@ -141,8 +130,8 @@ const GUIDE_STEPS: { title: string; body: string; cta: string }[] = [
     cta: "Next",
   },
   {
-    title: "2 · Your brief",
-    body: "Here you tell Smart Import what you want: the learning goal, who the learners are, and how challenging it should be. It uses this to aim every question. We've filled it in — read it, then continue.",
+    title: "2 · Your prompt",
+    body: "Here you tell Smart Import what you want, in plain language — the topic to focus on, who the learners are, the style. It uses this to aim every question. We've written one for you — read it, then continue.",
     cta: "Analyse the source →",
   },
   {
