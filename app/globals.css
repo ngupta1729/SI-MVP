@@ -24,3 +24,23 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Guided-run coach card: draw the eye to the Next button. */
+@keyframes guide-next-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 9px rgba(37, 99, 235, 0);
+  }
+}
+.guide-next:not(:disabled) {
+  animation: guide-next-pulse 1.5s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .guide-next:not(:disabled) {
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4);
+  }
+}

@@ -96,6 +96,72 @@ const DEFAULT_INTENT: ImportIntent = {
   contentTypes: [],
 };
 
+// ---- First-run guided simulation --------------------------------------------
+// A first-timer on Configure has a lot to do (find a file, write a prompt) and
+// ~half never reach step 2. The guided run drops them into a fully pre-filled
+// Smart Import on a sample document and narrates each step; the tour auto-runs
+// the analyze/generate calls so the only control is the coach card's "Next".
+
+const GUIDED_SOURCE = {
+  title: "The Water Cycle — Grade 6 Science",
+  text: `The water cycle, also called the hydrologic cycle, describes how water moves continuously between the Earth's surface and the atmosphere. Energy from the Sun drives the cycle. During evaporation, the Sun heats water in oceans, lakes, and rivers and turns it into water vapour that rises into the air. Plants also release water vapour through transpiration. As the vapour rises and cools, condensation occurs: the vapour turns back into tiny liquid droplets that form clouds. When the droplets combine and grow heavy enough, they fall as precipitation — rain, snow, sleet, or hail. Precipitation that reaches the ground either soaks in to become groundwater or flows over the surface as runoff, eventually returning to rivers and oceans, where the cycle begins again. The total amount of water on Earth stays roughly the same; the cycle simply moves it between different forms and places.`,
+};
+
+function guidedIntent(): ImportIntent {
+  const briefFields = starterBrief().map((f) =>
+    f.id === "goal"
+      ? {
+          ...f,
+          value:
+            "Explain the four stages of the water cycle and how energy from the Sun drives it",
+        }
+      : f.id === "audience"
+        ? { ...f, value: "Beginner" }
+        : f.id === "difficulty"
+          ? { ...f, value: "Moderate" }
+          : f,
+  );
+  return {
+    ...DEFAULT_INTENT,
+    authoringMode: "brief",
+    briefFields,
+    contentTypes: [],
+  };
+}
+
+const GUIDE_STEPS: { title: string; body: string; cta: string }[] = [
+  {
+    title: "Welcome — this is a guided run",
+    body: "Smart Import turns a document into interactive H5P activities. We've loaded a sample — a Grade 6 text on the water cycle — so you can watch the whole flow without needing your own file yet.",
+    cta: "Next",
+  },
+  {
+    title: "1 · Your source",
+    body: "This is the material the activities are built from. Normally you'd paste your own text or upload a file — a PDF, a Word doc, slides. We've pasted the sample for you.",
+    cta: "Next",
+  },
+  {
+    title: "2 · Your brief",
+    body: "Here you tell Smart Import what you want: the learning goal, who the learners are, and how challenging it should be. It uses this to aim every question. We've filled it in — read it, then continue.",
+    cta: "Analyse the source →",
+  },
+  {
+    title: "3 · Choose activities",
+    body: "Smart Import read the source and proposed a learning sequence — present an idea, practise it, then check it. Each card is an activity type; the ticked ones get generated. You can change the mix here.",
+    cta: "Generate →",
+  },
+  {
+    title: "4 · Review the first draft",
+    body: "Your activities, playing in the real H5P player. Each question shows the source sentence it came from. Anything off? Refine the wording, Remix it into a different type, or Discard it — then approve what you keep.",
+    cta: "Next",
+  },
+  {
+    title: "That's the whole loop",
+    body: "Source → brief → generate → review → approve. You've seen every step. Now try it with your own material — paste a document or drop in a file.",
+    cta: "Finish — start my own",
+  },
+];
+
 type ItemState =
   | "approved"
   | "editing"
@@ -167,6 +233,9 @@ export default function Page() {
   // Timestamp the generated set landed — start of step 3 (review & approve).
   const [generatedAt, setGeneratedAt] = useState<number | null>(null);
 
+  // Guided run: null = off, else the current 0-based step in GUIDE_STEPS.
+  const [guide, setGuide] = useState<number | null>(null);
+
   useEffect(() => {
     fetchImports().then(setAllImports).catch(() => {});
   }, []);
@@ -220,8 +289,8 @@ export default function Page() {
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  async function analyze() {
-    if (!sourceReady) return;
+  async function analyze(): Promise<boolean> {
+    if (!sourceReady) return false;
     const key = activeSourceKey;
     setAnalyzing(true);
     setError(null);
@@ -249,8 +318,10 @@ export default function Page() {
                 : ["H5P.SingleChoiceSet"],
             },
       );
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      return false;
     } finally {
       setAnalyzing(false);
     }
@@ -262,7 +333,9 @@ export default function Page() {
   // on when they hit "Choose activities" is the source that gets used.
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (sourceReady) debounceRef.current = setTimeout(analyze, 600);
+    // During a guided run the coach drives analyze explicitly at its own step.
+    if (sourceReady && guide === null)
+      debounceRef.current = setTimeout(analyze, 600);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
@@ -295,11 +368,11 @@ export default function Page() {
     }
   }, [uiVariant]);
 
-  async function generate() {
+  async function generate(typesOverride?: string[]): Promise<boolean> {
     setGenerating(true);
     setError(null);
     try {
-      const contentTypes = intent.contentTypes;
+      const contentTypes = typesOverride ?? intent.contentTypes;
       const res = await fetch("/api/twin", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -317,8 +390,10 @@ export default function Page() {
       );
       setSelected(data.items[0]?.id ?? null);
       setScreen("review");
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      return false;
     } finally {
       setGenerating(false);
     }
@@ -618,6 +693,7 @@ export default function Page() {
     saveImport(record);
     setAllImports((prev) => [record, ...prev.filter((r) => r.id !== record.id)]);
     // back to the shell, Smart Import view, filtered to this import
+    setGuide(null);
     setJustCreatedId(record.id);
     setSiFilter(record.id);
     setShellNav("smartimport");
@@ -646,6 +722,7 @@ export default function Page() {
     setFlowStartedAt(null);
     setBuildMs(null);
     setGeneratedAt(null);
+    setGuide(null);
   }
 
   /** One click from the shell straight into Configure. */
@@ -654,6 +731,50 @@ export default function Page() {
     setJustCreatedId(null);
     setFlowStartedAt(Date.now());
     setView("flow");
+  }
+
+  /** First-run guided simulation: preload the sample and start the coach. */
+  function startGuided() {
+    resetFlow();
+    setUiVariant("wizard"); // the guided coach is wired to the step-by-step UI
+    setJustCreatedId(null);
+    setFlowStartedAt(Date.now());
+    setSourceTab("Pasted Text");
+    setTitle(GUIDED_SOURCE.title);
+    setText(GUIDED_SOURCE.text);
+    setIntent(guidedIntent());
+    setScreen("configure");
+    setView("flow");
+    setGuide(0);
+  }
+
+  /** Advance the guided run — auto-runs the analyze/generate calls at the
+   *  action steps so the coach card's "Next" is the only control. */
+  async function guideNext() {
+    const s = guide;
+    if (s === null) return;
+    if (s === 2) {
+      const ok =
+        analyzedKey === activeSourceKey ? true : await analyze();
+      if (ok) {
+        setScreen("activities");
+        setGuide(3);
+      }
+      return;
+    }
+    if (s === 3) {
+      const types = intent.contentTypes.length
+        ? intent.contentTypes
+        : ["H5P.SingleChoiceSet"];
+      const ok = await generate(types);
+      if (ok) setGuide(4);
+      return;
+    }
+    if (s === GUIDE_STEPS.length - 1) {
+      resetFlow(); // clears guide, back to an empty Configure to do their own
+      return;
+    }
+    setGuide(s + 1);
   }
 
   /** Leave the flow without creating anything. */
@@ -1182,9 +1303,11 @@ export default function Page() {
           <div className="flex items-start justify-between gap-3">
             <h1 className="text-lg font-semibold">Smart Import</h1>
             <div className="flex items-center gap-2">
-              <VariantToggle value={uiVariant} onChange={setUiVariant} />
+              {guide === null && (
+                <VariantToggle value={uiVariant} onChange={setUiVariant} />
+              )}
               <button
-                onClick={requestExitFlow}
+                onClick={guide === null ? requestExitFlow : exitFlow}
                 aria-label="Close Smart Import"
                 title="Close"
                 className="flex h-7 w-7 items-center justify-center rounded-md border border-zinc-300 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
@@ -1217,6 +1340,32 @@ export default function Page() {
         )}
 
         <div className="px-6 py-6">
+          {screen === "configure" &&
+            guide === null &&
+            !result &&
+            !text.trim() &&
+            !wikiUrl.trim() && (
+              <div className="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-900 dark:bg-blue-950/40">
+                <span className="text-lg" aria-hidden>
+                  ✨
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-blue-900 dark:text-blue-200">
+                    New to Smart Import? Take a 2-minute guided run.
+                  </p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    We load a sample document and walk you through every step —
+                    nothing to fill in.
+                  </p>
+                </div>
+                <button
+                  onClick={startGuided}
+                  className="shrink-0 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white"
+                >
+                  Start guided run
+                </button>
+              </div>
+            )}
           {screen === "configure" && (
             <Configure
               {...{
@@ -1276,6 +1425,7 @@ export default function Page() {
           )}
         </div>
 
+        {guide === null && (
         <div className="flex items-center justify-between gap-3 border-t border-zinc-200 px-6 py-3 dark:border-zinc-800">
           <span
             className={`text-xs ${
@@ -1342,8 +1492,67 @@ export default function Page() {
             )}
           </div>
         </div>
+        )}
       </div>
+
+      {guide !== null && (
+        <GuideCoach
+          step={guide}
+          total={GUIDE_STEPS.length}
+          title={GUIDE_STEPS[guide].title}
+          body={GUIDE_STEPS[guide].body}
+          cta={GUIDE_STEPS[guide].cta}
+          busy={analyzing || generating}
+          onNext={guideNext}
+          onExit={exitFlow}
+        />
+      )}
     </main>
+  );
+}
+
+/** Fixed coach card for the first-run guided simulation. The tour auto-runs
+ *  the analyze/generate calls, so this card's Next is the only control. */
+function GuideCoach(p: {
+  step: number;
+  total: number;
+  title: string;
+  body: string;
+  cta: string;
+  busy: boolean;
+  onNext: () => void;
+  onExit: () => void;
+}) {
+  return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-5">
+      <div className="pointer-events-auto w-full max-w-lg rounded-xl border border-blue-300 bg-white p-4 shadow-2xl dark:border-blue-800 dark:bg-zinc-900">
+        <div className="mb-1 flex items-center justify-between">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+            Guided run · {p.step + 1} of {p.total}
+          </span>
+          <button
+            onClick={p.onExit}
+            className="text-xs text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+          >
+            Exit
+          </button>
+        </div>
+        <p className="text-sm font-semibold">{p.title}</p>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{p.body}</p>
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
+            {p.busy ? "Working…" : "Click Next to continue →"}
+          </span>
+          <button
+            onClick={p.onNext}
+            disabled={p.busy}
+            className="guide-next rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {p.busy ? "…" : p.cta}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
